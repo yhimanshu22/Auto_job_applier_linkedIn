@@ -1,6 +1,8 @@
 import streamlit as st
 import re
 import os
+import subprocess
+import sys
 
 st.set_page_config(page_title="LinkedIn Bot Config", layout="wide")
 
@@ -410,3 +412,52 @@ with tabs[4]:
             new_content = update_variable(new_content, "llm_api_key", llm_api_key)
             save_file(filepath, new_content)
             st.success("Saved!")
+
+# --- Sidebar ---
+st.sidebar.header("🤖 Bot Control")
+
+PID_FILE = "bot_pid.txt"
+
+if st.sidebar.button("🚀 Run Bot"):
+    # Use sys.executable to ensure we use the same python interpreter
+    try:
+        # Run in a separate process so it doesn't block the UI completely
+        # We use Popen to let it run independently
+        process = subprocess.Popen(
+            [sys.executable, "runAiBot.py"],
+            cwd=os.getcwd(),
+            creationflags=subprocess.CREATE_NEW_CONSOLE,
+        )
+        # Save PID to file
+        with open(PID_FILE, "w") as f:
+            f.write(str(process.pid))
+
+        st.sidebar.success(f"Bot started in a new console window! (PID: {process.pid})")
+    except Exception as e:
+        st.sidebar.error(f"Failed to start bot: {e}")
+
+if st.sidebar.button("🛑 Stop Bot"):
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE, "r") as f:
+                pid = int(f.read().strip())
+
+            # Use taskkill to kill the process tree
+            subprocess.run(
+                ["taskkill", "/F", "/PID", str(pid), "/T"],
+                check=True,
+                capture_output=True,
+            )
+
+            os.remove(PID_FILE)
+            st.sidebar.success("Bot stopped successfully!")
+        except subprocess.CalledProcessError:
+            st.sidebar.warning(
+                "Bot process not found (maybe already closed?). Cleaning up."
+            )
+            if os.path.exists(PID_FILE):
+                os.remove(PID_FILE)
+        except Exception as e:
+            st.sidebar.error(f"Failed to stop bot: {e}")
+    else:
+        st.sidebar.warning("No running bot found (PID file missing).")
