@@ -21,7 +21,7 @@ follow_companies = False  # True or False, Note: True or False are case-sensitiv
 # Do you want the program to run continuously until you stop it? (Beta)
 run_non_stop = False  # True or False, Note: True or False are case-sensitive
 """
-Note: Will be treated as False if `run_in_background = True`
+Note: Will be treated as False if `run_in_background = False`
 """
 alternate_sortby = True  # True or False, Note: True or False are case-sensitive
 cycle_date_posted = True  # True or False, Note: True or False are case-sensitive

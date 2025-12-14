@@ -23,7 +23,7 @@ Note: If left empty as "", the bot will fill in location of jobs location.
 street = ""
 state = ""
 zipcode = ""
-country = ""
+country = "India"
 
 ## US Equal Opportunity questions
 # What is your ethnicity or race? If left empty as "", tool will not answer the question. However, note that some companies make it compulsory to be answered
