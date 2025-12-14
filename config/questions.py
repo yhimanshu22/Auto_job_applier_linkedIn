@@ -59,9 +59,9 @@ notice_period = 0  # Any number >= 0 without quotes. Eg: 0, 7, 15, 30, 45, etc.
 """
 Note: If question has 'month' or 'week' in it (Example: What is your notice period in months), 
 then it will divide by 30 or 7 and answer respectively. Examples:
-* For notice_period = 66:
+* For notice_period = 0:
   - "66" OR "2" if asked in months OR "9" if asked in weeks
-* For notice_period = 15:"
+* For notice_period = 0:"
   - "15" OR "0" if asked in months OR "2" if asked in weeks
 * For notice_period = 0:
   - "0" OR "0" if asked in months OR "0" if asked in weeks
@@ -134,7 +134,7 @@ Phone No: +91 8114245060
 # Your user_information_all letter in quotes, use \n to add line breaks if using single quotes "user_information_all".You can skip \n if using triple quotes """user_information_all""" (This question makes sense though)
 # We use this to pass to AI to generate answer from information , Assuing Information contians eg: resume  all the information like name, experience, skills, Country, any illness etc.
 user_information_all = """
-User Information
+Himanshu Yadav : yhimanshu22@iitk.ac.in/yhimanshu220456@gmail.com +91 8114245060 IIT Kanpur B.Tech 2025
 """
 ##<
 """

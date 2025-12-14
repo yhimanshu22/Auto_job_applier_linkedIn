@@ -1,5 +1,3 @@
-
-
 from modules.helpers import make_directories
 from config.settings import (
     run_in_background,
@@ -22,9 +20,15 @@ else:
     # from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
-from modules.helpers import find_default_profile_directory, critical_error_log, print_lg
+from modules.helpers import (
+    find_default_profile_directory,
+    critical_error_log,
+    print_lg,
+    get_chrome_version,
+)
 import subprocess
 import pkg_resources
+import os
 
 
 def is_chrome_running():
@@ -52,10 +56,18 @@ try:
             logs_folder_path + "/screenshots",
             default_resume_path,
             generated_resume_path + "/temp",
+            "chrome_profile",  # Ensure local profile dir exists
         ]
     )
 
     log_versions()
+
+    # Detect Chrome version to avoid repeated downloads
+    chrome_ver = get_chrome_version()
+    if chrome_ver:
+        print_lg(f"Detected Chrome Version: {chrome_ver}")
+    else:
+        print_lg("Could not detect Chrome version, will let UC decide.")
 
     # Check if Chrome is already running
     if is_chrome_running() and not safe_mode:
@@ -76,27 +88,31 @@ try:
     print_lg(
         "IF YOU HAVE MORE THAN 10 TABS OPENED, PLEASE CLOSE OR BOOKMARK THEM! Or it's highly likely that application will just open browser and not do anything!"
     )
+
     if safe_mode:
         print_lg(
             "SAFE MODE: Will login with a guest profile, browsing history will not be saved in the browser!"
         )
     else:
-        profile_dir = find_default_profile_directory()
-        if profile_dir:
-            options.add_argument(f"--user-data-dir={profile_dir}")
-        else:
-            print_lg(
-                "Default profile directory not found. Logging in with a guest profile, Web history will not be saved!"
-            )
+        # Use LOCAL profile directory to avoid conflicts and ensure persistence
+        profile_dir = os.path.join(os.getcwd(), "chrome_profile")
+        options.add_argument(f"--user-data-dir={profile_dir}")
+        print_lg(f"Using local profile: {profile_dir}")
+
     if stealth_mode:
         # try:
         #     driver = uc.Chrome(driver_executable_path="C:\\Program Files\\Google\\Chrome\\chromedriver-win64\\chromedriver.exe", options=options)
         # except (FileNotFoundError, PermissionError) as e:
         #     print_lg("(Undetected Mode) Got '{}' when using pre-installed ChromeDriver.".format(type(e).__name__))
-        print_lg(
-            "Downloading Chrome Driver... This may take some time. Undetected mode requires download every run!"
-        )
-        driver = uc.Chrome(options=options)
+
+        if chrome_ver:
+            print_lg(f"Initializing UC with version_main={chrome_ver}...")
+            driver = uc.Chrome(options=options, version_main=chrome_ver)
+        else:
+            print_lg(
+                "Downloading Chrome Driver... This may take some time. Undetected mode requires download every run!"
+            )
+            driver = uc.Chrome(options=options)
     else:
         driver = webdriver.Chrome(
             options=options
