@@ -1,10 +1,10 @@
-# LinkedIn AI Auto Job Applier 🤖
+# LinkedIn AI Auto Job Applier
 
 Welcome! This bot automates the process of applying to jobs on LinkedIn. It searches for relevant jobs, answers application questions, and submits applications for you—saving you hours of manual work.
 
 ---
 
-## 🚀 Quick Start Guide
+## Quick Start Guide
 
 Follow these steps to get the bot running in minutes!
 
@@ -77,16 +77,5 @@ Here is a quick reference for what each config file does:
 ### Bot gets stuck or errors out
 *   Check the terminal output for error messages.
 *   If it gets stuck on a specific question, check `config/questions.py` to ensure you have a valid answer configured.
-
----
-
-## 💬 Community & Support
-
-Need help? Join our community!
-
-*   **Discord**: [Join Server](https://discord.gg/fFp7uUzWCY)
-*   **GitHub Issues**: [Report a Bug](https://github.com/GodsScion/Auto_job_applier_linkedIn/issues)
-
----
 
 **Disclaimer**: This tool is for educational purposes. Use it responsibly and at your own risk. Be aware of LinkedIn's terms of service regarding automation.
