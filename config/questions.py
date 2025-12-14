@@ -55,15 +55,15 @@ then it will add '.' before last 5 digits and answer. Examples:
 currency = "INR"  # "USD", "INR", "EUR", etc.
 
 # What is your notice period in days?
-notice_period = 0  # Any number >= 0 without quotes. Eg: 0, 7, 15, 30, 45, etc.
+notice_period = 20  # Any number >= 0 without quotes. Eg: 0, 7, 15, 30, 45, etc.
 """
 Note: If question has 'month' or 'week' in it (Example: What is your notice period in months), 
 then it will divide by 30 or 7 and answer respectively. Examples:
-* For notice_period = 0:
+* For notice_period = 20:
   - "66" OR "2" if asked in months OR "9" if asked in weeks
-* For notice_period = 0:"
+* For notice_period = 20:"
   - "15" OR "0" if asked in months OR "2" if asked in weeks
-* For notice_period = 0:
+* For notice_period = 20:
   - "0" OR "0" if asked in months OR "0" if asked in weeks
 """
 

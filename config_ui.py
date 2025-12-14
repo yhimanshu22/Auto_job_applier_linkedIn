@@ -214,31 +214,39 @@ with tabs[1]:
     if os.path.exists(filepath):
         content = read_file(filepath)
 
-        years_of_experience = st.text_input(
-            "Years of Experience",
-            extract_value(content, "years_of_experience", "string"),
+        # Easy Apply Questions
+        st.subheader("Easy Apply Questions")
+        default_resume_path = st.text_input(
+            "Default Resume Path",
+            extract_value(content, "default_resume_path", "string"),
         )
-        require_visa = st.selectbox(
-            "Require Visa Sponsorship?",
-            ["Yes", "No"],
-            index=(
-                ["Yes", "No"].index(extract_value(content, "require_visa", "string"))
-                if extract_value(content, "require_visa", "string") in ["Yes", "No"]
-                else 1
-            ),
-        )
-        us_citizenship = st.selectbox(
-            "US Citizenship Status",
-            [
-                "U.S. Citizen/Permanent Resident",
-                "Non-citizen allowed to work for any employer",
-                "Non-citizen allowed to work for current employer",
-                "Non-citizen seeking work authorization",
-                "Canadian Citizen/Permanent Resident",
-                "Other",
-                "Decline",
-            ],
-            index=(
+
+        c1, c2 = st.columns(2)
+        with c1:
+            years_of_experience = st.text_input(
+                "Years of Experience",
+                extract_value(content, "years_of_experience", "string"),
+            )
+            require_visa = st.selectbox(
+                "Require Visa Sponsorship?",
+                ["Yes", "No"],
+                index=(
+                    ["Yes", "No"].index(
+                        extract_value(content, "require_visa", "string")
+                    )
+                    if extract_value(content, "require_visa", "string") in ["Yes", "No"]
+                    else 1
+                ),
+            )
+            website = st.text_input(
+                "Portfolio Website", extract_value(content, "website", "string")
+            )
+        with c2:
+            linkedIn = st.text_input(
+                "LinkedIn Profile URL", extract_value(content, "linkedIn", "string")
+            )
+            us_citizenship = st.selectbox(
+                "US Citizenship Status",
                 [
                     "U.S. Citizen/Permanent Resident",
                     "Non-citizen allowed to work for any employer",
@@ -247,28 +255,55 @@ with tabs[1]:
                     "Canadian Citizen/Permanent Resident",
                     "Other",
                     "Decline",
-                ].index(extract_value(content, "us_citizenship", "string"))
-                if extract_value(content, "us_citizenship", "string")
-                in [
-                    "U.S. Citizen/Permanent Resident",
-                    "Non-citizen allowed to work for any employer",
-                    "Non-citizen allowed to work for current employer",
-                    "Non-citizen seeking work authorization",
-                    "Canadian Citizen/Permanent Resident",
-                    "Other",
-                    "Decline",
-                ]
-                else 5
-            ),
-        )
+                ],
+                index=(
+                    [
+                        "U.S. Citizen/Permanent Resident",
+                        "Non-citizen allowed to work for any employer",
+                        "Non-citizen allowed to work for current employer",
+                        "Non-citizen seeking work authorization",
+                        "Canadian Citizen/Permanent Resident",
+                        "Other",
+                        "Decline",
+                    ].index(extract_value(content, "us_citizenship", "string"))
+                    if extract_value(content, "us_citizenship", "string")
+                    in [
+                        "U.S. Citizen/Permanent Resident",
+                        "Non-citizen allowed to work for any employer",
+                        "Non-citizen allowed to work for current employer",
+                        "Non-citizen seeking work authorization",
+                        "Canadian Citizen/Permanent Resident",
+                        "Other",
+                        "Decline",
+                    ]
+                    else 5
+                ),
+            )
 
-        desired_salary = st.number_input(
-            "Desired Salary", value=extract_value(content, "desired_salary", "int")
-        )
-        notice_period = st.number_input(
-            "Notice Period (days)", value=extract_value(content, "notice_period", "int")
-        )
+        # Salary & Notice
+        st.subheader("Salary & Notice Period")
+        c3, c4 = st.columns(2)
+        with c3:
+            desired_salary = st.number_input(
+                "Desired Salary", value=extract_value(content, "desired_salary", "int")
+            )
+            currency = st.text_input(
+                "Currency", extract_value(content, "currency", "string")
+            )
+        with c4:
+            current_ctc = st.number_input(
+                "Current CTC", value=extract_value(content, "current_ctc", "int")
+            )
+            notice_period = st.number_input(
+                "Notice Period (days)",
+                value=extract_value(content, "notice_period", "int"),
+            )
 
+        # Profile Info
+        st.subheader("Profile Information")
+        linkedin_headline = st.text_input(
+            "LinkedIn Headline", extract_value(content, "linkedin_headline", "string")
+        )
         linkedin_summary = st.text_area(
             "LinkedIn Summary",
             extract_value(content, "linkedin_summary", "string"),
@@ -277,22 +312,55 @@ with tabs[1]:
         cover_letter = st.text_area(
             "Cover Letter", extract_value(content, "cover_letter", "string"), height=200
         )
-
         user_information_all = st.text_area(
             "User Information (for AI)",
             extract_value(content, "user_information_all", "string"),
             height=150,
         )
 
+        # Misc
+        st.subheader("Miscellaneous")
+        recent_employer = st.text_input(
+            "Recent Employer", extract_value(content, "recent_employer", "string")
+        )
+        confidence_level = st.text_input(
+            "Confidence Level (1-10)",
+            extract_value(content, "confidence_level", "string"),
+        )
+
+        # Related Settings
+        st.subheader("Related Settings")
+        pause_before_submit = st.checkbox(
+            "Pause Before Submit", extract_value(content, "pause_before_submit", "bool")
+        )
+        pause_at_failed_question = st.checkbox(
+            "Pause at Failed Question",
+            extract_value(content, "pause_at_failed_question", "bool"),
+        )
+        overwrite_previous_answers = st.checkbox(
+            "Overwrite Previous Answers",
+            extract_value(content, "overwrite_previous_answers", "bool"),
+        )
+
         if st.button("Save Questions"):
             new_content = content
+            new_content = update_variable(
+                new_content, "default_resume_path", default_resume_path
+            )
             new_content = update_variable(
                 new_content, "years_of_experience", years_of_experience
             )
             new_content = update_variable(new_content, "require_visa", require_visa)
+            new_content = update_variable(new_content, "website", website)
+            new_content = update_variable(new_content, "linkedIn", linkedIn)
             new_content = update_variable(new_content, "us_citizenship", us_citizenship)
             new_content = update_variable(new_content, "desired_salary", desired_salary)
+            new_content = update_variable(new_content, "current_ctc", current_ctc)
+            new_content = update_variable(new_content, "currency", currency)
             new_content = update_variable(new_content, "notice_period", notice_period)
+            new_content = update_variable(
+                new_content, "linkedin_headline", linkedin_headline
+            )
             new_content = update_variable(
                 new_content, "linkedin_summary", linkedin_summary
             )
@@ -300,6 +368,22 @@ with tabs[1]:
             new_content = update_variable(
                 new_content, "user_information_all", user_information_all
             )
+            new_content = update_variable(
+                new_content, "recent_employer", recent_employer
+            )
+            new_content = update_variable(
+                new_content, "confidence_level", confidence_level
+            )
+            new_content = update_variable(
+                new_content, "pause_before_submit", pause_before_submit
+            )
+            new_content = update_variable(
+                new_content, "pause_at_failed_question", pause_at_failed_question
+            )
+            new_content = update_variable(
+                new_content, "overwrite_previous_answers", overwrite_previous_answers
+            )
+
             save_file(filepath, new_content)
             st.success("Saved!")
 
@@ -614,22 +698,117 @@ with tabs[3]:
     if os.path.exists(filepath):
         content = read_file(filepath)
 
-        stealth_mode = st.checkbox(
-            "Stealth Mode (Recommended)", extract_value(content, "stealth_mode", "bool")
+        # LinkedIn Settings
+        st.subheader("LinkedIn Settings")
+        col1, col2 = st.columns(2)
+        with col1:
+            close_tabs = st.checkbox(
+                "Close External Tabs", extract_value(content, "close_tabs", "bool")
+            )
+            follow_companies = st.checkbox(
+                "Follow Companies", extract_value(content, "follow_companies", "bool")
+            )
+            run_non_stop = st.checkbox(
+                "Run Non-Stop (Beta)", extract_value(content, "run_non_stop", "bool")
+            )
+        with col2:
+            alternate_sortby = st.checkbox(
+                "Alternate Sort By", extract_value(content, "alternate_sortby", "bool")
+            )
+            cycle_date_posted = st.checkbox(
+                "Cycle Date Posted", extract_value(content, "cycle_date_posted", "bool")
+            )
+            stop_date_cycle_at_24hr = st.checkbox(
+                "Stop Date Cycle at 24hr",
+                extract_value(content, "stop_date_cycle_at_24hr", "bool"),
+            )
+
+        # Global Settings
+        st.subheader("Global Settings")
+
+        # Paths
+        st.markdown("##### File Paths")
+        file_name = st.text_input(
+            "Applied Jobs File", extract_value(content, "file_name", "string")
         )
-        safe_mode = st.checkbox(
-            "Safe Mode (Use Guest Profile)", extract_value(content, "safe_mode", "bool")
+        failed_file_name = st.text_input(
+            "Failed Jobs File", extract_value(content, "failed_file_name", "string")
         )
-        run_in_background = st.checkbox(
-            "Run in Background (Headless)",
-            extract_value(content, "run_in_background", "bool"),
+        logs_folder_path = st.text_input(
+            "Logs Folder", extract_value(content, "logs_folder_path", "string")
         )
-        disable_extensions = st.checkbox(
-            "Disable Extensions", extract_value(content, "disable_extensions", "bool")
+        generated_resume_path = st.text_input(
+            "Generated Resumes Path",
+            extract_value(content, "generated_resume_path", "string"),
         )
+
+        # Behavior
+        st.markdown("##### Behavior")
+        click_gap = st.number_input(
+            "Click Gap (seconds)",
+            value=extract_value(content, "click_gap", "int"),
+            min_value=0,
+        )
+
+        c1, c2 = st.columns(2)
+        with c1:
+            stealth_mode = st.checkbox(
+                "Stealth Mode (Recommended)",
+                extract_value(content, "stealth_mode", "bool"),
+            )
+            safe_mode = st.checkbox(
+                "Safe Mode (Guest Profile)", extract_value(content, "safe_mode", "bool")
+            )
+            run_in_background = st.checkbox(
+                "Run in Background (Headless)",
+                extract_value(content, "run_in_background", "bool"),
+            )
+        with c2:
+            disable_extensions = st.checkbox(
+                "Disable Extensions",
+                extract_value(content, "disable_extensions", "bool"),
+            )
+            smooth_scroll = st.checkbox(
+                "Smooth Scroll", extract_value(content, "smooth_scroll", "bool")
+            )
+            keep_screen_awake = st.checkbox(
+                "Keep Screen Awake", extract_value(content, "keep_screen_awake", "bool")
+            )
+            showAiErrorAlerts = st.checkbox(
+                "Show AI Error Alerts",
+                extract_value(content, "showAiErrorAlerts", "bool"),
+            )
 
         if st.button("Save Settings"):
             new_content = content
+            # LinkedIn
+            new_content = update_variable(new_content, "close_tabs", close_tabs)
+            new_content = update_variable(
+                new_content, "follow_companies", follow_companies
+            )
+            new_content = update_variable(new_content, "run_non_stop", run_non_stop)
+            new_content = update_variable(
+                new_content, "alternate_sortby", alternate_sortby
+            )
+            new_content = update_variable(
+                new_content, "cycle_date_posted", cycle_date_posted
+            )
+            new_content = update_variable(
+                new_content, "stop_date_cycle_at_24hr", stop_date_cycle_at_24hr
+            )
+
+            # Global
+            new_content = update_variable(new_content, "file_name", file_name)
+            new_content = update_variable(
+                new_content, "failed_file_name", failed_file_name
+            )
+            new_content = update_variable(
+                new_content, "logs_folder_path", logs_folder_path
+            )
+            new_content = update_variable(
+                new_content, "generated_resume_path", generated_resume_path
+            )
+            new_content = update_variable(new_content, "click_gap", click_gap)
             new_content = update_variable(new_content, "stealth_mode", stealth_mode)
             new_content = update_variable(new_content, "safe_mode", safe_mode)
             new_content = update_variable(
@@ -638,6 +817,14 @@ with tabs[3]:
             new_content = update_variable(
                 new_content, "disable_extensions", disable_extensions
             )
+            new_content = update_variable(new_content, "smooth_scroll", smooth_scroll)
+            new_content = update_variable(
+                new_content, "keep_screen_awake", keep_screen_awake
+            )
+            new_content = update_variable(
+                new_content, "showAiErrorAlerts", showAiErrorAlerts
+            )
+
             save_file(filepath, new_content)
             st.success("Saved!")
 
