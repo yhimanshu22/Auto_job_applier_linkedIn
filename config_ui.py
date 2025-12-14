@@ -3,12 +3,17 @@ import re
 import os
 import subprocess
 import sys
+from dotenv import load_dotenv, set_key
 
 st.set_page_config(page_title="LinkedIn Bot Config", layout="wide")
 
 st.title("🤖 LinkedIn Bot Configuration")
 
 CONFIG_DIR = "config"
+ENV_FILE = ".env"
+
+# Load environment variables
+load_dotenv(ENV_FILE)
 
 
 def read_file(filepath):
@@ -115,6 +120,20 @@ def extract_value(content, var_name, var_type):
             except:
                 return []
         return []
+
+
+def update_env_var(key, value):
+    # If value is boolean, convert to string
+    if isinstance(value, bool):
+        value = str(value)
+
+    # Create .env if it doesn't exist
+    if not os.path.exists(ENV_FILE):
+        with open(ENV_FILE, "w") as f:
+            f.write("")
+
+    set_key(ENV_FILE, key, str(value))
+    os.environ[key] = str(value)  # Update current session as well
 
 
 tabs = st.tabs(["Personal Info", "Questions", "Search", "Settings", "Secrets"])
@@ -831,94 +850,86 @@ with tabs[3]:
 # --- Secrets ---
 with tabs[4]:
     st.header("Secrets")
-    filepath = os.path.join(CONFIG_DIR, "secrets.py")
-    if os.path.exists(filepath):
-        content = read_file(filepath)
+    st.info("Secrets are now stored in a .env file for security.")
 
-        st.subheader("LinkedIn Credentials")
-        username = st.text_input(
-            "LinkedIn Username", extract_value(content, "username", "string")
+    # Read from environment variables (loaded by python-dotenv)
+    current_username = os.getenv("LINKEDIN_USERNAME", "")
+    current_password = os.getenv("LINKEDIN_PASSWORD", "")
+    current_use_ai = os.getenv("USE_AI", "False") == "True"
+    current_ai_provider = os.getenv("AI_PROVIDER", "openai")
+    current_llm_api_url = os.getenv("LLM_API_URL", "https://api.openai.com/v1/")
+    current_llm_api_key = os.getenv("LLM_API_KEY", "not-needed")
+    current_llm_model = os.getenv("LLM_MODEL", "gpt-5-mini")
+    current_llm_spec = os.getenv("LLM_SPEC", "openai")
+    current_stream_output = os.getenv("STREAM_OUTPUT", "False") == "True"
+
+    st.subheader("LinkedIn Credentials")
+    username = st.text_input("LinkedIn Username", current_username)
+    password = st.text_input("LinkedIn Password", current_password, type="password")
+
+    st.subheader("AI Configuration")
+    use_AI = st.checkbox("Use AI", current_use_ai)
+
+    if use_AI:
+        ai_provider = st.selectbox(
+            "AI Provider",
+            ["openai", "deepseek", "gemini"],
+            index=(
+                ["openai", "deepseek", "gemini"].index(current_ai_provider)
+                if current_ai_provider in ["openai", "deepseek", "gemini"]
+                else 0
+            ),
         )
-        password = st.text_input(
-            "LinkedIn Password",
-            extract_value(content, "password", "string"),
-            type="password",
+
+        llm_api_url = st.text_input("LLM API URL", current_llm_api_url)
+        llm_api_key = st.text_input("LLM API Key", current_llm_api_key, type="password")
+        llm_model = st.text_input("LLM Model Name", current_llm_model)
+
+        llm_spec = st.selectbox(
+            "LLM Spec",
+            ["openai", "openai-like", "openai-like-github", "openai-like-mistral"],
+            index=(
+                [
+                    "openai",
+                    "openai-like",
+                    "openai-like-github",
+                    "openai-like-mistral",
+                ].index(current_llm_spec)
+                if current_llm_spec
+                in [
+                    "openai",
+                    "openai-like",
+                    "openai-like-github",
+                    "openai-like-mistral",
+                ]
+                else 0
+            ),
         )
 
-        st.subheader("AI Configuration")
-        use_AI = st.checkbox("Use AI", extract_value(content, "use_AI", "bool"))
+        stream_output = st.checkbox("Stream Output", current_stream_output)
+    else:
+        # Keep existing values if hidden
+        ai_provider = current_ai_provider
+        llm_api_url = current_llm_api_url
+        llm_api_key = current_llm_api_key
+        llm_model = current_llm_model
+        llm_spec = current_llm_spec
+        stream_output = current_stream_output
 
-        if use_AI:
-            ai_provider = st.selectbox(
-                "AI Provider",
-                ["openai", "deepseek", "gemini"],
-                index=(
-                    ["openai", "deepseek", "gemini"].index(
-                        extract_value(content, "ai_provider", "string")
-                    )
-                    if extract_value(content, "ai_provider", "string")
-                    in ["openai", "deepseek", "gemini"]
-                    else 0
-                ),
-            )
-
-            llm_api_url = st.text_input(
-                "LLM API URL", extract_value(content, "llm_api_url", "string")
-            )
-
-            llm_api_key = st.text_input(
-                "LLM API Key",
-                extract_value(content, "llm_api_key", "string"),
-                type="password",
-            )
-
-            llm_model = st.text_input(
-                "LLM Model Name", extract_value(content, "llm_model", "string")
-            )
-
-            llm_spec = st.selectbox(
-                "LLM Spec",
-                ["openai", "openai-like", "openai-like-github", "openai-like-mistral"],
-                index=(
-                    [
-                        "openai",
-                        "openai-like",
-                        "openai-like-github",
-                        "openai-like-mistral",
-                    ].index(extract_value(content, "llm_spec", "string"))
-                    if extract_value(content, "llm_spec", "string")
-                    in [
-                        "openai",
-                        "openai-like",
-                        "openai-like-github",
-                        "openai-like-mistral",
-                    ]
-                    else 0
-                ),
-            )
-
-            stream_output = st.checkbox(
-                "Stream Output", extract_value(content, "stream_output", "bool")
-            )
-
-        if st.button("Save Secrets"):
-            new_content = content
-            new_content = update_variable(new_content, "username", username)
-            new_content = update_variable(new_content, "password", password)
-
-            new_content = update_variable(new_content, "use_AI", use_AI)
-            if use_AI:
-                new_content = update_variable(new_content, "ai_provider", ai_provider)
-                new_content = update_variable(new_content, "llm_api_url", llm_api_url)
-                new_content = update_variable(new_content, "llm_api_key", llm_api_key)
-                new_content = update_variable(new_content, "llm_model", llm_model)
-                new_content = update_variable(new_content, "llm_spec", llm_spec)
-                new_content = update_variable(
-                    new_content, "stream_output", stream_output
-                )
-
-            save_file(filepath, new_content)
-            st.success("Saved!")
+    if st.button("Save Secrets"):
+        try:
+            update_env_var("LINKEDIN_USERNAME", username)
+            update_env_var("LINKEDIN_PASSWORD", password)
+            update_env_var("USE_AI", use_AI)
+            update_env_var("AI_PROVIDER", ai_provider)
+            update_env_var("LLM_API_URL", llm_api_url)
+            update_env_var("LLM_API_KEY", llm_api_key)
+            update_env_var("LLM_MODEL", llm_model)
+            update_env_var("LLM_SPEC", llm_spec)
+            update_env_var("STREAM_OUTPUT", stream_output)
+            st.success("Secrets saved to .env file!")
+        except Exception as e:
+            st.error(f"Failed to save secrets: {e}")
 
 # --- Sidebar ---
 st.sidebar.header("🤖 Bot Control")
