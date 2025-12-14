@@ -461,3 +461,126 @@ if st.sidebar.button("🛑 Stop Bot"):
             st.sidebar.error(f"Failed to stop bot: {e}")
     else:
         st.sidebar.warning("No running bot found (PID file missing).")
+
+# --- Bot Statistics ---
+st.sidebar.markdown("---")
+st.sidebar.header("📊 Bot Statistics")
+
+
+def parse_log_metrics(log_path="logs/log.txt"):
+    daily_stats = {}
+    current_date = "Unknown"
+
+    if not os.path.exists(log_path):
+        return {}
+
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            for line in f:
+                # Check for Date
+                # Format: Date and Time: 2025-12-14 12:50:45.882008
+                date_match = re.search(r"Date and Time:\s+(\d{4}-\d{2}-\d{2})", line)
+                if date_match:
+                    current_date = date_match.group(1)
+                    if current_date not in daily_stats:
+                        daily_stats[current_date] = {
+                            "Applied": 0,
+                            "External": 0,
+                            "Failed": 0,
+                            "Skipped": 0,
+                        }
+
+                # Check for Metrics
+                # Only count if we have a valid date (or assign to "Unknown")
+                if current_date not in daily_stats:
+                    daily_stats[current_date] = {
+                        "Applied": 0,
+                        "External": 0,
+                        "Failed": 0,
+                        "Skipped": 0,
+                    }
+
+                if "Jobs Easy Applied:" in line:
+                    match = re.search(r"Jobs Easy Applied:\s+(\d+)", line)
+                    if match:
+                        daily_stats[current_date]["Applied"] += int(match.group(1))
+                elif "External job links collected:" in line:
+                    match = re.search(r"External job links collected:\s+(\d+)", line)
+                    if match:
+                        daily_stats[current_date]["External"] += int(match.group(1))
+                elif "Failed jobs:" in line:
+                    match = re.search(r"Failed jobs:\s+(\d+)", line)
+                    if match:
+                        daily_stats[current_date]["Failed"] += int(match.group(1))
+                elif "Irrelevant jobs skipped:" in line:
+                    match = re.search(r"Irrelevant jobs skipped:\s+(\d+)", line)
+                    if match:
+                        daily_stats[current_date]["Skipped"] += int(match.group(1))
+
+        return daily_stats
+    except Exception as e:
+        st.sidebar.error(f"Error parsing log file: {e}")
+        return {}
+
+
+if st.sidebar.button("🔄 Refresh Stats"):
+    st.rerun()
+
+daily_stats = parse_log_metrics()
+
+if daily_stats:
+    # Calculate Grand Totals
+    total_applied = sum(d["Applied"] for d in daily_stats.values())
+    total_external = sum(d["External"] for d in daily_stats.values())
+    total_failed = sum(d["Failed"] for d in daily_stats.values())
+    total_skipped = sum(d["Skipped"] for d in daily_stats.values())
+
+    # Display Grand Totals
+    c1, c2 = st.sidebar.columns(2)
+    c1.metric("Total Applied", total_applied)
+    c2.metric("Total External", total_external)
+    c3, c4 = st.sidebar.columns(2)
+    c3.metric("Total Failed", total_failed)
+    c4.metric("Total Skipped", total_skipped)
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📅 Daily Breakdown")
+
+    # Prepare data for chart
+    # Streamlit bar_chart expects a DataFrame or a dict where keys are x-axis labels
+    # We want dates on x-axis, and bars for each metric.
+    # Format: {"Date": ["2025-12-14"], "Applied": [10], "Failed": [2], ...}
+
+    chart_data = {
+        "Date": [],
+        "Applied": [],
+        "External": [],
+        "Failed": [],
+        "Skipped": [],
+    }
+
+    # Sort dates
+    sorted_dates = sorted(daily_stats.keys())
+
+    for date in sorted_dates:
+        stats = daily_stats[date]
+        chart_data["Date"].append(date)
+        chart_data["Applied"].append(stats["Applied"])
+        chart_data["External"].append(stats["External"])
+        chart_data["Failed"].append(stats["Failed"])
+        chart_data["Skipped"].append(stats["Skipped"])
+
+    # Display Chart
+    st.sidebar.bar_chart(
+        data=chart_data,
+        x="Date",
+        y=["Applied", "External", "Failed", "Skipped"],
+        stack=False,
+    )
+
+    # Display Table (optional, maybe in an expander)
+    with st.sidebar.expander("Show Detailed Data"):
+        st.dataframe(chart_data)
+
+else:
+    st.sidebar.info("No logs found or empty log file.")
