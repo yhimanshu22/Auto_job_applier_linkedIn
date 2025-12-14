@@ -105,7 +105,7 @@ def extract_value(content, var_name, var_type):
         match = re.search(rf"{var_name}\s*=\s*(True|False)", content)
         return match.group(1) == "True" if match else False
     elif var_type == "int":
-        match = re.search(rf"{var_name}\s*=\s*(\d+)", content)
+        match = re.search(rf"{var_name}\s*=\s*(-?\d+)", content)
         return int(match.group(1)) if match else 0
     elif var_type == "list":
         match = re.search(rf"{var_name}\s*=\s*(\[.*?\])", content, re.DOTALL)
@@ -310,44 +310,302 @@ with tabs[2]:
     if os.path.exists(filepath):
         content = read_file(filepath)
 
-        search_location = st.text_input(
-            "Search Location", extract_value(content, "search_location", "string")
-        )
+        # 1. General Search Settings
+        st.subheader("General Settings")
+        col1, col2 = st.columns(2)
+        with col1:
+            search_location = st.text_input(
+                "Search Location", extract_value(content, "search_location", "string")
+            )
+            switch_number = st.number_input(
+                "Switch to next search after (applications)",
+                value=extract_value(content, "switch_number", "int"),
+                min_value=1,
+            )
+        with col2:
+            randomize_search_order = st.checkbox(
+                "Randomize Search Order",
+                extract_value(content, "randomize_search_order", "bool"),
+            )
+            pause_after_filters = st.checkbox(
+                "Pause after applying filters",
+                extract_value(content, "pause_after_filters", "bool"),
+            )
 
-        # Lists are harder to edit with simple inputs, using text area for now or just display
-        st.info(
-            "For lists like 'search_terms', please edit the file directly for now to avoid formatting issues, or use the text area below carefully."
-        )
-
-        # Simple implementation for search_terms as comma separated string
+        st.info("Search Terms (Edit directly or use the text area below carefully)")
         current_terms = extract_value(content, "search_terms", "list")
         search_terms_str = st.text_area(
-            "Search Terms (format: ['Term1', 'Term2'])", str(current_terms)
+            "Search Terms (format: ['Term1', 'Term2'])", str(current_terms), height=100
         )
 
-        easy_apply_only = st.checkbox(
-            "Easy Apply Only", extract_value(content, "easy_apply_only", "bool")
+        # 2. Job Filters
+        st.subheader("Job Filters")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            sort_by = st.selectbox(
+                "Sort By",
+                ["", "Most recent", "Most relevant"],
+                index=(
+                    ["", "Most recent", "Most relevant"].index(
+                        extract_value(content, "sort_by", "string")
+                    )
+                    if extract_value(content, "sort_by", "string")
+                    in ["", "Most recent", "Most relevant"]
+                    else 0
+                ),
+            )
+            easy_apply_only = st.checkbox(
+                "Easy Apply Only", extract_value(content, "easy_apply_only", "bool")
+            )
+        with c2:
+            date_posted = st.selectbox(
+                "Date Posted",
+                ["", "Any time", "Past month", "Past week", "Past 24 hours"],
+                index=(
+                    ["", "Any time", "Past month", "Past week", "Past 24 hours"].index(
+                        extract_value(content, "date_posted", "string")
+                    )
+                    if extract_value(content, "date_posted", "string")
+                    in ["", "Any time", "Past month", "Past week", "Past 24 hours"]
+                    else 0
+                ),
+            )
+            under_10_applicants = st.checkbox(
+                "Under 10 Applicants",
+                extract_value(content, "under_10_applicants", "bool"),
+            )
+        with c3:
+            salary = st.selectbox(
+                "Salary",
+                [
+                    "",
+                    "$40,000+",
+                    "$60,000+",
+                    "$80,000+",
+                    "$100,000+",
+                    "$120,000+",
+                    "$140,000+",
+                    "$160,000+",
+                    "$180,000+",
+                    "$200,000+",
+                ],
+                index=(
+                    [
+                        "",
+                        "$40,000+",
+                        "$60,000+",
+                        "$80,000+",
+                        "$100,000+",
+                        "$120,000+",
+                        "$140,000+",
+                        "$160,000+",
+                        "$180,000+",
+                        "$200,000+",
+                    ].index(extract_value(content, "salary", "string"))
+                    if extract_value(content, "salary", "string")
+                    in [
+                        "",
+                        "$40,000+",
+                        "$60,000+",
+                        "$80,000+",
+                        "$100,000+",
+                        "$120,000+",
+                        "$140,000+",
+                        "$160,000+",
+                        "$180,000+",
+                        "$200,000+",
+                    ]
+                    else 0
+                ),
+            )
+            in_your_network = st.checkbox(
+                "In Your Network", extract_value(content, "in_your_network", "bool")
+            )
+            fair_chance_employer = st.checkbox(
+                "Fair Chance Employer",
+                extract_value(content, "fair_chance_employer", "bool"),
+            )
+
+        # 3. Advanced Filters (Lists)
+        st.subheader("Advanced Filters")
+
+        # Experience Level
+        exp_options = [
+            "Internship",
+            "Entry level",
+            "Associate",
+            "Mid-Senior level",
+            "Director",
+            "Executive",
+        ]
+        current_exp_level = extract_value(content, "experience_level", "list")
+        experience_level = st.multiselect(
+            "Experience Level",
+            exp_options,
+            default=[x for x in current_exp_level if x in exp_options],
         )
+
+        # Job Type
+        type_options = [
+            "Full-time",
+            "Part-time",
+            "Contract",
+            "Temporary",
+            "Volunteer",
+            "Internship",
+            "Other",
+        ]
+        current_job_type = extract_value(content, "job_type", "list")
+        job_type = st.multiselect(
+            "Job Type",
+            type_options,
+            default=[x for x in current_job_type if x in type_options],
+        )
+
+        # On Site
+        site_options = ["On-site", "Remote", "Hybrid"]
+        current_on_site = extract_value(content, "on_site", "list")
+        on_site = st.multiselect(
+            "On-site/Remote",
+            site_options,
+            default=[x for x in current_on_site if x in site_options],
+        )
+
+        # 4. Dynamic Lists
+        st.subheader("Dynamic Lists (Enter as Python lists)")
+        with st.expander("Edit Dynamic Lists"):
+            companies_str = st.text_area(
+                "Companies", str(extract_value(content, "companies", "list"))
+            )
+            location_str = st.text_area(
+                "Locations", str(extract_value(content, "location", "list"))
+            )
+            industry_str = st.text_area(
+                "Industries", str(extract_value(content, "industry", "list"))
+            )
+            job_function_str = st.text_area(
+                "Job Functions", str(extract_value(content, "job_function", "list"))
+            )
+            job_titles_str = st.text_area(
+                "Job Titles", str(extract_value(content, "job_titles", "list"))
+            )
+            benefits_str = st.text_area(
+                "Benefits", str(extract_value(content, "benefits", "list"))
+            )
+            commitments_str = st.text_area(
+                "Commitments", str(extract_value(content, "commitments", "list"))
+            )
+
+        # 5. Exclusion/Inclusion Rules
+        st.subheader("Exclusion Rules")
+        about_company_bad_words_str = st.text_area(
+            "About Company Bad Words",
+            str(extract_value(content, "about_company_bad_words", "list")),
+        )
+        about_company_good_words_str = st.text_area(
+            "About Company Good Words",
+            str(extract_value(content, "about_company_good_words", "list")),
+        )
+        bad_words_str = st.text_area(
+            "Job Description Bad Words",
+            str(extract_value(content, "bad_words", "list")),
+        )
+
+        # 6. Experience & Qualifications
+        st.subheader("Experience & Qualifications")
+        qc1, qc2 = st.columns(2)
+        with qc1:
+            security_clearance = st.checkbox(
+                "Security Clearance",
+                extract_value(content, "security_clearance", "bool"),
+            )
+            did_masters = st.checkbox(
+                "Masters Degree", extract_value(content, "did_masters", "bool")
+            )
+        with qc2:
+            current_experience = st.number_input(
+                "Current Experience (Years, -1 to ignore)",
+                value=extract_value(content, "current_experience", "int"),
+                min_value=-1,
+            )
 
         if st.button("Save Search Preferences"):
             new_content = content
+            # General
             new_content = update_variable(
                 new_content, "search_location", search_location
             )
+            new_content = update_variable(new_content, "switch_number", switch_number)
+            new_content = update_variable(
+                new_content, "randomize_search_order", randomize_search_order
+            )
+            new_content = update_variable(
+                new_content, "pause_after_filters", pause_after_filters
+            )
+
+            # Filters
+            new_content = update_variable(new_content, "sort_by", sort_by)
             new_content = update_variable(
                 new_content, "easy_apply_only", easy_apply_only
             )
+            new_content = update_variable(new_content, "date_posted", date_posted)
+            new_content = update_variable(
+                new_content, "under_10_applicants", under_10_applicants
+            )
+            new_content = update_variable(new_content, "salary", salary)
+            new_content = update_variable(
+                new_content, "in_your_network", in_your_network
+            )
+            new_content = update_variable(
+                new_content, "fair_chance_employer", fair_chance_employer
+            )
 
-            # Try to update list
+            # Advanced Filters
+            new_content = update_variable(
+                new_content, "experience_level", experience_level
+            )
+            new_content = update_variable(new_content, "job_type", job_type)
+            new_content = update_variable(new_content, "on_site", on_site)
+
+            # Qualifications
+            new_content = update_variable(
+                new_content, "security_clearance", security_clearance
+            )
+            new_content = update_variable(new_content, "did_masters", did_masters)
+            new_content = update_variable(
+                new_content, "current_experience", current_experience
+            )
+
+            # Lists
             try:
-                new_list = eval(search_terms_str)
-                if isinstance(new_list, list):
-                    new_content = update_variable(new_content, "search_terms", new_list)
-            except:
-                st.error("Invalid list format for Search Terms")
+                # Search Terms
+                new_terms = eval(search_terms_str)
+                if isinstance(new_terms, list):
+                    new_content = update_variable(
+                        new_content, "search_terms", new_terms
+                    )
 
-            save_file(filepath, new_content)
-            st.success("Saved!")
+                # Dynamic Lists
+                for var_name, var_str in [
+                    ("companies", companies_str),
+                    ("location", location_str),
+                    ("industry", industry_str),
+                    ("job_function", job_function_str),
+                    ("job_titles", job_titles_str),
+                    ("benefits", benefits_str),
+                    ("commitments", commitments_str),
+                    ("about_company_bad_words", about_company_bad_words_str),
+                    ("about_company_good_words", about_company_good_words_str),
+                    ("bad_words", bad_words_str),
+                ]:
+                    new_list = eval(var_str)
+                    if isinstance(new_list, list):
+                        new_content = update_variable(new_content, var_name, new_list)
+
+                save_file(filepath, new_content)
+                st.success("Saved!")
+            except Exception as e:
+                st.error(f"Error saving lists: {e}. Please check your list formatting.")
 
 # --- Settings ---
 with tabs[3]:
@@ -390,6 +648,7 @@ with tabs[4]:
     if os.path.exists(filepath):
         content = read_file(filepath)
 
+        st.subheader("LinkedIn Credentials")
         username = st.text_input(
             "LinkedIn Username", extract_value(content, "username", "string")
         )
@@ -399,17 +658,78 @@ with tabs[4]:
             type="password",
         )
 
-        llm_api_key = st.text_input(
-            "LLM API Key",
-            extract_value(content, "llm_api_key", "string"),
-            type="password",
-        )
+        st.subheader("AI Configuration")
+        use_AI = st.checkbox("Use AI", extract_value(content, "use_AI", "bool"))
+
+        if use_AI:
+            ai_provider = st.selectbox(
+                "AI Provider",
+                ["openai", "deepseek", "gemini"],
+                index=(
+                    ["openai", "deepseek", "gemini"].index(
+                        extract_value(content, "ai_provider", "string")
+                    )
+                    if extract_value(content, "ai_provider", "string")
+                    in ["openai", "deepseek", "gemini"]
+                    else 0
+                ),
+            )
+
+            llm_api_url = st.text_input(
+                "LLM API URL", extract_value(content, "llm_api_url", "string")
+            )
+
+            llm_api_key = st.text_input(
+                "LLM API Key",
+                extract_value(content, "llm_api_key", "string"),
+                type="password",
+            )
+
+            llm_model = st.text_input(
+                "LLM Model Name", extract_value(content, "llm_model", "string")
+            )
+
+            llm_spec = st.selectbox(
+                "LLM Spec",
+                ["openai", "openai-like", "openai-like-github", "openai-like-mistral"],
+                index=(
+                    [
+                        "openai",
+                        "openai-like",
+                        "openai-like-github",
+                        "openai-like-mistral",
+                    ].index(extract_value(content, "llm_spec", "string"))
+                    if extract_value(content, "llm_spec", "string")
+                    in [
+                        "openai",
+                        "openai-like",
+                        "openai-like-github",
+                        "openai-like-mistral",
+                    ]
+                    else 0
+                ),
+            )
+
+            stream_output = st.checkbox(
+                "Stream Output", extract_value(content, "stream_output", "bool")
+            )
 
         if st.button("Save Secrets"):
             new_content = content
             new_content = update_variable(new_content, "username", username)
             new_content = update_variable(new_content, "password", password)
-            new_content = update_variable(new_content, "llm_api_key", llm_api_key)
+
+            new_content = update_variable(new_content, "use_AI", use_AI)
+            if use_AI:
+                new_content = update_variable(new_content, "ai_provider", ai_provider)
+                new_content = update_variable(new_content, "llm_api_url", llm_api_url)
+                new_content = update_variable(new_content, "llm_api_key", llm_api_key)
+                new_content = update_variable(new_content, "llm_model", llm_model)
+                new_content = update_variable(new_content, "llm_spec", llm_spec)
+                new_content = update_variable(
+                    new_content, "stream_output", stream_output
+                )
+
             save_file(filepath, new_content)
             st.success("Saved!")
 
