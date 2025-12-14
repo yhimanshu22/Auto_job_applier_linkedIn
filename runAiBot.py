@@ -1445,7 +1445,9 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                             try:
                                 errored = ""
                                 modal = find_by_class(driver, "jobs-easy-apply-modal")
-                                wait_span_click(modal, "Next", 1)
+                                wait_span_click(modal, "Next", 1) or robust_click(
+                                    driver, ["Next"], 1
+                                )
                                 # if description != "Unknown":
                                 #     resume = create_custom_resume(description)
                                 resume = "Previous resume"
@@ -1521,7 +1523,9 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                         )
                                         + "\n\n"
                                     )
-                                wait_span_click(driver, "Review", 1, scrollTop=True)
+                                wait_span_click(
+                                    driver, "Review", 1, scrollTop=True
+                                ) or robust_click(driver, ["Review"], 1)
                                 cur_pause_before_submit = pause_before_submit
                                 if errored != "stuck" and cur_pause_before_submit:
                                     decision = pyautogui.confirm(
@@ -1544,9 +1548,12 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                 follow_company(modal)
                                 if wait_span_click(
                                     driver, "Submit application", 2, scrollTop=True
-                                ):
+                                ) or robust_click(driver, ["Submit application"], 2):
                                     date_applied = datetime.now()
-                                    if not wait_span_click(driver, "Done", 2):
+                                    if not (
+                                        wait_span_click(driver, "Done", 2)
+                                        or robust_click(driver, ["Done"], 2)
+                                    ):
                                         actions.send_keys(Keys.ESCAPE).perform()
                                 elif (
                                     errored != "stuck"
@@ -1559,7 +1566,9 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                     )
                                 ):
                                     date_applied = datetime.now()
-                                    wait_span_click(driver, "Done", 2)
+                                    wait_span_click(driver, "Done", 2) or robust_click(
+                                        driver, ["Done"], 2
+                                    )
                                 else:
                                     print_lg(
                                         "Since, Submit Application failed, discarding the job application..."

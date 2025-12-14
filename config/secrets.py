@@ -4,8 +4,8 @@
 
 
 # Login Credentials for LinkedIn (Optional)
-username = "yhimanshu220456@gmail.com"       # Enter your username in the quotes
-password ="TcrvvEoKq-xa9KM"         # Enter your password in the quotes
+username = "himu09854@gmail.com"       # Enter your username in the quotes
+password ="Himanshu$220456"         # Enter your password in the quotes
 
 
 ## Artificial Intelligence (Beta Not-Recommended)
