@@ -111,6 +111,7 @@ about_company_for_ai = None  # TODO extract about company for AI
 # --- Session Management Functions ---
 import pickle
 
+
 def save_cookies():
     """Saves current cookies to a file."""
     try:
@@ -118,6 +119,7 @@ def save_cookies():
         print_lg("Session cookies saved successfully!")
     except Exception as e:
         print_lg("Failed to save cookies!", e)
+
 
 def load_cookies():
     """Loads cookies from file and refreshes the page."""
@@ -127,16 +129,16 @@ def load_cookies():
             # You must be on the domain before adding cookies
             if "linkedin.com" not in driver.current_url:
                 driver.get("https://www.linkedin.com")
-                
+
             for cookie in cookies:
                 # Security: Sometimes 'expiry' causes issues if it's a float
-                if 'expiry' in cookie:
-                    cookie['expiry'] = int(cookie['expiry'])
+                if "expiry" in cookie:
+                    cookie["expiry"] = int(cookie["expiry"])
                 driver.add_cookie(cookie)
-            
+
             print_lg("Cookies loaded. Refreshing session...")
             driver.refresh()
-            buffer(2) # Wait for reload
+            buffer(2)  # Wait for reload
         except Exception as e:
             print_lg("Failed to load cookies. You may need to login manually.", e)
 
@@ -144,18 +146,22 @@ def load_cookies():
 # --- 🛡️ Humanization & Anti-Ban Overrides -------------------------
 from selenium.webdriver.common.action_chains import ActionChains
 
+
 # 1. Helper to sleep for a random duration
 def random_sleep(min_time=1.0, max_time=None):
     """Sleeps for a random amount of time to simulate human processing."""
     if max_time is None:
         max_time = min_time + 2.0  # Add 2 seconds jitter by default
-    
+
     # Ensure times are valid
-    if min_time < 0.1: min_time = 0.1
-    if max_time <= min_time: max_time = min_time + 0.5
-    
+    if min_time < 0.1:
+        min_time = 0.1
+    if max_time <= min_time:
+        max_time = min_time + 0.5
+
     duration = randint(int(min_time * 100), int(max_time * 100)) / 100.0
     sleep(duration)
+
 
 # 2. OVERRIDE the existing 'buffer' function globally
 def buffer(seconds=0):
@@ -165,18 +171,22 @@ def buffer(seconds=0):
     """
     # If the script asks for 0 or 1 second, we default to the user's 'click_gap' setting
     # to ensure we never go too fast, even if the code says 'buffer(0)'
-    base_time = max(seconds, click_gap if 'click_gap' in globals() else 1.0)
-    
+    base_time = max(seconds, click_gap if "click_gap" in globals() else 1.0)
+
     # Call random_sleep with the base time + some randomness
     random_sleep(base_time, base_time + 1.5)
+
 
 # 3. OVERRIDE click to be human-like (Optional but recommended)
 def human_click(element):
     try:
         # Move mouse to element before clicking
-        ActionChains(driver).move_to_element(element).pause(randint(2, 6)/10).click().perform()
+        ActionChains(driver).move_to_element(element).pause(
+            randint(2, 6) / 10
+        ).click().perform()
     except:
-        element.click() # Fallback
+        element.click()  # Fallback
+
 
 # < Login Functions
 def is_logged_in_LN() -> bool:
@@ -234,11 +244,11 @@ def login_LN() -> None:
         wait.until(
             EC.url_to_be("https://www.linkedin.com/feed/")
         )  # wait.until(EC.presence_of_element_located((By.XPATH, '//button[normalize-space(.)="Start a post"]')))
-        
+
         # --- Fixed Logic: Save cookies BEFORE returning ---
         save_cookies()
         print_lg("Login successful!")
-        return 
+        return
         # --------------------------------------------------
 
     except Exception as e:
@@ -1310,7 +1320,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
 
     if randomize_search_order:
         shuffle(search_terms)
-        
+
     for searchTerm in search_terms:
         # Construct URL with parameters to avoid unreliable UI clicks
         base_url = "https://www.linkedin.com/jobs/search/?"
@@ -1334,8 +1344,12 @@ def apply_to_jobs(search_terms: list[str]) -> None:
 
         # 3. Experience Level Logic (f_E)
         exp_mapping = {
-            "Internship": "1", "Entry level": "2", "Associate": "3", 
-            "Mid-Senior level": "4", "Director": "5", "Executive": "6"
+            "Internship": "1",
+            "Entry level": "2",
+            "Associate": "3",
+            "Mid-Senior level": "4",
+            "Director": "5",
+            "Executive": "6",
         }
         if experience_level:
             exp_values = [exp_mapping[e] for e in experience_level if e in exp_mapping]
@@ -1344,8 +1358,12 @@ def apply_to_jobs(search_terms: list[str]) -> None:
 
         # 4. Job Type Logic (f_JT)
         jt_mapping = {
-            "Full-time": "F", "Part-time": "P", "Contract": "C", 
-            "Temporary": "T", "Volunteer": "V", "Internship": "I"
+            "Full-time": "F",
+            "Part-time": "P",
+            "Contract": "C",
+            "Temporary": "T",
+            "Volunteer": "V",
+            "Internship": "I",
         }
         if job_type:
             jt_values = [jt_mapping[j] for j in job_type if j in jt_mapping]
@@ -1367,15 +1385,21 @@ def apply_to_jobs(search_terms: list[str]) -> None:
         full_url = base_url + "&".join(params)
 
         driver.get(full_url)
-        print_lg("\n________________________________________________________________________________________________________________________\n")
+        print_lg(
+            "\n________________________________________________________________________________________________________________________\n"
+        )
         print_lg(f'\n>>>> Now searching for "{searchTerm}" <<<<\n')
-        print_lg(f'URL: {full_url}\n\n')
+        print_lg(f"URL: {full_url}\n\n")
 
         current_count = 0
         try:
             while current_count < switch_number:
                 # Wait until job listings are loaded
-                wait.until(EC.presence_of_all_elements_located((By.XPATH, "//li[@data-occludable-job-id]")))
+                wait.until(
+                    EC.presence_of_all_elements_located(
+                        (By.XPATH, "//li[@data-occludable-job-id]")
+                    )
+                )
 
                 pagination_element, current_page = get_page_info()
 
@@ -1390,21 +1414,29 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                         pyautogui.press("shiftright")
                     if current_count >= switch_number:
                         break
-                    
+
                     print_lg("\n-@-\n")
 
-                    job_id, title, company, work_location, work_style, skip = get_job_main_details(job, blacklisted_companies, rejected_jobs)
+                    job_id, title, company, work_location, work_style, skip = (
+                        get_job_main_details(job, blacklisted_companies, rejected_jobs)
+                    )
 
                     if skip:
                         continue
-                        
+
                     # Redundant fail safe check for applied jobs!
                     try:
-                        if job_id in applied_jobs or find_by_class(driver, "jobs-s-apply__application-link", 2):
-                            print_lg(f'Already applied to "{title} | {company}" job. Job ID: {job_id}!')
+                        if job_id in applied_jobs or find_by_class(
+                            driver, "jobs-s-apply__application-link", 2
+                        ):
+                            print_lg(
+                                f'Already applied to "{title} | {company}" job. Job ID: {job_id}!'
+                            )
                             continue
                     except Exception as e:
-                        print_lg(f'Trying to Apply to "{title} | {company}" job. Job ID: {job_id}')
+                        print_lg(
+                            f'Trying to Apply to "{title} | {company}" job. Job ID: {job_id}'
+                        )
 
                     job_link = "https://www.linkedin.com/jobs/view/" + job_id
                     application_link = "Easy Applied"
@@ -1468,6 +1500,16 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     description, experience_required, skip, reason, message = (
                         get_job_description()
                     )
+
+                    # --- NON-AI DEAL BREAKER CHECK ---
+                    if not skip:
+                        is_deal_breaker, breaker_reason = check_deal_breakers(
+                            description
+                        )
+                        if is_deal_breaker:
+                            skip = True
+                            reason = "Deal Breaker Rule"
+                            message = f"{breaker_reason}. Skipping this job!"
 
                     if skip:
                         print_lg(message)
@@ -1706,6 +1748,7 @@ def run(total_runs: int) -> int:
 chatGPT_tab = False
 linkedIn_tab = False
 
+
 def main() -> None:
     try:
         global linkedIn_tab, tabs_count, useNewResume, aiClient
@@ -1724,13 +1767,13 @@ def main() -> None:
 
         # --- Login Logic ---
         tabs_count = len(driver.window_handles)
-        
+
         # 1. Open LinkedIn Homepage to set domain context for cookies
         driver.get("https://www.linkedin.com")
-        
+
         # 2. Attempt to restore session from cookies
         load_cookies()
-        
+
         # 3. Verify login status
         if not is_logged_in_LN():
             print_lg("Cookie login failed or first run. Logging in manually...")
@@ -1741,7 +1784,9 @@ def main() -> None:
 
         # 4. Final Safety Check before starting
         if not is_logged_in_LN():
-            raise Exception("Failed to login! Please check your credentials or internet connection.")
+            raise Exception(
+                "Failed to login! Please check your credentials or internet connection."
+            )
 
         linkedIn_tab = driver.current_window_handle
 
@@ -1773,10 +1818,10 @@ def main() -> None:
 
         # --- Job Application Loop ---
         driver.switch_to.window(linkedIn_tab)
-        
+
         # Run the first cycle
         total_runs = run(total_runs)
-        
+
         # Continue running if loop mode is enabled
         while run_non_stop:
             if cycle_date_posted:
@@ -1800,7 +1845,7 @@ def main() -> None:
                         )
                     ]
                 )
-            
+
             if alternate_sortby:
                 global sort_by
                 sort_by = (
@@ -1811,9 +1856,9 @@ def main() -> None:
                 sort_by = (
                     "Most recent" if sort_by == "Most relevant" else "Most relevant"
                 )
-            
+
             total_runs = run(total_runs)
-            
+
             if dailyEasyApplyLimitReached:
                 print_lg("Daily limit reached. Stopping run loop.")
                 break
@@ -1836,7 +1881,7 @@ def main() -> None:
         )
         print_lg("\nFailed jobs:                    {}".format(failed_count))
         print_lg("Irrelevant jobs skipped:        {}\n".format(skip_count))
-        
+
         if randomly_answered_questions:
             print_lg(
                 "\n\nQuestions randomly answered:\n  {}  \n\n".format(
@@ -1845,7 +1890,7 @@ def main() -> None:
                     )
                 )
             )
-            
+
         quote = choice(
             [
                 "You're one step closer than before.",
@@ -1865,12 +1910,12 @@ def main() -> None:
         msg = f"\n{quote}\n\n\nBest regards,\nSai Vignesh Golla\nhttps://www.linkedin.com/in/saivigneshgolla/\n\n"
         pyautogui.alert(msg, "Exiting..")
         print_lg(msg, "Closing the browser...")
-        
+
         if tabs_count >= 10:
             msg = "NOTE: IF YOU HAVE MORE THAN 10 TABS OPENED, PLEASE CLOSE OR BOOKMARK THEM!\n\nOr it's highly likely that application will just open browser and not do anything next time!"
             pyautogui.alert(msg, "Info")
             print_lg("\n" + msg)
-            
+
         ##> ------ Yang Li : MARKYangL - Feature ------
         if use_AI and aiClient:
             try:
@@ -1884,7 +1929,7 @@ def main() -> None:
             except Exception as e:
                 print_lg("Failed to close AI client:", e)
         ##<
-        
+
         try:
             if driver:
                 driver.quit()
@@ -1892,6 +1937,7 @@ def main() -> None:
             print_lg("Browser already closed.", e)
         except Exception as e:
             critical_error_log("When quitting...", e)
-            
+
+
 if __name__ == "__main__":
     main()

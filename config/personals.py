@@ -3,6 +3,11 @@
 
 # >>>>>>>>>>> Easy Apply Questions & Inputs <<<<<<<<<<<
 
+# Do you require a visa sponsorship?
+require_visa = True  # True or False
+
+# Your legal name
+
 # Your legal name
 first_name = "Himanshu"  # Your first name in quotes Eg: "First", "Sai"
 middle_name = ""  # Your name in quotes Eg: "Middle", "Vignesh", ""

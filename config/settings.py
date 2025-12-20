@@ -51,7 +51,7 @@ run_in_background = False  # True or False, Note: True or False are case-sensiti
 disable_extensions = True  # True or False, Note: True or False are case-sensitive
 
 # Run in safe mode. Set this true if chrome is taking too long to open or if you have multiple profiles in browser. This will open chrome in guest profile!
-safe_mode = True # True or False, Note: True or False are case-sensitive
+safe_mode = True  # True or False, Note: True or False are case-sensitive
 
 # Do you want scrolling to be smooth or instantaneous? (Can reduce performance if True)
 smooth_scroll = True  # True or False, Note: True or False are case-sensitive
@@ -60,10 +60,56 @@ smooth_scroll = True  # True or False, Note: True or False are case-sensitive
 keep_screen_awake = True  # True or False, Note: True or False are case-sensitive (Note: Will temporarily deactivate when any application dialog boxes are present (Eg: Pause before submit, Help needed for a question..))
 
 # Run in undetected mode to bypass anti-bot protections (Preview Feature, UNSTABLE. Recommended to leave it as False)
-stealth_mode = True # True or False, Note: True or False are case-sensitive
+stealth_mode = True  # True or False, Note: True or False are case-sensitive
 
 # Do you want to get alerts on errors related to AI API connection?
 showAiErrorAlerts = False  # True or False, Note: True or False are case-sensitive
 
 # Use ChatGPT for resume building (Experimental Feature can break the application. Recommended to leave it as False)
 # use_resume_generator = False       # True or False, Note: True or False are case-sensitive ,   This feature may only work with 'stealth_mode = True'. As ChatGPT website is hosted by CloudFlare which is protected by Anti-bot protections!
+
+# --- DEAL BREAKER CONFIGURATION ---
+
+# 1. VISA / CITIZENSHIP
+# Skip if the job mentions these phrases (and you need a visa)
+# Only active if 'require_visa = True' in your config/personals.py
+visa_deal_breakers = [
+    r"\bus citizen\b",
+    r"\bu\.s\. citizen\b",
+    r"\bunited states citizen\b",
+    r"\bpermanent resident\b",
+    r"\bgreen card\b",
+    r"\bsecurity clearance\b",
+    r"\bclearance required\b",
+    r"\bmust be a citizen\b",
+    r"\bcitizenship required\b",
+    r"\bno sponsorship\b",
+    r"\bnot provide sponsorship\b",
+    r"\bcannot sponsor\b",
+    r"authorized to work .* without sponsorship",
+    r"authorized to work .* no sponsorship",
+    r"work authorization .* without sponsorship",
+]
+
+# 2. LOCATION (Strict)
+# Skip if the job description mentions specific locations you CANNOT work in
+location_blacklists = [
+    "must reside in",
+    "must live in",
+    "locals only",
+    "only candidates located in",
+]
+
+# 3. TECHNICAL DEAL BREAKERS
+# Skip if you absolutely hate these technologies or don't know them
+tech_blacklists = [
+    "mainframe",
+    "cobol",
+    "assembly",
+]
+
+# 4. EDUCATION (Optional)
+education_blacklists = [
+    "phd required",
+    "doctorate required",
+]

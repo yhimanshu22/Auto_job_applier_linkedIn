@@ -329,3 +329,57 @@ def get_chrome_version() -> int | None:
             except Exception:
                 pass
     return None
+
+
+def check_deal_breakers(description_text: str) -> tuple[bool, str]:
+    """
+    Scans the job description for deal-breaker phrases using Regex.
+    Returns: (bool, str) -> (Should_Skip, Reason)
+    """
+    import re
+    from config.settings import (
+        visa_deal_breakers,
+        location_blacklists,
+        tech_blacklists,
+        education_blacklists,
+    )
+
+    try:
+        from config.personals import require_visa
+    except ImportError:
+        require_visa = False
+
+    text_lower = description_text.lower()
+
+    # 1. Check Visa/Citizenship (Only if you need a visa)
+    if require_visa:
+        # We only care about "US Citizen" requirements if we actually need a visa.
+        # If require_visa is True, it means we DO need sponsorship, so we must skip "Citizenship Only" jobs.
+        for phrase in visa_deal_breakers:
+            # Check if it's a raw string regex or just text
+            if phrase.startswith(r"\\") or "\\" in phrase or "[" in phrase:
+                pattern = phrase  # It's already a regex
+            else:
+                # \b ensures we match whole words (e.g., avoids matching "reuse" when looking for "us")
+                pattern = r"\b" + re.escape(phrase) + r"\b"
+
+            if re.search(pattern, text_lower, re.IGNORECASE):
+                return True, f"Visa Deal Breaker: Found '{phrase}'"
+
+    # 2. Check Tech Stack Blacklist
+    for phrase in tech_blacklists:
+        pattern = r"\b" + re.escape(phrase) + r"\b"
+        if re.search(pattern, text_lower, re.IGNORECASE):
+            return True, f"Tech Stack Deal Breaker: Found '{phrase}'"
+
+    # 3. Check Location Strictness
+    for phrase in location_blacklists:
+        if phrase in text_lower:
+            return True, f"Location Deal Breaker: Found '{phrase}'"
+
+    # 4. Check Education Strictness
+    for phrase in education_blacklists:
+        if phrase in text_lower:
+            return True, f"Education Deal Breaker: Found '{phrase}'"
+
+    return False, "Safe"
