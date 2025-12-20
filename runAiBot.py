@@ -163,20 +163,6 @@ def random_sleep(min_time=1.0, max_time=None):
     sleep(duration)
 
 
-# 2. OVERRIDE the existing 'buffer' function globally
-def buffer(seconds=0):
-    """
-    Replaces the robotic fixed wait with a human-like variable wait.
-    This automatically fixes every 'buffer()' call in your entire script.
-    """
-    # If the script asks for 0 or 1 second, we default to the user's 'click_gap' setting
-    # to ensure we never go too fast, even if the code says 'buffer(0)'
-    base_time = max(seconds, click_gap if "click_gap" in globals() else 1.0)
-
-    # Call random_sleep with the base time + some randomness
-    random_sleep(base_time, base_time + 1.5)
-
-
 # 3. OVERRIDE click to be human-like (Optional but recommended)
 def human_click(element):
     try:
