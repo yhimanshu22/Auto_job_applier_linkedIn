@@ -108,6 +108,42 @@ about_company_for_ai = None  # TODO extract about company for AI
 
 # >
 
+# --- 🛡️ Humanization & Anti-Ban Overrides -------------------------
+from selenium.webdriver.common.action_chains import ActionChains
+
+# 1. Helper to sleep for a random duration
+def random_sleep(min_time=1.0, max_time=None):
+    """Sleeps for a random amount of time to simulate human processing."""
+    if max_time is None:
+        max_time = min_time + 2.0  # Add 2 seconds jitter by default
+    
+    # Ensure times are valid
+    if min_time < 0.1: min_time = 0.1
+    if max_time <= min_time: max_time = min_time + 0.5
+    
+    duration = randint(int(min_time * 100), int(max_time * 100)) / 100.0
+    sleep(duration)
+
+# 2. OVERRIDE the existing 'buffer' function globally
+def buffer(seconds=0):
+    """
+    Replaces the robotic fixed wait with a human-like variable wait.
+    This automatically fixes every 'buffer()' call in your entire script.
+    """
+    # If the script asks for 0 or 1 second, we default to the user's 'click_gap' setting
+    # to ensure we never go too fast, even if the code says 'buffer(0)'
+    base_time = max(seconds, click_gap if 'click_gap' in globals() else 1.0)
+    
+    # Call random_sleep with the base time + some randomness
+    random_sleep(base_time, base_time + 1.5)
+
+# 3. OVERRIDE click to be human-like (Optional but recommended)
+def human_click(element):
+    try:
+        # Move mouse to element before clicking
+        ActionChains(driver).move_to_element(element).pause(randint(2, 6)/10).click().perform()
+    except:
+        element.click() # Fallback
 
 # < Login Functions
 def is_logged_in_LN() -> bool:
@@ -381,7 +417,8 @@ def get_job_main_details(
         pass
     try:
         if not skip:
-            job_details_button.click()
+            # job_details_button.click()
+            human_click(job_details_button)
     except Exception as e:
         print_lg(
             f'Failed to click "{title} | {company}" job on details button. Job ID: {job_id}!'
@@ -1017,14 +1054,15 @@ def external_apply(
         if pagination_element != None:
             return True, application_link, tabs_count
     try:
-        wait.until(
+        apply_btn = wait.until(
             EC.element_to_be_clickable(
                 (
                     By.XPATH,
                     ".//button[contains(@class,'jobs-apply-button') and contains(@class, 'artdeco-button--3')]",
                 )
             )
-        ).click()  # './/button[contains(span, "Apply") and not(span[contains(@class, "disabled")])]'
+        )  # './/button[contains(span, "Apply") and not(span[contains(@class, "disabled")])]'
+        human_click(apply_btn)
         wait_span_click(driver, "Continue", 1, True, False)
         windows = driver.window_handles
         tabs_count = len(windows)
@@ -1303,8 +1341,10 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                 pagination_element, current_page = get_page_info()
 
                 # Find all job listings in current page
-                buffer(3)
-                job_listings = driver.find_elements(By.XPATH, "//li[@data-occludable-job-id]")
+                random_sleep(2, 4)
+                job_listings = driver.find_elements(
+                    By.XPATH, "//li[@data-occludable-job-id]"
+                )
 
                 for job in job_listings:
                     if keep_screen_awake:
@@ -1335,10 +1375,23 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     questions_list, screenshot_name = None, "Not Available"
 
                     try:
-                        rejected_jobs, blacklisted_companies, jobs_top_card = check_blacklist(rejected_jobs, job_id, company, blacklisted_companies)
+                        rejected_jobs, blacklisted_companies, jobs_top_card = (
+                            check_blacklist(
+                                rejected_jobs, job_id, company, blacklisted_companies
+                            )
+                        )
                     except ValueError as e:
                         print_lg(e, "Skipping this job!\n")
-                        failed_job(job_id, job_link, resume, date_listed, "Found Blacklisted words in About Company", e, "Skipped", screenshot_name)
+                        failed_job(
+                            job_id,
+                            job_link,
+                            resume,
+                            date_listed,
+                            "Found Blacklisted words in About Company",
+                            e,
+                            "Skipped",
+                            screenshot_name,
+                        )
                         skip_count += 1
                         continue
                     except Exception as e:
@@ -1346,15 +1399,25 @@ def apply_to_jobs(search_terms: list[str]) -> None:
 
                     # Hiring Manager info
                     try:
-                        hr_info_card = WebDriverWait(driver, 2).until(EC.presence_of_element_located((By.CLASS_NAME, "hirer-card__hirer-information")))
-                        hr_link = hr_info_card.find_element(By.TAG_NAME, "a").get_attribute("href")
+                        hr_info_card = WebDriverWait(driver, 2).until(
+                            EC.presence_of_element_located(
+                                (By.CLASS_NAME, "hirer-card__hirer-information")
+                            )
+                        )
+                        hr_link = hr_info_card.find_element(
+                            By.TAG_NAME, "a"
+                        ).get_attribute("href")
                         hr_name = hr_info_card.find_element(By.TAG_NAME, "span").text
                     except Exception as e:
-                        print_lg(f'HR info was not given for "{title}" with Job ID: {job_id}!')
+                        print_lg(
+                            f'HR info was not given for "{title}" with Job ID: {job_id}!'
+                        )
 
                     # Calculation of date posted
                     try:
-                        time_posted_text = jobs_top_card.find_element(By.XPATH, './/span[contains(normalize-space(), " ago")]').text
+                        time_posted_text = jobs_top_card.find_element(
+                            By.XPATH, './/span[contains(normalize-space(), " ago")]'
+                        ).text
                         print("Time Posted: " + time_posted_text)
                         if time_posted_text.__contains__("Reposted"):
                             reposted = True
@@ -1363,11 +1426,22 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     except Exception as e:
                         print_lg("Failed to calculate the date posted!", e)
 
-                    description, experience_required, skip, reason, message = get_job_description()
-                    
+                    description, experience_required, skip, reason, message = (
+                        get_job_description()
+                    )
+
                     if skip:
                         print_lg(message)
-                        failed_job(job_id, job_link, resume, date_listed, reason, message, "Skipped", screenshot_name)
+                        failed_job(
+                            job_id,
+                            job_link,
+                            resume,
+                            date_listed,
+                            reason,
+                            message,
+                            "Skipped",
+                            screenshot_name,
+                        )
                         rejected_jobs.add(job_id)
                         skip_count += 1
                         continue
@@ -1389,93 +1463,183 @@ def apply_to_jobs(search_terms: list[str]) -> None:
 
                     uploaded = False
                     # Case 1: Easy Apply Button
-                    if try_xp(driver, ".//button[contains(@class,'jobs-apply-button') and contains(@class, 'artdeco-button--3') and contains(@aria-label, 'Easy')]"):
+                    if try_xp(
+                        driver,
+                        ".//button[contains(@class,'jobs-apply-button') and contains(@class, 'artdeco-button--3') and contains(@aria-label, 'Easy')]",
+                    ):
                         try:
                             errored = ""
                             modal = find_by_class(driver, "jobs-easy-apply-modal")
-                            wait_span_click(modal, "Next", 1) or robust_click(driver, ["Next"], 1)
-                            
+                            wait_span_click(modal, "Next", 1) or robust_click(
+                                driver, ["Next"], 1
+                            )
+
                             resume = "Previous resume"
                             next_button = True
                             questions_list = set()
                             next_counter = 0
-                            
+
                             while next_button:
                                 next_counter += 1
                                 if next_counter >= 15:
                                     if pause_at_failed_question:
-                                        screenshot(driver, job_id, "Needed manual intervention")
-                                        pyautogui.alert('Help needed at questions. Click Continue when done.', "Help Needed", "Continue")
+                                        screenshot(
+                                            driver, job_id, "Needed manual intervention"
+                                        )
+                                        pyautogui.alert(
+                                            "Help needed at questions. Click Continue when done.",
+                                            "Help Needed",
+                                            "Continue",
+                                        )
                                         next_counter = 1
                                         continue
-                                    
-                                    screenshot_name = screenshot(driver, job_id, "Failed at questions")
+
+                                    screenshot_name = screenshot(
+                                        driver, job_id, "Failed at questions"
+                                    )
                                     errored = "stuck"
                                     raise Exception("Stuck in Next loop")
 
-                                questions_list = answer_questions(modal, questions_list, work_location, job_description=description)
-                                
+                                questions_list = answer_questions(
+                                    modal,
+                                    questions_list,
+                                    work_location,
+                                    job_description=description,
+                                )
+
                                 if useNewResume and not uploaded:
-                                    uploaded, resume = upload_resume(modal, default_resume_path)
-                                
+                                    uploaded, resume = upload_resume(
+                                        modal, default_resume_path
+                                    )
+
                                 try:
-                                    next_button = modal.find_element(By.XPATH, './/span[normalize-space(.)="Review"]')
+                                    next_button = modal.find_element(
+                                        By.XPATH, './/span[normalize-space(.)="Review"]'
+                                    )
                                 except NoSuchElementException:
                                     try:
-                                        next_button = modal.find_element(By.XPATH, './/button[contains(span, "Next")]')
+                                        next_button = modal.find_element(
+                                            By.XPATH,
+                                            './/button[contains(span, "Next")]',
+                                        )
                                     except NoSuchElementException:
-                                        break # Final screen
-                                
+                                        break  # Final screen
+
                                 next_button.click()
                                 buffer(click_gap)
 
-                            wait_span_click(driver, "Review", 1, scrollTop=True) or robust_click(driver, ["Review"], 1)
-                            
+                            wait_span_click(
+                                driver, "Review", 1, scrollTop=True
+                            ) or robust_click(driver, ["Review"], 1)
+
                             if errored != "stuck" and pause_before_submit:
-                                decision = pyautogui.confirm('Review info. Do not click Submit manually.', "Confirm", ["Disable Pause", "Discard Application", "Submit Application"])
-                                if decision == "Discard Application": raise Exception("User discarded job")
-                                if decision == "Disable Pause": pause_before_submit = False
+                                decision = pyautogui.confirm(
+                                    "Review info. Do not click Submit manually.",
+                                    "Confirm",
+                                    [
+                                        "Disable Pause",
+                                        "Discard Application",
+                                        "Submit Application",
+                                    ],
+                                )
+                                if decision == "Discard Application":
+                                    raise Exception("User discarded job")
+                                if decision == "Disable Pause":
+                                    pause_before_submit = False
 
                             follow_company(modal)
-                            
-                            if wait_span_click(driver, "Submit application", 2, scrollTop=True) or robust_click(driver, ["Submit application"], 2):
+
+                            if wait_span_click(
+                                driver, "Submit application", 2, scrollTop=True
+                            ) or robust_click(driver, ["Submit application"], 2):
                                 date_applied = datetime.now()
-                                if not (wait_span_click(driver, "Done", 2) or robust_click(driver, ["Done"], 2)):
+                                if not (
+                                    wait_span_click(driver, "Done", 2)
+                                    or robust_click(driver, ["Done"], 2)
+                                ):
                                     actions.send_keys(Keys.ESCAPE).perform()
                             else:
                                 raise Exception("Failed to click Submit")
 
                         except Exception as e:
                             print_lg("Failed to Easy apply!", e)
-                            failed_job(job_id, job_link, resume, date_listed, "Problem in Easy Applying", e, application_link, screenshot_name)
+                            failed_job(
+                                job_id,
+                                job_link,
+                                resume,
+                                date_listed,
+                                "Problem in Easy Applying",
+                                e,
+                                application_link,
+                                screenshot_name,
+                            )
                             failed_count += 1
                             discard_job()
                             continue
                     else:
                         # Case 2: Apply externally
-                        skip, application_link, tabs_count = external_apply(pagination_element, job_id, job_link, resume, date_listed, application_link, screenshot_name)
-                        if dailyEasyApplyLimitReached: return
-                        if skip: continue
+                        skip, application_link, tabs_count = external_apply(
+                            pagination_element,
+                            job_id,
+                            job_link,
+                            resume,
+                            date_listed,
+                            application_link,
+                            screenshot_name,
+                        )
+                        if dailyEasyApplyLimitReached:
+                            return
+                        if skip:
+                            continue
 
-                    submitted_jobs(job_id, title, company, work_location, work_style, description, experience_required, skills, hr_name, hr_link, resume, reposted, date_listed, date_applied, job_link, application_link, questions_list, "In Development")
-                    
-                    if uploaded: useNewResume = False
+                    submitted_jobs(
+                        job_id,
+                        title,
+                        company,
+                        work_location,
+                        work_style,
+                        description,
+                        experience_required,
+                        skills,
+                        hr_name,
+                        hr_link,
+                        resume,
+                        reposted,
+                        date_listed,
+                        date_applied,
+                        job_link,
+                        application_link,
+                        questions_list,
+                        "In Development",
+                    )
+
+                    if uploaded:
+                        useNewResume = False
                     current_count += 1
-                    if application_link == "Easy Applied": easy_applied_count += 1
-                    else: external_jobs_count += 1
+                    if application_link == "Easy Applied":
+                        easy_applied_count += 1
+                    else:
+                        external_jobs_count += 1
                     applied_jobs.add(job_id)
 
-                if pagination_element == None: break
+                if pagination_element == None:
+                    break
                 try:
-                    pagination_element.find_element(By.XPATH, f"//button[@aria-label='Page {current_page+1}']").click()
+                    next_page_btn = pagination_element.find_element(
+                        By.XPATH, f"//button[@aria-label='Page {current_page+1}']"
+                    )
+                    human_click(next_page_btn)
+                    random_sleep(3, 6)
                     print_lg(f"\n>-> Now on Page {current_page+1} \n")
-                except NoSuchElementException: break
+                except NoSuchElementException:
+                    break
 
         except (NoSuchWindowException, WebDriverException) as e:
-            raise e 
+            raise e
         except Exception as e:
             print_lg("Failed to find Job listings!", e)
-            
+
+
 def run(total_runs: int) -> int:
     if dailyEasyApplyLimitReached:
         return total_runs
@@ -1496,13 +1660,12 @@ def run(total_runs: int) -> int:
         sleep(300)
         print_lg("Few more min... Gonna start with in next 5 min...")
         sleep(300)
-    buffer(3)
+    random_sleep(2, 4)
     return total_runs + 1
 
 
 chatGPT_tab = False
 linkedIn_tab = False
-
 
 def main() -> None:
     try:
@@ -1608,6 +1771,7 @@ def main() -> None:
         critical_error_log("In Applier Main", e)
         pyautogui.alert(e, alert_title)
     finally:
+        # --- Statistics & Cleanup ---
         print_lg("\n\nTotal runs:                     {}".format(total_runs))
         print_lg("Jobs Easy Applied:              {}".format(easy_applied_count))
         print_lg("External job links collected:   {}".format(external_jobs_count))
@@ -1643,7 +1807,7 @@ def main() -> None:
                 "The only limit to our realization of tomorrow will be our doubts of today. - Franklin D. Roosevelt",
             ]
         )
-        msg = f"\n{quote}\n\n\nBest regards,\nSai Vignesh Golla\nhttps://www.linkedin.com/in/saivigneshgolla/\n\n"
+        msg = f"\n{quote}\n\n\nBest regards,\nHimanshu Yadav\nhttps://www.linkedin.com/in/yhimanshu22456/\n\n"
         pyautogui.alert(msg, "Exiting..")
         print_lg(msg, "Closing the browser...")
         if tabs_count >= 10:
