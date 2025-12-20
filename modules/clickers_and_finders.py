@@ -201,7 +201,7 @@ def company_search_click(
     )
     search.send_keys(Keys.CONTROL + "a")
     search.send_keys(companyName)
-    buffer(3)
+    random_sleep(2, 4)
     actions.send_keys(Keys.DOWN).perform()
     actions.send_keys(Keys.ENTER).perform()
     print_lg(f'Tried searching and adding "{companyName}"')
