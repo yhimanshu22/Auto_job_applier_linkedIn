@@ -108,6 +108,39 @@ about_company_for_ai = None  # TODO extract about company for AI
 
 # >
 
+# --- Session Management Functions ---
+import pickle
+
+def save_cookies():
+    """Saves current cookies to a file."""
+    try:
+        pickle.dump(driver.get_cookies(), open("linkedin_cookies.pkl", "wb"))
+        print_lg("Session cookies saved successfully!")
+    except Exception as e:
+        print_lg("Failed to save cookies!", e)
+
+def load_cookies():
+    """Loads cookies from file and refreshes the page."""
+    if os.path.exists("linkedin_cookies.pkl"):
+        try:
+            cookies = pickle.load(open("linkedin_cookies.pkl", "rb"))
+            # You must be on the domain before adding cookies
+            if "linkedin.com" not in driver.current_url:
+                driver.get("https://www.linkedin.com")
+                
+            for cookie in cookies:
+                # Security: Sometimes 'expiry' causes issues if it's a float
+                if 'expiry' in cookie:
+                    cookie['expiry'] = int(cookie['expiry'])
+                driver.add_cookie(cookie)
+            
+            print_lg("Cookies loaded. Refreshing session...")
+            driver.refresh()
+            buffer(2) # Wait for reload
+        except Exception as e:
+            print_lg("Failed to load cookies. You may need to login manually.", e)
+
+
 # --- 🛡️ Humanization & Anti-Ban Overrides -------------------------
 from selenium.webdriver.common.action_chains import ActionChains
 
@@ -201,16 +234,22 @@ def login_LN() -> None:
         wait.until(
             EC.url_to_be("https://www.linkedin.com/feed/")
         )  # wait.until(EC.presence_of_element_located((By.XPATH, '//button[normalize-space(.)="Start a post"]')))
-        return print_lg("Login successful!")
+        
+        # --- Fixed Logic: Save cookies BEFORE returning ---
+        save_cookies()
+        print_lg("Login successful!")
+        return 
+        # --------------------------------------------------
+
     except Exception as e:
         print_lg(
             "Seems like login attempt failed! Possibly due to wrong credentials or already logged in! Try logging in manually!"
         )
         # print_lg(e)
         manual_login_retry(is_logged_in_LN, 2)
-
-
-# >
+        # Optional: Check if manual login worked and save cookies then
+        if is_logged_in_LN():
+            save_cookies()
 
 
 def get_applied_job_ids() -> set[str]:
@@ -1674,40 +1713,43 @@ def main() -> None:
         total_runs = 1
         validate_config()
 
+        # Check for Resume existence
         if not os.path.exists(default_resume_path):
             pyautogui.alert(
-                text='Your default resume "{}" is missing! Please update it\'s folder path "default_resume_path" in config.py\n\nOR\n\nAdd a resume with exact name and path (check for spelling mistakes including cases).\n\n\nFor now the bot will continue using your previous upload from LinkedIn!'.format(
-                    default_resume_path
-                ),
+                text=f'Your default resume "{default_resume_path}" is missing! Please update "default_resume_path" in config.py\n\nOR\n\nAdd a resume with exact name and path (check for spelling mistakes including cases).\n\n\nFor now the bot will continue using your previous upload from LinkedIn!',
                 title="Missing Resume",
                 button="OK",
             )
             useNewResume = False
 
-        # Login to LinkedIn
+        # --- Login Logic ---
         tabs_count = len(driver.window_handles)
-        driver.get("https://www.linkedin.com/login")
+        
+        # 1. Open LinkedIn Homepage to set domain context for cookies
+        driver.get("https://www.linkedin.com")
+        
+        # 2. Attempt to restore session from cookies
+        load_cookies()
+        
+        # 3. Verify login status
         if not is_logged_in_LN():
+            print_lg("Cookie login failed or first run. Logging in manually...")
             login_LN()
+            # Note: login_LN() saves cookies internally upon success, so we don't need to call it again here.
+        else:
+            print_lg("Restored previous session successfully!")
+
+        # 4. Final Safety Check before starting
+        if not is_logged_in_LN():
+            raise Exception("Failed to login! Please check your credentials or internet connection.")
 
         linkedIn_tab = driver.current_window_handle
 
-        # # Login to ChatGPT in a new tab for resume customization
-        # if use_resume_generator:
-        #     try:
-        #         driver.switch_to.new_window('tab')
-        #         driver.get("https://chat.openai.com/")
-        #         if not is_logged_in_GPT(): login_GPT()
-        #         open_resume_chat()
-        #         global chatGPT_tab
-        #         chatGPT_tab = driver.current_window_handle
-        #     except Exception as e:
-        #         print_lg("Opening OpenAI chatGPT tab failed!")
+        # --- AI Client Setup ---
         if use_AI:
             if ai_provider == "openai":
                 aiClient = ai_create_openai_client()
             ##> ------ Yang Li : MARKYangL - Feature ------
-            # Create DeepSeek client
             elif ai_provider == "deepseek":
                 aiClient = deepseek_create_client()
             elif ai_provider == "gemini":
@@ -1715,6 +1757,7 @@ def main() -> None:
             ##<
 
             try:
+                # Construct "About Me" string for AI context
                 about_company_for_ai = " ".join(
                     [
                         word
@@ -1728,13 +1771,18 @@ def main() -> None:
             except Exception as e:
                 print_lg("Failed to extract about company info!", e)
 
-        # Start applying to jobs
+        # --- Job Application Loop ---
         driver.switch_to.window(linkedIn_tab)
+        
+        # Run the first cycle
         total_runs = run(total_runs)
+        
+        # Continue running if loop mode is enabled
         while run_non_stop:
             if cycle_date_posted:
                 date_options = ["Any time", "Past month", "Past week", "Past 24 hours"]
                 global date_posted
+                # Cycle through date options logic
                 date_posted = (
                     date_options[
                         (
@@ -1752,24 +1800,29 @@ def main() -> None:
                         )
                     ]
                 )
+            
             if alternate_sortby:
                 global sort_by
                 sort_by = (
                     "Most recent" if sort_by == "Most relevant" else "Most relevant"
                 )
                 total_runs = run(total_runs)
+                # Toggle back
                 sort_by = (
                     "Most recent" if sort_by == "Most relevant" else "Most relevant"
                 )
+            
             total_runs = run(total_runs)
+            
             if dailyEasyApplyLimitReached:
+                print_lg("Daily limit reached. Stopping run loop.")
                 break
 
     except (NoSuchWindowException, WebDriverException) as e:
         print_lg("Browser window closed or session is invalid. Exiting.", e)
     except Exception as e:
         critical_error_log("In Applier Main", e)
-        pyautogui.alert(e, alert_title)
+        pyautogui.alert(str(e), alert_title)
     finally:
         # --- Statistics & Cleanup ---
         print_lg("\n\nTotal runs:                     {}".format(total_runs))
@@ -1783,6 +1836,7 @@ def main() -> None:
         )
         print_lg("\nFailed jobs:                    {}".format(failed_count))
         print_lg("Irrelevant jobs skipped:        {}\n".format(skip_count))
+        
         if randomly_answered_questions:
             print_lg(
                 "\n\nQuestions randomly answered:\n  {}  \n\n".format(
@@ -1791,6 +1845,7 @@ def main() -> None:
                     )
                 )
             )
+            
         quote = choice(
             [
                 "You're one step closer than before.",
@@ -1807,13 +1862,15 @@ def main() -> None:
                 "The only limit to our realization of tomorrow will be our doubts of today. - Franklin D. Roosevelt",
             ]
         )
-        msg = f"\n{quote}\n\n\nBest regards,\nHimanshu Yadav\nhttps://www.linkedin.com/in/yhimanshu22456/\n\n"
+        msg = f"\n{quote}\n\n\nBest regards,\nSai Vignesh Golla\nhttps://www.linkedin.com/in/saivigneshgolla/\n\n"
         pyautogui.alert(msg, "Exiting..")
         print_lg(msg, "Closing the browser...")
+        
         if tabs_count >= 10:
             msg = "NOTE: IF YOU HAVE MORE THAN 10 TABS OPENED, PLEASE CLOSE OR BOOKMARK THEM!\n\nOr it's highly likely that application will just open browser and not do anything next time!"
             pyautogui.alert(msg, "Info")
             print_lg("\n" + msg)
+            
         ##> ------ Yang Li : MARKYangL - Feature ------
         if use_AI and aiClient:
             try:
@@ -1827,6 +1884,7 @@ def main() -> None:
             except Exception as e:
                 print_lg("Failed to close AI client:", e)
         ##<
+        
         try:
             if driver:
                 driver.quit()
@@ -1834,7 +1892,6 @@ def main() -> None:
             print_lg("Browser already closed.", e)
         except Exception as e:
             critical_error_log("When quitting...", e)
-
-
+            
 if __name__ == "__main__":
     main()
