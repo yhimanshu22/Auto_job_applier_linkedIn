@@ -143,15 +143,15 @@ recent_employer = "Not Applicable" # "", "Lala Company", "Google", "Snowflake", 
 
 ## US Equal Opportunity questions
 # What is your ethnicity or race? If left empty as "", tool will not answer the question. However, note that some companies make it compulsory to be answered
-ethnicity = "Decline"              # "Decline", "Hispanic/Latino", "American Indian or Alaska Native", "Asian", "Black or African American", "Native Hawaiian or Other Pacific Islander", "White", "Other"
+ethnicity = "Asian"              # "Decline", "Hispanic/Latino", "American Indian or Alaska Native", "Asian", "Black or African American", "Native Hawaiian or Other Pacific Islander", "White", "Other"
 
 # How do you identify yourself? If left empty as "", tool will not answer the question. However, note that some companies make compulsory to be answered
-gender = "Decline"                 # "Male", "Female", "Other", "Decline" or ""
+gender = "Male"                 # "Male", "Female", "Other", "Decline" or ""
 
 # Are you physically disabled or have a history/record of having a disability? If left empty as "", tool will not answer the question. However, note that some companies make it compulsory to be answered
-disability_status = "Decline"      # "Yes", "No", "Decline"
+disability_status = "No"      # "Yes", "No", "Decline"
 
-veteran_status = "Decline"         # "Yes", "No", "Decline"
+veteran_status = "No"         # "Yes", "No", "Decline"
 ##
 
 
@@ -183,7 +183,7 @@ security_clearance = False         # True or False, Note: True or False are case
 did_masters = True                 # True or False, Note: True or False are case-sensitive
 
 # Avoid applying to jobs if their required experience is above your current_experience. (Set value as -1 if you want to apply to all ignoring their required experience...)
-current_experience = 5             # Integers > -2 (Ex: -1, 0, 1, 2, 3, 4...)
+current_experience = 2            # Integers > -2 (Ex: -1, 0, 1, 2, 3, 4...)
 ##
 
 
@@ -253,20 +253,3 @@ generated_resume_path = "all resumes/"
 
 
 
-
-############################################################################################################
-'''
-THANK YOU for using my tool 😊! Wishing you the best in your job hunt 🙌🏻!
-
-Sharing is caring! If you found this tool helpful, please share it with your peers 🥺. Your support keeps this project alive.
-
-Support my work on <PATREON_LINK>. Together, we can help more job seekers.
-
-As an independent developer, I pour my heart and soul into creating tools like this, driven by the genuine desire to make a positive impact.
-
-Your support, whether through donations big or small or simply spreading the word, means the world to me and helps keep this project alive and thriving.
-
-Gratefully yours 🙏🏻,
-Sai Vignesh Golla
-'''
-############################################################################################################

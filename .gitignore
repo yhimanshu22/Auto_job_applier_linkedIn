@@ -6,7 +6,7 @@ all resumes
 logs
 
 old
-
+.env
 secrets.py
 config/personals.py
 .venv

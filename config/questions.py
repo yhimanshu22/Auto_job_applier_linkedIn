@@ -4,7 +4,7 @@
 # >>>>>>>>>>> Easy Apply Questions & Inputs <<<<<<<<<<<
 
 # Give an relative path of your default resume to be uploaded. If file in not found, will continue using your previously uploaded resume in LinkedIn.
-default_resume_path = "all resumes/default/220456_himanshu_yadav_bt_ce_sde.pdf"  # (In Development)
+default_resume_path =  "all resumes/default/220456_himanshu_yadav_bt_ce_sde.pdf"  # (In Development)
 
 # What do you want to answer for questions that ask about years of experience you have, this is different from current_experience?
 years_of_experience = "1"  # A number in quotes Eg: "0","1","2","3","4", etc.
@@ -26,7 +26,8 @@ us_citizenship = "Other"
 ## SOME ANNOYING QUESTIONS BY COMPANIES 🫠 ##
 
 # What to enter in your desired salary question (American and European), What is your expected CTC (South Asian and others)?, only enter in numbers as some companies only allow numbers,
-desired_salary = 3000000  # 80000, 90000, 100000 or 120000 and so on... Do NOT use quotes
+desired_salary = 2000000  # 80000, 90000, 100000 or 120000 and so on... Do NOT use quotes
+
 """
 Note: If question has the word "lakhs" in it (Example: What is your expected CTC in lakhs), 
 then it will add '.' before last 5 digits and answer. Examples: 
@@ -38,9 +39,9 @@ And if asked in months, then it will divide by 12 and answer. Examples:
 """
 
 # What is your current CTC? Some companies make it compulsory to be answered in numbers...
-current_ctc = (
-    2000000  # 800000, 900000, 1000000 or 1200000 and so on... Do NOT use quotes
-)
+current_ctc =     1600000  # 800000, 900000, 1000000 or 1200000 and so on... Do NOT use quotes
+
+
 """
 Note: If question has the word "lakhs" in it (Example: What is your current CTC in lakhs), 
 then it will add '.' before last 5 digits and answer. Examples: 
@@ -142,14 +143,11 @@ Note: If left empty as "", the tool will not answer the question. However, note 
 """
 
 # Name of your most recent employer
-recent_employer = (
-    "Not Applicable"  # "", "Lala Company", "Google", "Snowflake", "Databricks"
-)
+recent_employer = "Not Applicable"  # "", "Lala Company", "Google", "Snowflake", "Databricks"
 
 # Example question: "On a scale of 1-10 how much experience do you have building web or mobile applications? 1 being very little or only in school, 10 being that you have built and launched applications to real users"
-confidence_level = (
-    "8"  # Any number between "1" to "10" including 1 and 10, put it in quotes ""
-)
+confidence_level = "10"  # Any number between "1" to "10" including 1 and 10, put it in quotes ""
+
 ##
 
 
@@ -164,16 +162,15 @@ Note: Will be treated as False if `run_in_background = True`
 
 # Should the tool pause if it needs help in answering questions during easy apply?
 # Note: If set as False will answer randomly...
-pause_at_failed_question = True  # True or False, Note: True or False are case-sensitive
+pause_at_failed_question = False  # True or False, Note: True or False are case-sensitive
+
 """
 Note: Will be treated as False if `run_in_background = True`
 """
 ##
 
 # Do you want to overwrite previous answers?
-overwrite_previous_answers = (
-    False  # True or False, Note: True or False are case-sensitive
-)
+overwrite_previous_answers = False  # True or False, Note: True or False are case-sensitive
 
 
 ############################################################################################################
