@@ -4,6 +4,8 @@ import os
 import subprocess
 import sys
 import pandas as pd
+import json
+import ast
 from dotenv import load_dotenv, set_key
 
 st.set_page_config(page_title="LinkedIn Bot Config", layout="wide")
@@ -165,7 +167,6 @@ def save_configuration(filepath, updates):
         st.success(f"Saved changes to {os.path.basename(filepath)}!")
     except Exception as e:
         st.error(f"Failed to save {filepath}: {e}")
-
 
 
 APPLIED_JOBS_FILE = "all excels/all_applied_applications_history.csv"
@@ -427,6 +428,72 @@ with tabs[1]:
                 },
             )
 
+        # Custom Answers from History
+        st.subheader("Custom Answers from History")
+        st.markdown(
+            "Extract questions from your applied jobs history and define custom answers."
+        )
+        custom_qa_path = os.path.join(CONFIG_DIR, "custom_qa.json")
+
+        # Load existing custom answers
+        if os.path.exists(custom_qa_path):
+            try:
+                with open(custom_qa_path, "r", encoding="utf-8") as f:
+                    custom_answers = json.load(f)
+            except:
+                custom_answers = {}
+        else:
+            custom_answers = {}
+
+        # Parse CSV for unique questions
+        df = load_data(APPLIED_JOBS_FILE)
+        unique_questions = set()
+        if df is not None and "Questions Found" in df.columns:
+            for val in df["Questions Found"].dropna():
+                try:
+                    if isinstance(val, str):
+                        qs = ast.literal_eval(val)
+                        if isinstance(qs, (set, list)):
+                            for q in qs:
+                                if isinstance(q, tuple) and len(q) > 0:
+                                    unique_questions.add(q[0])
+                except Exception as e:
+                    pass
+
+        # Sort questions for consistent display
+        sorted_questions = sorted(list(unique_questions))
+
+        # UI for editing answers
+        selected_question = st.selectbox(
+            "Select a Question to Answer", ["Select..."] + sorted_questions
+        )
+
+        if selected_question != "Select...":
+            current_ans = custom_answers.get(selected_question, "")
+            new_ans = st.text_input(
+                f"Answer for: {selected_question}", value=current_ans
+            )
+
+            if st.button("Save Answer"):
+                custom_answers[selected_question] = new_ans
+                with open(custom_qa_path, "w", encoding="utf-8") as f:
+                    json.dump(custom_answers, f, indent=4)
+                st.success(f"Saved answer for: {selected_question}")
+
+        # Display existing custom answers
+        if custom_answers:
+            st.markdown("### Existing Custom Answers")
+            for q, a in custom_answers.items():
+                col_a, col_b = st.columns([0.8, 0.2])
+                with col_a:
+                    st.text_input(q, a, disabled=True, key=f"view_{q}")
+                with col_b:
+                    if st.button("Delete", key=f"del_{q}"):
+                        del custom_answers[q]
+                        with open(custom_qa_path, "w", encoding="utf-8") as f:
+                            json.dump(custom_answers, f, indent=4)
+                        st.rerun()
+
 # --- Search ---
 with tabs[2]:
     st.header("Search Preferences")
@@ -675,12 +742,12 @@ with tabs[2]:
                     "did_masters": did_masters,
                     "current_experience": current_experience,
                 }
-                
+
                 # Add complex lists
                 new_terms = eval(search_terms_str)
                 if isinstance(new_terms, list):
-                     updates["search_terms"] = new_terms
-                
+                    updates["search_terms"] = new_terms
+
                 for var_name, var_str in [
                     ("companies", companies_str),
                     ("location", location_str),
@@ -996,6 +1063,7 @@ if st.sidebar.button("🛑 Stop Bot"):
 st.sidebar.markdown("---")
 st.sidebar.header("📊 Bot Statistics")
 
+
 def process_csv_dates(df, date_column, daily_stats_dict, metric_key):
     """
     Helper to process date columns from dataframe and update stats dict.
@@ -1011,6 +1079,7 @@ def process_csv_dates(df, date_column, daily_stats_dict, metric_key):
                 daily_stats_dict[date_str] = {"Applied": 0, "Failed": 0}
             daily_stats_dict[date_str][metric_key] += int(count)
 
+
 def get_stats_from_csvs():
     """
     Reads the CSV files to get daily counts for Applied and Failed jobs.
@@ -1025,7 +1094,7 @@ def get_stats_from_csvs():
     # 2. Process Failed Jobs
     df_failed = load_data(FAILED_JOBS_FILE)
     process_csv_dates(df_failed, "Date Tried", daily_csv_stats, "Failed")
-    
+
     return daily_csv_stats
 
 

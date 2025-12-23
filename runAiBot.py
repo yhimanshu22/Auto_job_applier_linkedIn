@@ -3,6 +3,7 @@ import os
 import csv
 import re
 import pyautogui
+import json
 
 # Set CSV field size limit to prevent field size errors
 csv.field_size_limit(1000000)  # Set to 1MB instead of default 131KB
@@ -601,6 +602,14 @@ def answer_questions(
     work_location: str,
     job_description: str | None = None,
 ) -> set:
+    custom_qa = {}
+    custom_qa_path = "config/custom_qa.json"
+    if os.path.exists(custom_qa_path):
+        try:
+            with open(custom_qa_path, "r", encoding="utf-8") as f:
+                custom_qa = json.load(f)
+        except:
+            pass
     # Get all questions from the page
 
     all_questions = modal.find_elements(By.XPATH, ".//div[@data-test-form-element]")
@@ -631,7 +640,10 @@ def answer_questions(
             prev_answer = selected_option
             if overwrite_previous_answers or selected_option == "Select an option":
                 ##> ------ WINDY_WINDWARD Email:karthik.sarode23@gmail.com - Added fuzzy logic to answer location based questions ------
-                if "email" in label or "phone" in label:
+                custom_key = f"{label_org} [ {options} ]"
+                if custom_key in custom_qa:
+                    answer = custom_qa[custom_key]
+                elif "email" in label or "phone" in label:
                     answer = prev_answer
                 elif "gender" in label or "sex" in label:
                     answer = gender
@@ -750,7 +762,10 @@ def answer_questions(
                 label_org += f" {options_labels[-1]},"
 
             if overwrite_previous_answers or prev_answer is None:
-                if "citizenship" in label or "employment eligibility" in label:
+                custom_key = label_org + " ]"
+                if custom_key in custom_qa:
+                    answer = custom_qa[custom_key]
+                elif "citizenship" in label or "employment eligibility" in label:
                     answer = us_citizenship
                 elif "veteran" in label or "protected" in label:
                     answer = veteran_status
@@ -815,7 +830,9 @@ def answer_questions(
 
             prev_answer = text.get_attribute("value")
             if not prev_answer or overwrite_previous_answers:
-                if "experience" in label or "years" in label:
+                if label_org in custom_qa:
+                    answer = custom_qa[label_org]
+                elif "experience" in label or "years" in label:
                     answer = years_of_experience
                 elif "phone" in label or "mobile" in label:
                     answer = phone_number
