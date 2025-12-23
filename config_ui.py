@@ -137,6 +137,41 @@ def update_env_var(key, value):
     os.environ[key] = str(value)  # Update current session as well
 
 
+# helper to load csv efficiently
+def load_data(file_path):
+    if os.path.exists(file_path):
+        try:
+            return pd.read_csv(file_path)
+        except Exception as e:
+            st.error(f"Error reading {file_path}: {e}")
+            return None
+    return None
+
+
+def save_configuration(filepath, updates):
+    """
+    Reads the file, updates multiple variables, saves it, and shows a success message.
+    updates: dict of {var_name: new_value}
+    """
+    if not os.path.exists(filepath):
+        st.error(f"File not found: {filepath}")
+        return
+
+    try:
+        content = read_file(filepath)
+        for var_name, new_value in updates.items():
+            content = update_variable(content, var_name, new_value)
+        save_file(filepath, content)
+        st.success(f"Saved changes to {os.path.basename(filepath)}!")
+    except Exception as e:
+        st.error(f"Failed to save {filepath}: {e}")
+
+
+
+APPLIED_JOBS_FILE = "all excels/all_applied_applications_history.csv"
+FAILED_JOBS_FILE = "all excels/all_failed_applications_history.csv"
+
+
 tabs = st.tabs(
     ["Personal Info", "Questions", "Search", "Settings", "Secrets", "Applications"]
 )
@@ -218,16 +253,18 @@ with tabs[0]:
             )
 
         if st.button("Save Personal Info"):
-            new_content = content
-            new_content = update_variable(new_content, "first_name", first_name)
-            new_content = update_variable(new_content, "last_name", last_name)
-            new_content = update_variable(new_content, "phone_number", phone_number)
-            new_content = update_variable(new_content, "current_city", current_city)
-            new_content = update_variable(new_content, "country", country)
-            new_content = update_variable(new_content, "ethnicity", ethnicity)
-            new_content = update_variable(new_content, "gender", gender)
-            save_file(filepath, new_content)
-            st.success("Saved!")
+            save_configuration(
+                filepath,
+                {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "phone_number": phone_number,
+                    "current_city": current_city,
+                    "country": country,
+                    "ethnicity": ethnicity,
+                    "gender": gender,
+                },
+            )
 
 # --- Questions ---
 with tabs[1]:
@@ -365,49 +402,30 @@ with tabs[1]:
         )
 
         if st.button("Save Questions"):
-            new_content = content
-            new_content = update_variable(
-                new_content, "default_resume_path", default_resume_path
+            save_configuration(
+                filepath,
+                {
+                    "default_resume_path": default_resume_path,
+                    "years_of_experience": years_of_experience,
+                    "require_visa": require_visa,
+                    "website": website,
+                    "linkedIn": linkedIn,
+                    "us_citizenship": us_citizenship,
+                    "desired_salary": desired_salary,
+                    "current_ctc": current_ctc,
+                    "currency": currency,
+                    "notice_period": notice_period,
+                    "linkedin_headline": linkedin_headline,
+                    "linkedin_summary": linkedin_summary,
+                    "cover_letter": cover_letter,
+                    "user_information_all": user_information_all,
+                    "recent_employer": recent_employer,
+                    "confidence_level": confidence_level,
+                    "pause_before_submit": pause_before_submit,
+                    "pause_at_failed_question": pause_at_failed_question,
+                    "overwrite_previous_answers": overwrite_previous_answers,
+                },
             )
-            new_content = update_variable(
-                new_content, "years_of_experience", years_of_experience
-            )
-            new_content = update_variable(new_content, "require_visa", require_visa)
-            new_content = update_variable(new_content, "website", website)
-            new_content = update_variable(new_content, "linkedIn", linkedIn)
-            new_content = update_variable(new_content, "us_citizenship", us_citizenship)
-            new_content = update_variable(new_content, "desired_salary", desired_salary)
-            new_content = update_variable(new_content, "current_ctc", current_ctc)
-            new_content = update_variable(new_content, "currency", currency)
-            new_content = update_variable(new_content, "notice_period", notice_period)
-            new_content = update_variable(
-                new_content, "linkedin_headline", linkedin_headline
-            )
-            new_content = update_variable(
-                new_content, "linkedin_summary", linkedin_summary
-            )
-            new_content = update_variable(new_content, "cover_letter", cover_letter)
-            new_content = update_variable(
-                new_content, "user_information_all", user_information_all
-            )
-            new_content = update_variable(
-                new_content, "recent_employer", recent_employer
-            )
-            new_content = update_variable(
-                new_content, "confidence_level", confidence_level
-            )
-            new_content = update_variable(
-                new_content, "pause_before_submit", pause_before_submit
-            )
-            new_content = update_variable(
-                new_content, "pause_at_failed_question", pause_at_failed_question
-            )
-            new_content = update_variable(
-                new_content, "overwrite_previous_answers", overwrite_previous_answers
-            )
-
-            save_file(filepath, new_content)
-            st.success("Saved!")
 
 # --- Search ---
 with tabs[2]:
@@ -636,62 +654,33 @@ with tabs[2]:
             )
 
         if st.button("Save Search Preferences"):
-            new_content = content
-            # General
-            new_content = update_variable(
-                new_content, "search_location", search_location
-            )
-            new_content = update_variable(new_content, "switch_number", switch_number)
-            new_content = update_variable(
-                new_content, "randomize_search_order", randomize_search_order
-            )
-            new_content = update_variable(
-                new_content, "pause_after_filters", pause_after_filters
-            )
-
-            # Filters
-            new_content = update_variable(new_content, "sort_by", sort_by)
-            new_content = update_variable(
-                new_content, "easy_apply_only", easy_apply_only
-            )
-            new_content = update_variable(new_content, "date_posted", date_posted)
-            new_content = update_variable(
-                new_content, "under_10_applicants", under_10_applicants
-            )
-            new_content = update_variable(new_content, "salary", salary)
-            new_content = update_variable(
-                new_content, "in_your_network", in_your_network
-            )
-            new_content = update_variable(
-                new_content, "fair_chance_employer", fair_chance_employer
-            )
-
-            # Advanced Filters
-            new_content = update_variable(
-                new_content, "experience_level", experience_level
-            )
-            new_content = update_variable(new_content, "job_type", job_type)
-            new_content = update_variable(new_content, "on_site", on_site)
-
-            # Qualifications
-            new_content = update_variable(
-                new_content, "security_clearance", security_clearance
-            )
-            new_content = update_variable(new_content, "did_masters", did_masters)
-            new_content = update_variable(
-                new_content, "current_experience", current_experience
-            )
-
-            # Lists
             try:
-                # Search Terms
+                # Prepare all updates
+                updates = {
+                    "search_location": search_location,
+                    "switch_number": switch_number,
+                    "randomize_search_order": randomize_search_order,
+                    "pause_after_filters": pause_after_filters,
+                    "sort_by": sort_by,
+                    "easy_apply_only": easy_apply_only,
+                    "date_posted": date_posted,
+                    "under_10_applicants": under_10_applicants,
+                    "salary": salary,
+                    "in_your_network": in_your_network,
+                    "fair_chance_employer": fair_chance_employer,
+                    "experience_level": experience_level,
+                    "job_type": job_type,
+                    "on_site": on_site,
+                    "security_clearance": security_clearance,
+                    "did_masters": did_masters,
+                    "current_experience": current_experience,
+                }
+                
+                # Add complex lists
                 new_terms = eval(search_terms_str)
                 if isinstance(new_terms, list):
-                    new_content = update_variable(
-                        new_content, "search_terms", new_terms
-                    )
-
-                # Dynamic Lists
+                     updates["search_terms"] = new_terms
+                
                 for var_name, var_str in [
                     ("companies", companies_str),
                     ("location", location_str),
@@ -706,10 +695,9 @@ with tabs[2]:
                 ]:
                     new_list = eval(var_str)
                     if isinstance(new_list, list):
-                        new_content = update_variable(new_content, var_name, new_list)
+                        updates[var_name] = new_list
 
-                save_file(filepath, new_content)
-                st.success("Saved!")
+                save_configuration(filepath, updates)
             except Exception as e:
                 st.error(f"Error saving lists: {e}. Please check your list formatting.")
 
@@ -805,19 +793,6 @@ with tabs[3]:
 with tabs[5]:
     st.header("Job Application History")
 
-    # helper to load csv efficiently
-    def load_data(file_path):
-        if os.path.exists(file_path):
-            try:
-                return pd.read_csv(file_path)
-            except Exception as e:
-                st.error(f"Error reading {file_path}: {e}")
-                return None
-        return None
-
-    APPLIED_JOBS_FILE = "all excels/all_applied_applications_history.csv"
-    FAILED_JOBS_FILE = "all excels/all_failed_applications_history.csv"
-
     st.subheader("Successfully Applied Jobs")
     df_applied = load_data(APPLIED_JOBS_FILE)
     if df_applied is not None and not df_applied.empty:
@@ -860,53 +835,29 @@ with tabs[5]:
         st.info("No failed applications history found.")
 
         if st.button("Save Settings"):
-            new_content = content
-            # LinkedIn
-            new_content = update_variable(new_content, "close_tabs", close_tabs)
-            new_content = update_variable(
-                new_content, "follow_companies", follow_companies
+            save_configuration(
+                filepath,
+                {
+                    "close_tabs": close_tabs,
+                    "follow_companies": follow_companies,
+                    "run_non_stop": run_non_stop,
+                    "alternate_sortby": alternate_sortby,
+                    "cycle_date_posted": cycle_date_posted,
+                    "stop_date_cycle_at_24hr": stop_date_cycle_at_24hr,
+                    "file_name": file_name,
+                    "failed_file_name": failed_file_name,
+                    "logs_folder_path": logs_folder_path,
+                    "generated_resume_path": generated_resume_path,
+                    "click_gap": click_gap,
+                    "stealth_mode": stealth_mode,
+                    "safe_mode": safe_mode,
+                    "run_in_background": run_in_background,
+                    "disable_extensions": disable_extensions,
+                    "smooth_scroll": smooth_scroll,
+                    "keep_screen_awake": keep_screen_awake,
+                    "showAiErrorAlerts": showAiErrorAlerts,
+                },
             )
-            new_content = update_variable(new_content, "run_non_stop", run_non_stop)
-            new_content = update_variable(
-                new_content, "alternate_sortby", alternate_sortby
-            )
-            new_content = update_variable(
-                new_content, "cycle_date_posted", cycle_date_posted
-            )
-            new_content = update_variable(
-                new_content, "stop_date_cycle_at_24hr", stop_date_cycle_at_24hr
-            )
-
-            # Global
-            new_content = update_variable(new_content, "file_name", file_name)
-            new_content = update_variable(
-                new_content, "failed_file_name", failed_file_name
-            )
-            new_content = update_variable(
-                new_content, "logs_folder_path", logs_folder_path
-            )
-            new_content = update_variable(
-                new_content, "generated_resume_path", generated_resume_path
-            )
-            new_content = update_variable(new_content, "click_gap", click_gap)
-            new_content = update_variable(new_content, "stealth_mode", stealth_mode)
-            new_content = update_variable(new_content, "safe_mode", safe_mode)
-            new_content = update_variable(
-                new_content, "run_in_background", run_in_background
-            )
-            new_content = update_variable(
-                new_content, "disable_extensions", disable_extensions
-            )
-            new_content = update_variable(new_content, "smooth_scroll", smooth_scroll)
-            new_content = update_variable(
-                new_content, "keep_screen_awake", keep_screen_awake
-            )
-            new_content = update_variable(
-                new_content, "showAiErrorAlerts", showAiErrorAlerts
-            )
-
-            save_file(filepath, new_content)
-            st.success("Saved!")
 
 # --- Secrets ---
 with tabs[4]:
@@ -1045,9 +996,45 @@ if st.sidebar.button("🛑 Stop Bot"):
 st.sidebar.markdown("---")
 st.sidebar.header("📊 Bot Statistics")
 
+def process_csv_dates(df, date_column, daily_stats_dict, metric_key):
+    """
+    Helper to process date columns from dataframe and update stats dict.
+    """
+    if df is not None and not df.empty and date_column in df.columns:
+        # Convert to datetime, handling errors
+        df[date_column] = pd.to_datetime(df[date_column], errors="coerce")
+        # Group by date
+        daily_counts = df.groupby(df[date_column].dt.date).size()
+        for date_obj, count in daily_counts.items():
+            date_str = str(date_obj)
+            if date_str not in daily_stats_dict:
+                daily_stats_dict[date_str] = {"Applied": 0, "Failed": 0}
+            daily_stats_dict[date_str][metric_key] += int(count)
+
+def get_stats_from_csvs():
+    """
+    Reads the CSV files to get daily counts for Applied and Failed jobs.
+    Returns a dictionary keyed by date (YYYY-MM-DD).
+    """
+    daily_csv_stats = {}
+
+    # 1. Process Applied Jobs
+    df_applied = load_data(APPLIED_JOBS_FILE)
+    process_csv_dates(df_applied, "Date Applied", daily_csv_stats, "Applied")
+
+    # 2. Process Failed Jobs
+    df_failed = load_data(FAILED_JOBS_FILE)
+    process_csv_dates(df_failed, "Date Tried", daily_csv_stats, "Failed")
+    
+    return daily_csv_stats
+
 
 def parse_log_metrics(log_path="logs/log.txt"):
-    daily_stats = {}
+    """
+    Parses logs for 'External' and 'Skipped' only.
+    'Applied' and 'Failed' are now fetched from CSVs for accuracy.
+    """
+    daily_log_stats = {}
     current_date = "Unknown"
 
     if not os.path.exists(log_path):
@@ -1057,46 +1044,30 @@ def parse_log_metrics(log_path="logs/log.txt"):
         with open(log_path, "r", encoding="utf-8") as f:
             for line in f:
                 # Check for Date
-                # Format: Date and Time: 2025-12-14 12:50:45.882008
                 date_match = re.search(r"Date and Time:\s+(\d{4}-\d{2}-\d{2})", line)
                 if date_match:
                     current_date = date_match.group(1)
-                    if current_date not in daily_stats:
-                        daily_stats[current_date] = {
-                            "Applied": 0,
-                            "External": 0,
-                            "Failed": 0,
-                            "Skipped": 0,
-                        }
 
-                # Check for Metrics
-                # Only count if we have a valid date (or assign to "Unknown")
-                if current_date not in daily_stats:
-                    daily_stats[current_date] = {
-                        "Applied": 0,
+                if current_date == "Unknown":
+                    continue
+
+                if current_date not in daily_log_stats:
+                    daily_log_stats[current_date] = {
                         "External": 0,
-                        "Failed": 0,
                         "Skipped": 0,
                     }
 
-                if "Jobs Easy Applied:" in line:
-                    match = re.search(r"Jobs Easy Applied:\s+(\d+)", line)
-                    if match:
-                        daily_stats[current_date]["Applied"] += int(match.group(1))
-                elif "External job links collected:" in line:
+                # We only parse External and Skipped from logs now
+                if "External job links collected:" in line:
                     match = re.search(r"External job links collected:\s+(\d+)", line)
                     if match:
-                        daily_stats[current_date]["External"] += int(match.group(1))
-                elif "Failed jobs:" in line:
-                    match = re.search(r"Failed jobs:\s+(\d+)", line)
-                    if match:
-                        daily_stats[current_date]["Failed"] += int(match.group(1))
+                        daily_log_stats[current_date]["External"] += int(match.group(1))
                 elif "Irrelevant jobs skipped:" in line:
                     match = re.search(r"Irrelevant jobs skipped:\s+(\d+)", line)
                     if match:
-                        daily_stats[current_date]["Skipped"] += int(match.group(1))
+                        daily_log_stats[current_date]["Skipped"] += int(match.group(1))
 
-        return daily_stats
+        return daily_log_stats
     except Exception as e:
         st.sidebar.error(f"Error parsing log file: {e}")
         return {}
@@ -1105,7 +1076,22 @@ def parse_log_metrics(log_path="logs/log.txt"):
 if st.sidebar.button("🔄 Refresh Stats"):
     st.rerun()
 
-daily_stats = parse_log_metrics()
+# --- Merge Data Sources ---
+csv_stats = get_stats_from_csvs()
+log_stats = parse_log_metrics()
+
+# Create a master set of all dates
+all_dates = sorted(set(csv_stats.keys()) | set(log_stats.keys()))
+
+# Build the combined daily_stats dictionary
+daily_stats = {}
+for date in all_dates:
+    daily_stats[date] = {
+        "Applied": csv_stats.get(date, {}).get("Applied", 0),
+        "Failed": csv_stats.get(date, {}).get("Failed", 0),
+        "External": log_stats.get(date, {}).get("External", 0),
+        "Skipped": log_stats.get(date, {}).get("Skipped", 0),
+    }
 
 if daily_stats:
     # Calculate Grand Totals
@@ -1124,11 +1110,6 @@ if daily_stats:
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("📅 Daily Breakdown")
-
-    # Prepare data for chart
-    # Streamlit bar_chart expects a DataFrame or a dict where keys are x-axis labels
-    # We want dates on x-axis, and bars for each metric.
-    # Format: {"Date": ["2025-12-14"], "Applied": [10], "Failed": [2], ...}
 
     chart_data = {
         "Date": [],
@@ -1162,4 +1143,4 @@ if daily_stats:
         st.dataframe(chart_data)
 
 else:
-    st.sidebar.info("No logs found or empty log file.")
+    st.sidebar.info("No stats available.")
