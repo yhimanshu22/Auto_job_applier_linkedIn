@@ -3,6 +3,7 @@ import re
 import os
 import subprocess
 import sys
+import pandas as pd
 from dotenv import load_dotenv, set_key
 
 st.set_page_config(page_title="LinkedIn Bot Config", layout="wide")
@@ -136,7 +137,9 @@ def update_env_var(key, value):
     os.environ[key] = str(value)  # Update current session as well
 
 
-tabs = st.tabs(["Personal Info", "Questions", "Search", "Settings", "Secrets"])
+tabs = st.tabs(
+    ["Personal Info", "Questions", "Search", "Settings", "Secrets", "Applications"]
+)
 
 # --- Personal Info ---
 with tabs[0]:
@@ -797,6 +800,64 @@ with tabs[3]:
                 "Show AI Error Alerts",
                 extract_value(content, "showAiErrorAlerts", "bool"),
             )
+
+# --- Applications ---
+with tabs[5]:
+    st.header("Job Application History")
+
+    # helper to load csv efficiently
+    def load_data(file_path):
+        if os.path.exists(file_path):
+            try:
+                return pd.read_csv(file_path)
+            except Exception as e:
+                st.error(f"Error reading {file_path}: {e}")
+                return None
+        return None
+
+    APPLIED_JOBS_FILE = "all excels/all_applied_applications_history.csv"
+    FAILED_JOBS_FILE = "all excels/all_failed_applications_history.csv"
+
+    st.subheader("Successfully Applied Jobs")
+    df_applied = load_data(APPLIED_JOBS_FILE)
+    if df_applied is not None and not df_applied.empty:
+        st.dataframe(
+            df_applied,
+            width="stretch",
+            column_config={
+                "Job Link": st.column_config.LinkColumn("Job Link"),
+                "HR Link": st.column_config.LinkColumn("HR Link"),
+                "External Job link": st.column_config.LinkColumn("External Link"),
+                "Date Applied": st.column_config.DatetimeColumn(
+                    "Date Applied", format="D MMM YYYY, h:mm a"
+                ),
+            },
+            hide_index=True,
+        )
+        st.caption(f"Total Applied: {len(df_applied)}")
+    else:
+        st.info("No applied jobs history found.")
+
+    st.divider()
+
+    st.subheader("Failed Applications")
+    df_failed = load_data(FAILED_JOBS_FILE)
+    if df_failed is not None and not df_failed.empty:
+        st.dataframe(
+            df_failed,
+            width="stretch",
+            column_config={
+                "Job Link": st.column_config.LinkColumn("Job Link"),
+                "External Job link": st.column_config.LinkColumn("External Link"),
+                "Date Tried": st.column_config.DatetimeColumn(
+                    "Date Tried", format="D MMM YYYY, h:mm a"
+                ),
+            },
+            hide_index=True,
+        )
+        st.caption(f"Total Failed: {len(df_failed)}")
+    else:
+        st.info("No failed applications history found.")
 
         if st.button("Save Settings"):
             new_content = content
