@@ -51,7 +51,8 @@ run_in_background = False  # True or False, Note: True or False are case-sensiti
 disable_extensions = True  # True or False, Note: True or False are case-sensitive
 
 # Run in safe mode. Set this true if chrome is taking too long to open or if you have multiple profiles in browser. This will open chrome in guest profile!
-safe_mode = True  # True or False, Note: True or False are case-sensitive
+# NOTE: Set to False to use your saved LinkedIn login session.
+safe_mode = False  # True or False, Note: True or False are case-sensitive
 
 # Do you want scrolling to be smooth or instantaneous? (Can reduce performance if True)
 smooth_scroll = True  # True or False, Note: True or False are case-sensitive
@@ -60,13 +61,14 @@ smooth_scroll = True  # True or False, Note: True or False are case-sensitive
 keep_screen_awake = True  # True or False, Note: True or False are case-sensitive (Note: Will temporarily deactivate when any application dialog boxes are present (Eg: Pause before submit, Help needed for a question..))
 
 # Run in undetected mode to bypass anti-bot protections (Preview Feature, UNSTABLE. Recommended to leave it as False)
-stealth_mode = True  # True or False, Note: True or False are case-sensitive
+# NOTE: MUST BE False for Chrome version 145+ on Windows as it causes initialization hangs.
+stealth_mode = False  # True or False, Note: True or False are case-sensitive
 
 # Do you want to get alerts on errors related to AI API connection?
 showAiErrorAlerts = False  # True or False, Note: True or False are case-sensitive
 
 # Use ChatGPT for resume building (Experimental Feature can break the application. Recommended to leave it as False)
-# use_resume_generator = False       # True or False, Note: True or False are case-sensitive ,   This feature may only work with 'stealth_mode = True'. As ChatGPT website is hosted by CloudFlare which is protected by Anti-bot protections!
+# use_resume_generator = False       # True or False, Note: True or False are case-sensitive ,   This feature may only work with 'stealth_mode = False'. As ChatGPT website is hosted by CloudFlare which is protected by Anti-bot protections!
 
 # --- DEAL BREAKER CONFIGURATION ---
 

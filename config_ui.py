@@ -856,6 +856,31 @@ with tabs[3]:
                 extract_value(content, "showAiErrorAlerts", "bool"),
             )
 
+        if st.button("Save Settings"):
+            save_configuration(
+                filepath,
+                {
+                    "close_tabs": close_tabs,
+                    "follow_companies": follow_companies,
+                    "run_non_stop": run_non_stop,
+                    "alternate_sortby": alternate_sortby,
+                    "cycle_date_posted": cycle_date_posted,
+                    "stop_date_cycle_at_24hr": stop_date_cycle_at_24hr,
+                    "file_name": file_name,
+                    "failed_file_name": failed_file_name,
+                    "logs_folder_path": logs_folder_path,
+                    "generated_resume_path": generated_resume_path,
+                    "click_gap": click_gap,
+                    "stealth_mode": stealth_mode,
+                    "safe_mode": safe_mode,
+                    "run_in_background": run_in_background,
+                    "disable_extensions": disable_extensions,
+                    "smooth_scroll": smooth_scroll,
+                    "keep_screen_awake": keep_screen_awake,
+                    "showAiErrorAlerts": showAiErrorAlerts,
+                },
+            )
+
 # --- Applications ---
 with tabs[5]:
     st.header("Job Application History")
@@ -901,31 +926,6 @@ with tabs[5]:
     else:
         st.info("No failed applications history found.")
 
-        if st.button("Save Settings"):
-            save_configuration(
-                filepath,
-                {
-                    "close_tabs": close_tabs,
-                    "follow_companies": follow_companies,
-                    "run_non_stop": run_non_stop,
-                    "alternate_sortby": alternate_sortby,
-                    "cycle_date_posted": cycle_date_posted,
-                    "stop_date_cycle_at_24hr": stop_date_cycle_at_24hr,
-                    "file_name": file_name,
-                    "failed_file_name": failed_file_name,
-                    "logs_folder_path": logs_folder_path,
-                    "generated_resume_path": generated_resume_path,
-                    "click_gap": click_gap,
-                    "stealth_mode": stealth_mode,
-                    "safe_mode": safe_mode,
-                    "run_in_background": run_in_background,
-                    "disable_extensions": disable_extensions,
-                    "smooth_scroll": smooth_scroll,
-                    "keep_screen_awake": keep_screen_awake,
-                    "showAiErrorAlerts": showAiErrorAlerts,
-                },
-            )
-
 # --- Secrets ---
 with tabs[4]:
     st.header("Secrets")
@@ -952,10 +952,10 @@ with tabs[4]:
     if use_AI:
         ai_provider = st.selectbox(
             "AI Provider",
-            ["openai", "deepseek", "gemini"],
+            ["openai", "deepseek", "gemini", "openclaw"],
             index=(
-                ["openai", "deepseek", "gemini"].index(current_ai_provider)
-                if current_ai_provider in ["openai", "deepseek", "gemini"]
+                ["openai", "deepseek", "gemini", "openclaw"].index(current_ai_provider)
+                if current_ai_provider in ["openai", "deepseek", "gemini", "openclaw"]
                 else 0
             ),
         )

@@ -42,6 +42,12 @@ if use_AI:
         ai_answer_question,
         ai_close_openai_client,
     )
+    from modules.ai.openclawConnections import (
+        ai_create_openai_client as openclaw_create_client,
+        ai_extract_skills as openclaw_extract_skills,
+        ai_answer_question as openclaw_answer_question,
+        ai_close_openai_client as openclaw_close_client,
+    )
     from modules.ai.deepseekConnections import (
         deepseek_create_client,
         deepseek_extract_skills,
@@ -942,6 +948,14 @@ def answer_questions(
                                     about_company=None,
                                     user_information_all=user_information_all,
                                 )
+                            elif ai_provider.lower() == "openclaw":
+                                answer = openclaw_answer_question(
+                                    aiClient,
+                                    label_org,
+                                    question_type="text",
+                                    job_description=job_description,
+                                    user_information_all=user_information_all,
+                                )
                             else:
                                 randomly_answered_questions.add((label_org, "text"))
                                 answer = years_of_experience
@@ -1014,6 +1028,14 @@ def answer_questions(
                                     question_type="textarea",
                                     job_description=job_description,
                                     about_company=None,
+                                    user_information_all=user_information_all,
+                                )
+                            elif ai_provider.lower() == "openclaw":
+                                answer = openclaw_answer_question(
+                                    aiClient,
+                                    label_org,
+                                    question_type="textarea",
+                                    job_description=job_description,
                                     user_information_all=user_information_all,
                                 )
                             else:
@@ -1538,6 +1560,8 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                 skills = deepseek_extract_skills(aiClient, description)
                             elif ai_provider.lower() == "gemini":
                                 skills = gemini_extract_skills(aiClient, description)
+                            elif ai_provider.lower() == "openclaw":
+                                skills = openclaw_extract_skills(aiClient, description)
                             else:
                                 skills = "In Development"
                             print_lg(f"Extracted skills using {ai_provider} AI")
@@ -1802,6 +1826,8 @@ def main() -> None:
                 aiClient = deepseek_create_client()
             elif ai_provider == "gemini":
                 aiClient = gemini_create_client()
+            elif ai_provider == "openclaw":
+                aiClient = openclaw_create_client()
             ##<
 
             try:
@@ -1928,6 +1954,8 @@ def main() -> None:
                     ai_close_openai_client(aiClient)
                 elif ai_provider.lower() == "gemini":
                     pass  # Gemini client does not need to be closed
+                elif ai_provider.lower() == "openclaw":
+                    openclaw_close_client(aiClient)
                 print_lg(f"Closed {ai_provider} AI client.")
             except Exception as e:
                 print_lg("Failed to close AI client:", e)

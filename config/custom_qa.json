@@ -1,4 +1,9 @@
 {
     "Are you a U.S. Citizen? Please respond Yes or No! [  \"Select an option\", \"Yes\", \"No\", ]": "No",
-    "Are you Mumbai based ? [  \"Select an option\", \"Yes\", \"No\", ]": "No"
+    "Are you Mumbai based ? [  \"Select an option\", \"Yes\", \"No\", ]": "No",
+    "Are you a citizen of Cuba, Iran, North Korea or Syria? [  \"Yes\"<1>, \"No\"<0>, ]": "No",
+    "Are you a citizen of the U.S., a lawful permanent resident of the U.S., or a non-U.S. citizen who is in the U.S. as an asylee or a refugee? (if you only hold a temporary work/travel/student U.S. visa, please check No) [  \"Yes\"<1>, \"No\"<0>, ]": "No",
+    "Are you a citizen of the country you\u2019ll be employed in? [  \"Yes\"<1>, \"No\"<0>, ]": "Yes",
+    "Are you an immediate joiner? Can you join us in 15 days? [  \"Select an option\", \"Yes\", \"No\", ]": "Yes",
+    "Are you comfortable with the compensation mentioned in the Job Description? [  \"Select an option\", \"Yes\", \"No\", ]": "Yes"
 }

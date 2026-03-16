@@ -7,7 +7,7 @@
 default_resume_path =  "all resumes/default/220456_himanshu_yadav_bt_ce_sde.pdf"  # (In Development)
 
 # What do you want to answer for questions that ask about years of experience you have, this is different from current_experience?
-years_of_experience = "1"  # A number in quotes Eg: "0","1","2","3","4", etc.
+years_of_experience = "2"  # A number in quotes Eg: "0","1","2","3","4", etc.
 
 # Do you need visa sponsorship now or in future?
 require_visa = "No"  # "Yes" or "No"
@@ -26,7 +26,7 @@ us_citizenship = "Other"
 ## SOME ANNOYING QUESTIONS BY COMPANIES 🫠 ##
 
 # What to enter in your desired salary question (American and European), What is your expected CTC (South Asian and others)?, only enter in numbers as some companies only allow numbers,
-desired_salary = 2000000  # 80000, 90000, 100000 or 120000 and so on... Do NOT use quotes
+desired_salary = 1500000  # 80000, 90000, 100000 or 120000 and so on... Do NOT use quotes
 
 """
 Note: If question has the word "lakhs" in it (Example: What is your expected CTC in lakhs), 
@@ -39,7 +39,7 @@ And if asked in months, then it will divide by 12 and answer. Examples:
 """
 
 # What is your current CTC? Some companies make it compulsory to be answered in numbers...
-current_ctc =     1600000  # 800000, 900000, 1000000 or 1200000 and so on... Do NOT use quotes
+current_ctc =     0  # 800000, 900000, 1000000 or 1200000 and so on... Do NOT use quotes
 
 
 """
@@ -56,15 +56,15 @@ then it will add '.' before last 5 digits and answer. Examples:
 currency = "INR"  # "USD", "INR", "EUR", etc.
 
 # What is your notice period in days?
-notice_period = 20  # Any number >= 0 without quotes. Eg: 0, 7, 15, 30, 45, etc.
+notice_period = 0  # Any number >= 0 without quotes. Eg: 0, 7, 15, 30, 45, etc.
 """
 Note: If question has 'month' or 'week' in it (Example: What is your notice period in months), 
 then it will divide by 30 or 7 and answer respectively. Examples:
-* For notice_period = 20:
+* For notice_period = 0:
   - "66" OR "2" if asked in months OR "9" if asked in weeks
-* For notice_period = 20:"
+* For notice_period = 0:"
   - "15" OR "0" if asked in months OR "2" if asked in weeks
-* For notice_period = 20:
+* For notice_period = 0:
   - "0" OR "0" if asked in months OR "0" if asked in weeks
 """
 
@@ -97,39 +97,27 @@ Note: If left empty as "", the tool will not answer the question. However, note 
 """
 
 # Your cover letter in quotes, use \n to add line breaks if using single quotes "Cover Letter".You can skip \n if using triple quotes """Cover Letter""" (This question makes sense though)
-cover_letter = """
-Dear Hiring Manager, 
-I am writing to express my interest in the Software Development / Data Engineering role at 
-your organization. I am a final-year B.Tech undergraduate in Civil Engineering at IIT Kanpur, 
-with strong hands-on experience in software development, data science, and scalable 
-system design. 
-During my internship at GIVA Indiejewel Pvt. Ltd., I worked on both product engineering and 
-data-driven decision systems. I developed Angular-based admin modules for SKU and 
-category management and built an end-to-end sales forecasting and inventory optimization 
-pipeline using AutoGluon, which improved forecast accuracy by over 15% and reduced 
-stockout risks by 25%. I also delivered a Streamlit dashboard that translated complex analytics 
-into actionable insights for business stakeholders. 
-Beyond internships, I have built multiple production-grade full-stack projects using Next.js, 
-MERN, Prisma, Firebase, Cloudflare, and Vercel. My projects include an AI-powered blogging 
-platform using Gemini API, a secure blood bank management system with analytics, and 
-several backend systems focused on authentication, scalability, and clean API design. These 
-projects strengthened my understanding of system design, RESTful architectures, databases, 
-and modern deployment workflows. 
-I bring a strong foundation in programming (Java, Python, JavaScript, SQL, C++), practical 
-exposure to machine learning and data analysis, and leadership experience from managing 
-web development initiatives at IIT Kanpur student bodies. I enjoy working in fast-paced 
-environments where engineering decisions directly impact users and business outcomes. 
-I am highly motivated to contribute as a developer who can build reliable systems, learn 
-quickly, and collaborate eAectively. I would welcome the opportunity to discuss how my skills 
-and experiences align with your team’s goals. 
-Thank you for your time and consideration. 
-Sincerely, 
-Himanshu Yadav 
-College Name : IIT Kanpur 
-email id :  yhimanshu22@iitk.ac.in  
-Phone No: +91 8114245060 
+cover_letter = """Dear Hiring Manager,
 
-"""
+I am writing to express my interest in the Software Development / Data Engineering role at your organization. I am a final-year B.Tech undergraduate in Civil Engineering at IIT Kanpur, with strong hands-on experience in software development, data science, and scalable system design.
+
+I had secured a software engineering job through my institute’s placement process, but unfortunately the company recently revoked all the offers they had made. As a result, I am actively seeking new opportunities where I can contribute my skills and grow as a developer.
+
+During my internship at GIVA Indiejewel Pvt. Ltd., I worked on both product engineering and data-driven decision systems. I developed Angular-based admin modules for SKU and category management and built an end-to-end sales forecasting and inventory optimization pipeline using AutoGluon, which improved forecast accuracy by over 15% and reduced stockout risks by 25%. I also delivered a Streamlit dashboard that translated complex analytics into actionable insights for business stakeholders.
+
+Beyond internships, I have built multiple production-grade full-stack projects using Next.js, MERN, Prisma, Firebase, Cloudflare, and Vercel. My projects include an AI-powered blogging platform using Gemini API, a secure blood bank management system with analytics, and several backend systems focused on authentication, scalability, and clean API design. These projects strengthened my understanding of system design, RESTful architectures, databases, and modern deployment workflows.
+
+I bring a strong foundation in programming (Java, Python, JavaScript, SQL, C++,), practical exposure to machine learning and data analysis, and leadership experience from managing web development initiatives at IIT Kanpur student bodies. I enjoy working in fast-paced environments where engineering decisions directly impact users and business outcomes.
+
+I am highly motivated to contribute as a developer who can build reliable systems, learn quickly, and collaborate effectively. I would welcome the opportunity to discuss how my skills and experiences align with your team’s goals.
+
+Thank you for your time and consideration.
+
+Sincerely,
+Himanshu Yadav
+College Name: IIT Kanpur
+Email: yhimanshu22@iitk.ac.in
+Phone: +91 8114245060"""
 ##> ------ Dheeraj Deshwal : dheeraj9811 Email:dheeraj20194@iiitd.ac.in/dheerajdeshwal9811@gmail.com - Feature ------
 
 # Your user_information_all letter in quotes, use \n to add line breaks if using single quotes "user_information_all".You can skip \n if using triple quotes """user_information_all""" (This question makes sense though)

@@ -31,12 +31,13 @@ CHECK THE OPENAI API PIRCES AT THEIR WEBSITE (https://openai.com/api/pricing/).
 ##> ------ Yang Li : MARKYangL - Feature ------
 ##> ------ Tim L : tulxoro - Refactor ------
 # Select AI Provider
-ai_provider = os.getenv("AI_PROVIDER", "openai")  # "openai", "deepseek", "gemini"
+ai_provider = os.getenv("AI_PROVIDER", "openai")  # "openai", "deepseek", "gemini", "openclaw"
 """
 Note: Select your AI provider.
 * "openai" - OpenAI API (GPT models) OR OpenAi-compatible APIs (like Ollama)
 * "deepseek" - DeepSeek API (DeepSeek models)
 * "gemini" - Google Gemini API (Gemini models)
+* "openclaw" - OpenClaw API (OpenAI-compatible)
 * For any other models, keep it as "openai" if it is compatible with OpenAI's api.
 """
 
