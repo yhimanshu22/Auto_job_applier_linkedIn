@@ -6,3 +6,4 @@ flask-cors
 flask
 streamlit
 python-dotenv
+google-generativeai

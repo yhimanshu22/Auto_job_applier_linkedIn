@@ -56,7 +56,6 @@ try:
             logs_folder_path + "/screenshots",
             default_resume_path,
             generated_resume_path + "/temp",
-            "chrome_profile",  # Ensure local profile dir exists
         ]
     )
 
@@ -94,10 +93,9 @@ try:
             "SAFE MODE: Will login with a guest profile, browsing history will not be saved in the browser!"
         )
     else:
-        # Use LOCAL profile directory to avoid conflicts and ensure persistence
-        profile_dir = os.path.join(os.getcwd(), "chrome_profile")
-        options.add_argument(f"--user-data-dir={profile_dir}")
-        print_lg(f"Using local profile: {profile_dir}")
+        # User requested to remove persistent chrome_profile and use pickle for sessions instead
+        # UC/Selenium will use a default temporary profile if no user-data-dir is provided
+        print_lg("Using default/temporary browser profile (session persistence via cookies/pickle)")
 
     if stealth_mode:
         # try:
