@@ -35,22 +35,63 @@ sort_by = "Most recent"                       # "Most recent", "Most relevant" o
 date_posted = "Past 24 hours"         # "Any time", "Past month", "Past week", "Past 24 hours" or ("" to not select)
 salary = ""                        # "$40,000+", "$60,000+", "$80,000+", "$100,000+", "$120,000+", "$140,000+", "$160,000+", "$180,000+", "$200,000+"
 
-easy_apply_only = False             # True or False, Note: True or False are case-sensitive
+easy_apply_only = True            # True or False, Note: True or False are case-sensitive
 
-experience_level = ["Entry level"]              # (multiple select) "Internship", "Entry level", "Associate", "Mid-Senior level", "Director", "Executive"
+experience_level = ["Internship", "Entry level", "Associate", "Mid-Senior level"]              # (multiple select) "Internship", "Entry level", "Associate", "Mid-Senior level", "Director", "Executive"
 job_type = ["Full-time", "Internship", "Part-time"]                      # (multiple select) "Full-time", "Part-time", "Contract", "Temporary", "Volunteer", "Internship", "Other"
 on_site = ["Remote", "Hybrid", "On-site"]                       # (multiple select) "On-site", "Remote", "Hybrid"
 
-companies = []                     # (dynamic multiple select) make sure the name you type in list exactly matches with the company name you're looking for, including capitals. 
+companies = [
+    "Upwork", "Docker", "Automattic", "DigitalOcean", "Constructor", "Shopify",
+    "Abnormal Security", "Mentorsity", "Cloudflare", "MissionWired", "Symetra",
+    "Doist", "LogicGate", "Canonical", "Cloudbeds", "Sorcero", "Beekeeper",
+    "Uplers", "Bold", "DuckDuckGo", "DealHub", "Kemecon",
+    "Akamai Technologies", "Arkency", "Deltek", "Cash App", "Affordmate",
+    "Rec Room", "Funded.club", "Expert Thinking", "Patreon", "Xapo Bank",
+    "Cengage Group", "Quest Software", "Workera", "Faire", "McGraw Hill",
+    "UserGems", "Goinstacare", "Workiva", "Contra", "Awesome Motive",
+    "Appcues", "Jenius Bank", "DocuSign", "Confluent", "Census", "Angel One",
+    "Stripe", "Airbnb", "Coinbase", "Twilio", "GitLab", "GitHub", "Notion", "Figma",
+    "Canva", "Vercel", "Netlify", "Supabase", "PlanetScale", "Snowflake", "Databricks",
+    "Palantir", "MongoDB", "Redis", "Elastic", "HashiCorp", "NVIDIA", "Intel", "AMD",
+    "Qualcomm", "Tesla", "Rivian", "ByteDance", "TikTok", "Discord", "Reddit",
+    "Pinterest", "Snap", "Zoom", "Slack", "Asana", "Monday.com", "ClickUp",
+    "Zoho", "Freshworks", "Postman", "BrowserStack", "InMobi", "ShareChat",
+    "Dailyhunt", "Paytm", "PhonePe", "Razorpay", "Groww", "Zerodha", "Meesho"
+]                     # (dynamic multiple select) make sure the name you type in list exactly matches with the company name you're looking for, including capitals. 
                                     # Eg: "7-eleven", "Google","X, the moonshot factory","YouTube","CapitalG","Adometry (acquired by Google)","Meta","Apple","Byte Dance","Netflix", "Snowflake","Mineral.ai","Microsoft","JP Morgan","Barclays","Visa","American Express", "Snap Inc", "JPMorgan Chase & Co.", "Tata Consultancy Services", "Recruiting from Scratch", "Epic", and so on...
-location = []                      # (dynamic multiple select)
-industry = []                      # (dynamic multiple select)
-job_function = []                  # (dynamic multiple select)
-job_titles = []                    # (dynamic multiple select)
+location = [
+    "Bangalore", "Hyderabad", "Pune", "Mumbai", "Delhi NCR",
+    "Chennai", "Gurgaon", "Noida", "Kolkata", "Ahmedabad",
+    "Remote", "India", "United States", "Europe", "Singapore"
+]                    # (dynamic multiple select)
+industry = [
+    "Information Technology", "Software Development", "Internet",
+    "FinTech", "E-commerce", "SaaS", "Artificial Intelligence",
+    "Machine Learning", "Cloud Computing", "Cybersecurity",
+    "Data Science", "EdTech", "HealthTech", "Blockchain",
+    "Consumer Services", "Enterprise Software"
+]                     # (dynamic multiple select)
+job_function = [
+    "Engineering", "Information Technology", "Software Development",
+    "Research", "Data Science", "Product Development",
+    "Backend Development", "Frontend Development",
+    "Full Stack Development", "DevOps", "Machine Learning",
+    "Artificial Intelligence"
+]                # (dynamic multiple select)
+job_titles = [
+    "Software Engineer", "Software Developer", "SDE 1",
+    "Backend Engineer", "Frontend Engineer", "Full Stack Engineer",
+    "Associate Software Engineer", "Junior Software Engineer",
+    "Graduate Engineer Trainee", "Trainee Software Engineer",
+    "Machine Learning Engineer", "AI Engineer", "Data Scientist",
+    "Data Analyst", "Research Engineer", "Platform Engineer",
+    "Application Developer", "Web Developer", "Cloud Engineer"
+]                   # (dynamic multiple select)
 benefits = []                      # (dynamic multiple select)
 commitments = []                   # (dynamic multiple select)
 
-under_10_applicants = False        # True or False, Note: True or False are case-sensitive
+under_10_applicants = True       # True or False, Note: True or False are case-sensitive
 in_your_network = False            # True or False, Note: True or False are case-sensitive
 fair_chance_employer = False       # True or False, Note: True or False are case-sensitive
 

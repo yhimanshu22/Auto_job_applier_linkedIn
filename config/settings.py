@@ -9,7 +9,7 @@ Note: RECOMMENDED TO LEAVE IT AS `True`, if you set it `False`, be sure to CLOSE
 """
 
 # Follow easy applied companies
-follow_companies = True  # True or False, Note: True or False are case-sensitive
+follow_companies = False  # True or False, Note: True or False are case-sensitive
 
 ## Upcoming features (In Development)
 # # Send connection requests to HR's

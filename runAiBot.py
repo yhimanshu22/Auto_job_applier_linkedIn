@@ -1936,7 +1936,7 @@ def main() -> None:
                 "The only limit to our realization of tomorrow will be our doubts of today. - Franklin D. Roosevelt",
             ]
         )
-        msg = f"\n{quote}\n\n\nBest regards,\nSai Vignesh Golla\nhttps://www.linkedin.com/in/saivigneshgolla/\n\n"
+        msg = f"\n{quote}\n\n\nBest regards,\nHimanshu Yadav\nhttps://www.linkedin.com/in/yhimanshu22045/\n\n"
         pyautogui.alert(msg, "Exiting..")
         print_lg(msg, "Closing the browser...")
 
