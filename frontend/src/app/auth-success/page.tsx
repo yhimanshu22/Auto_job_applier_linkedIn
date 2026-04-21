@@ -2,20 +2,30 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 export default function AuthSuccessPage() {
   const router = useRouter();
+  const { data: session }: any = useSession();
 
   useEffect(() => {
     // This page is opened in the system browser after Google login
-    // We want to trigger the deep link to return to Electron
-    window.location.assign("linkdapply://auth-success");
+    // We want to trigger the deep link to return to Electron with the token
+    if (session?.accessToken) {
+      console.log("Triggering deep link with token...");
+      window.location.assign(`linkdapply://auth-success?token=${session.accessToken}`);
+    } else {
+      // Fallback for when session isn't loaded yet or missing token
+      window.location.assign("linkdapply://auth-success");
+    }
     
     // Fallback for UI
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       router.push("/dashboard");
-    }, 2000);
-  }, [router]);
+    }, 5000);
+
+    return () => clearTimeout(timeout);
+  }, [router, session]);
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center text-white p-6">

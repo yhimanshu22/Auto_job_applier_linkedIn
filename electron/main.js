@@ -124,9 +124,27 @@ if (process.defaultApp) {
 
 function handleDeepLink(url) {
   console.log(`[Electron] Received deep link: ${url}`);
-  if (url.includes('auth-success')) {
-    // Navigate to dashboard once authenticated via browser
-    mainWindow?.loadURL(`${APP_URL.replace('/login', '/dashboard')}`);
+  
+  try {
+    const parsed = new URL(url);
+    // On some platforms, the URL might be linkdapply://auth-success
+    // searchParams.get('token') works if it's linkdapply://auth-success?token=xyz
+    const token = parsed.searchParams.get('token');
+
+    if (mainWindow) {
+      if (token) {
+        console.log('[Electron] Sending auth-success to renderer with token');
+        mainWindow.webContents.send('auth-success', token);
+      } else if (url.includes('auth-success')) {
+        console.log('[Electron] Auth success triggered without token, navigating to dashboard');
+        mainWindow.loadURL(`${APP_URL.replace('/login', '/dashboard')}`);
+      }
+      
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  } catch (err) {
+    console.error('[Electron] Error parsing deep link URL:', err);
   }
 }
 
@@ -153,14 +171,14 @@ if (!gotTheLock) {
       mainWindow.focus();
     }
     // Command line contains the deep link URL on Windows
-    const url = commandLine.pop();
-    if (url.startsWith('linkdapply://')) {
+    const url = commandLine.find(arg => arg.startsWith('linkdapply://'));
+    if (url) {
       handleDeepLink(url);
     }
   });
 }
 
-// Handle deep links on macOS
+// Handle deep links on macOS / Linux
 app.on('open-url', (event, url) => {
   event.preventDefault();
   handleDeepLink(url);

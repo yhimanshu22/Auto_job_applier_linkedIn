@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('electron', {
   maximize: () => ipcRenderer.send('maximize-window'),
   close: () => ipcRenderer.send('close-window'),
   openExternal: (url) => ipcRenderer.send('open-external-url', url),
+  onAuthSuccess: (callback) => ipcRenderer.on('auth-success', (event, token) => callback(token)),
 });
 
 window.addEventListener('DOMContentLoaded', () => {
