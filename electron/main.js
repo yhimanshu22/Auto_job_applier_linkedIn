@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 
@@ -6,12 +6,13 @@ let mainWindow;
 let splashWindow;
 
 const isDev = process.argv.includes('--dev');
-const APP_URL = isDev ? 'http://localhost:3000/dashboard' : 'http://localhost:3000/dashboard'; // Replace with deployed URL
+// ❗ Update this with your production URL when ready
+const APP_URL = isDev ? 'http://localhost:3000/dashboard' : 'http://localhost:3000/dashboard'; 
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
-    width: 500,
-    height: 300,
+    width: 600,
+    height: 400,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -22,80 +23,82 @@ function createSplashWindow() {
   });
 
   splashWindow.loadFile(path.join(__dirname, 'splash.html'));
-  splashWindow.on('closed', () => (splashWindow = null));
 }
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
+    width: 1280,
     height: 800,
-    show: false, // Hide until ready-to-show
-    frame: false, // Remove default chrome UI
+    show: false,
+    frame: false,
     backgroundColor: '#ffffff',
+    autoHideMenuBar: true,
+    resizable: true,
+    minimizable: true,
+    maximizable: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
+      sandbox: true,
     },
     icon: path.join(__dirname, 'icon.ico'),
     title: 'LinkdApply',
   });
 
-  // Load the web app
   mainWindow.loadURL(APP_URL);
-
-  // Native Feel: Remove default menu
+  
+  // Clean UI: Remove default menu
   mainWindow.removeMenu();
 
-  // Block navigation to other domains
-  mainWindow.webContents.setWindowOpenHandler(() => {
+  // Smooth Transition: Hide splash and show main ONLY when content is ready
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (splashWindow) {
+      splashWindow.close();
+      splashWindow = null;
+    }
+    mainWindow.show();
+    mainWindow.maximize();
+  });
+
+  // Error Handling: Handle load failures gracefully
+  mainWindow.webContents.on('did-fail-load', () => {
+    mainWindow.loadURL('data:text/html,<html><body style="background:#09090b;color:white;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;"><h1>App failed to load</h1><p>Please ensure the local server is running or check your connection.</p></body></html>');
+  });
+
+  // Security: Prevent unauthorized external navigation
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith(APP_URL)) return { action: 'allow' };
     return { action: 'deny' };
   });
 
-  // Disable DevTools in production
+  // DEV: Enable tools if requested
   if (!isDev) {
     mainWindow.webContents.on('devtools-opened', () => {
       mainWindow.webContents.closeDevTools();
     });
   }
 
-  // Show main window when ready
-  mainWindow.once('ready-to-show', () => {
-    if (splashWindow) {
-      splashWindow.close();
-    }
-    mainWindow.show();
-    mainWindow.maximize();
-  });
-
   mainWindow.on('closed', () => (mainWindow = null));
-
-  // Auto-updater check
-  if (!isDev) {
-    autoUpdater.checkForUpdatesAndNotify();
-  }
 }
 
-// IPC Handlers for Window Controls
-ipcMain.on('minimize-window', () => {
-  mainWindow.minimize();
-});
-
+// IPC Handlers for Custom Titlebar
+ipcMain.on('minimize-window', () => mainWindow?.minimize());
 ipcMain.on('maximize-window', () => {
-  if (mainWindow.isMaximized()) {
-    mainWindow.unmaximize();
-  } else {
-    mainWindow.maximize();
-  }
+  if (mainWindow?.isMaximized()) mainWindow.unmaximize();
+  else mainWindow?.maximize();
 });
+ipcMain.on('close-window', () => mainWindow?.close());
 
-ipcMain.on('close-window', () => {
-  mainWindow.close();
-});
-
-app.on('ready', () => {
+// Lifecycle Management
+app.whenReady().then(() => {
   createSplashWindow();
-  setTimeout(createMainWindow, 500);
+  createMainWindow();
+
+  // Native Shortcuts
+  globalShortcut.register('CommandOrControl+Q', () => {
+    app.quit();
+  });
 });
 
 app.on('window-all-closed', () => {
@@ -109,3 +112,15 @@ app.on('activate', () => {
     createMainWindow();
   }
 });
+
+// Auto-Updater Management
+if (!isDev) {
+  autoUpdater.on('update-available', () => {
+    console.log('Update available. Downloading...');
+  });
+  autoUpdater.on('update-downloaded', () => {
+    console.log('Update downloaded. Ready to install.');
+    autoUpdater.quitAndInstall();
+  });
+  autoUpdater.checkForUpdatesAndNotify();
+}
