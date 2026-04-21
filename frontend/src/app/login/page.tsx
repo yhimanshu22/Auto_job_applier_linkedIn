@@ -2,19 +2,30 @@
 
 import React from "react";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import TitleBar from "@/components/TitleBar";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { data: session, status } = useSession();
   const [electronAPI, setElectronAPI] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(false);
 
   React.useEffect(() => {
+    // 1. Check if Electron API is available
     if (typeof window !== "undefined" && (window as any).electron) {
       console.log("[LoginPage] Electron API detected in window");
       setElectronAPI((window as any).electron);
     }
-  }, []);
+
+    // 2. Auto-redirect if already authenticated
+    const hasToken = typeof window !== "undefined" && localStorage.getItem("auth_token");
+    if (status === "authenticated" || hasToken) {
+        console.log("[LoginPage] User already authenticated, redirecting to dashboard...");
+        router.push("/dashboard");
+    }
+  }, [status, router]);
 
   const handleGoogleSignIn = () => {
     if (isLoading) return;
