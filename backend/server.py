@@ -25,6 +25,10 @@ supervisor_process = None
 
 @app.get("/api/config/{filename}")
 async def read_config(filename: str):
+    # Support both "personals" and "personals.py"
+    if not filename.endswith(".py"):
+        filename += ".py"
+        
     if filename not in ["personals.py", "search.py", "settings.py", "questions.py"]:
         raise HTTPException(status_code=400, detail="Invalid config file")
         
@@ -37,6 +41,9 @@ async def read_config(filename: str):
 
 @app.post("/api/config/{filename}")
 async def write_config(filename: str, data: ConfigData):
+    if not filename.endswith(".py"):
+        filename += ".py"
+        
     if filename not in ["personals.py", "search.py", "settings.py", "questions.py"]:
         raise HTTPException(status_code=400, detail="Invalid config file")
         

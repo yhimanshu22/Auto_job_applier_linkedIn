@@ -153,6 +153,11 @@ app.setPath('userData', path.join(app.getPath('temp'), 'linkdapply-v1'));
 let backendProcess;
 
 function startBackend() {
+  if (backendProcess && !backendProcess.killed) {
+    console.log('[Electron] Backend is already running.');
+    return;
+  }
+
   try {
     const backendDir = path.resolve(__dirname, '..', 'backend');
     const serverPath = path.join(backendDir, 'server.py');
@@ -163,6 +168,17 @@ function startBackend() {
 
     const spawn = require('child_process').spawn;
     const execSync = require('child_process').execSync;
+
+    // 0. Kill anything on port 8000 to avoid conflicts
+    if (process.platform === 'win32') {
+      try {
+        console.log('[Electron] Checking for existing processes on port 8000...');
+        execSync('for /f "tokens=5" %a in (\'netstat -aon ^| findstr :8000\') do taskkill /f /pid %a', { stdio: 'ignore' });
+        console.log('[Electron] Port 8000 cleared.');
+      } catch (e) {
+        // This will throw if nothing is on port 8000, which is fine
+      }
+    }
 
     // 1. Ensure dependencies are synced (fast with uv)
     console.log(`[Electron] Syncing Python dependencies...`);

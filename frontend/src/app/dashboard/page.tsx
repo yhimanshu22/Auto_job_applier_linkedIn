@@ -56,7 +56,8 @@ export default function Dashboard() {
     setIsLoading(true);
     setMessage(null);
     try {
-      const res = await fetch(`http://localhost:8000/api/config/${filename}`);
+      const cleanName = filename.replace('.py', '');
+      const res = await fetch(`http://localhost:8000/api/config/${cleanName}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setContent(data.content || "");
@@ -71,7 +72,8 @@ export default function Dashboard() {
     setIsSaving(true);
     setMessage(null);
     try {
-      const res = await fetch(`http://localhost:8000/api/config/${activeTab}`, {
+      const cleanName = activeTab.replace('.py', '');
+      const res = await fetch(`http://localhost:8000/api/config/${cleanName}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
