@@ -4,6 +4,7 @@ import csv
 import re
 import pyautogui
 import json
+import sys
 
 # Set CSV field size limit to prevent field size errors
 csv.field_size_limit(1000000)  # Set to 1MB instead of default 131KB
@@ -122,7 +123,7 @@ import pickle
 def save_cookies():
     """Saves current cookies to a file."""
     try:
-        pickle.dump(driver.get_cookies(), open("linkedin_cookies.pkl", "wb"))
+        pickle.dump(driver.get_cookies(), open(cookies_file, "wb"))
         print_lg("Session cookies saved successfully!")
     except Exception as e:
         print_lg("Failed to save cookies!", e)
@@ -130,9 +131,9 @@ def save_cookies():
 
 def load_cookies():
     """Loads cookies from file and refreshes the page."""
-    if os.path.exists("linkedin_cookies.pkl"):
+    if os.path.exists(cookies_file):
         try:
-            cookies = pickle.load(open("linkedin_cookies.pkl", "rb"))
+            cookies = pickle.load(open(cookies_file, "rb"))
             # You must be on the domain before adding cookies
             if "linkedin.com" not in driver.current_url:
                 driver.get("https://www.linkedin.com")
@@ -1897,6 +1898,7 @@ def main() -> None:
     except Exception as e:
         critical_error_log("In Applier Main", e)
         pyautogui.alert(str(e), alert_title)
+        sys.exit(1)
     finally:
         # --- Statistics & Cleanup ---
         print_lg("\n\nTotal runs:                     {}".format(total_runs))

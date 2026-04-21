@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --accent: #6d28d9;
+  --accent-foreground: #ffffff;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #18181b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-eb-garamond);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #09090b;
+    --foreground: #fafafa;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+    --accent: #7c3aed;
+    --accent-foreground: #ffffff;
+    --border: #27272a;
+    --input: #27272a;
+    --ring: #d4d4d8;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), sans-serif;
+}
+
+.font-serif {
+  font-family: var(--font-eb-garamond), serif;
+}
+
+/* Premium Gradients */
+.hero-gradient {
+  background: radial-gradient(circle at top center, rgba(124, 58, 237, 0.15), transparent 50%);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dark .glass-card {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Custom Scrollbar for Cluely look */
+.cluely-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cluely-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cluely-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.purple-gradient-button {
+  background: linear-gradient(180deg, #7c3aed 0%, #6d28d9 100%);
+  box-shadow: 0 4px 14px 0 rgba(124, 58, 237, 0.39);
+}

@@ -41,6 +41,20 @@ file_name = "all excels/all_applied_applications_history.csv"
 failed_file_name = "all excels/all_failed_applications_history.csv"
 logs_folder_path = "logs/"
 
+import os
+# --- BOT_ID Isolation logic ---
+bot_id = os.getenv("BOT_ID", "")
+cookies_file = f"linkedin_cookies_{bot_id}.pkl" if bot_id else "linkedin_cookies.pkl"
+if bot_id:
+    # Override settings for this instance
+    file_name = file_name.replace(".csv", f"_{bot_id}.csv")
+    failed_file_name = failed_file_name.replace(".csv", f"_{bot_id}.csv")
+    logs_folder_path = os.path.join(logs_folder_path, f"bot_{bot_id}")
+    # Ensure log directory exists
+    if not os.path.exists(logs_folder_path):
+        os.makedirs(logs_folder_path, exist_ok=True)
+# ------------------------------
+
 # Set the maximum amount of time allowed to wait between each click in secs
 click_gap = 3  # Enter max allowed secs to wait approximately. (Only Non Negative Integers Eg: 0,1,2,3,....)
 

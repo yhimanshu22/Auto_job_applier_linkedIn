@@ -1,0 +1,13 @@
+│
+◇  Doctor warnings ────────────────────────────────────────────────────────╮
+│                                                                          │
+│  - channels.telegram.groupPolicy is "allowlist" but groupAllowFrom (and  │
+│    allowFrom) is empty — all group messages will be silently dropped.    │
+│    Add sender IDs to channels.telegram.groupAllowFrom or                 │
+│    channels.telegram.allowFrom, or set groupPolicy to "open".            │
+│                                                                          │
+├──────────────────────────────────────────────────────────────────────────╯
+Gateway service missing.
+Start with: openclaw gateway install
+Start with: openclaw gateway
+Start with: schtasks /Run /TN "OpenClaw Gateway"

@@ -1,0 +1,28 @@
+[90m2026-03-16T03:01:37.091+05:30[39m [36m[gateway][39m [36mforce: killed pid 19700 on port 3000[39m
+2026-03-16T03:01:37.316+05:30 Registered plugin command: /pair (plugin: device-pair)
+2026-03-16T03:01:37.332+05:30 Registered plugin command: /phone (plugin: phone-control)
+2026-03-16T03:01:37.339+05:30 Registered plugin command: /voice (plugin: talk-voice)
+[90m2026-03-16T03:01:42.333+05:30[39m [35m[canvas][39m [36mhost mounted at http://127.0.0.1:3000/__openclaw__/canvas/ (root C:\Users\91811\.openclaw\canvas)[39m
+2026-03-16T03:01:42.849+05:30 bonjour: starting (hostname=openclaw, instance="Jack (OpenClaw)", gatewayPort=3000, minimal=true)
+[90m2026-03-16T03:01:42.990+05:30[39m [36m[heartbeat][39m [36mstarted[39m
+[90m2026-03-16T03:01:42.994+05:30[39m [32m[health-monitor][39m [36mstarted (interval: 300s, startup-grace: 60s, channel-connect-grace: 120s)[39m
+[90m2026-03-16T03:01:43.001+05:30[39m [36m[gateway][39m [36magent model: anthropic/claude-opus-4-6[39m
+[90m2026-03-16T03:01:43.003+05:30[39m [36m[gateway][39m [36mlistening on ws://127.0.0.1:3000, ws://[::1]:3000 (PID 17636)[39m
+[90m2026-03-16T03:01:43.007+05:30[39m [36m[gateway][39m [36mlog file: \tmp\openclaw\openclaw-2026-03-16.log[39m
+[90m2026-03-16T03:01:43.015+05:30[39m [34m[telegram][39m [36mautoSelectFamily=true (default-node22)[39m
+[90m2026-03-16T03:01:43.018+05:30[39m [34m[telegram][39m [36mdnsResultOrder=ipv4first (default-node22)[39m
+[90m2026-03-16T03:01:43.099+05:30[39m [36m[browser/server][39m [36mBrowser control listening on http://127.0.0.1:3002/ (auth=token)[39m
+[90m2026-03-16T03:01:45.150+05:30[39m [34m[telegram][39m [36m[default] starting provider (@pplyPulse_bot)[39m
+[90m2026-03-16T03:01:45.162+05:30[39m [34m[telegram][39m [36mautoSelectFamily=true (default-node22)[39m
+[90m2026-03-16T03:01:45.164+05:30[39m [34m[telegram][39m [36mdnsResultOrder=ipv4first (default-node22)[39m
+2026-03-16T03:01:45.174+05:30 [routing] resolveAgentRoute: channel=telegram accountId=default peer=none guildId=none teamId=none bindings=0
+2026-03-16T03:01:45.201+05:30 Skipping agent "main": workspace does not exist: C:\Users\91811\.openclaw\workspace
+[90m2026-03-16T03:03:15.000+05:30[39m [34m[reload][39m [36mconfig change detected; evaluating reload (channels.telegram.dmPolicy, channels.telegram.allowFrom, agents.defaults.compaction)[39m
+[90m2026-03-16T03:03:15.016+05:30[39m [31m[gateway/channels][39m [36mrestarting telegram channel[39m
+[90m2026-03-16T03:03:15.044+05:30[39m [34m[reload][39m [36mconfig hot reload applied (channels.telegram.dmPolicy, channels.telegram.allowFrom)[39m
+[90m2026-03-16T03:03:16.500+05:30[39m [34m[telegram][39m [36m[default] starting provider (@pplyPulse_bot)[39m
+[90m2026-03-16T03:03:16.509+05:30[39m [34m[telegram][39m [36mautoSelectFamily=true (default-node22)[39m
+[90m2026-03-16T03:03:16.514+05:30[39m [34m[telegram][39m [36mdnsResultOrder=ipv4first (default-node22)[39m
+2026-03-16T03:03:16.525+05:30 [routing] resolveAgentRoute: channel=telegram accountId=default peer=none guildId=none teamId=none bindings=0
+2026-03-16T03:03:16.535+05:30 Skipping agent "main": workspace does not exist: C:\Users\91811\.openclaw\workspace
+2026-03-16T03:03:16.545+05:30 telegram: command menu unchanged; skipping sync

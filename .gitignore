@@ -31,21 +31,27 @@ ENV/
 *.swo
 
 # Project specific
-all excels/
-all resumes/
-logs/
-chrome_profile/
-linkedin_cookies.pkl
-bot_pid.txt
-openclaw_out.log
-test_output.txt
-old/
+backend/all excels/
+backend/all resumes/
+backend/logs/
+backend/chrome_profile/
+backend/linkedin_cookies*.pkl
+backend/bot_pid.txt
+backend/openclaw_out.log
+backend/test_output.txt
+backend/old/
 
 # Environment and Secrets
 .env
-secrets.py
-config/personals.py
+backend/.env
+backend/config/secrets.py
+backend/config/personals.py
 apikeys.py.env
+
+# Next.js
+frontend/.next/
+frontend/node_modules/
+frontend/package-lock.json
 
 # OS
 Thumbs.db
