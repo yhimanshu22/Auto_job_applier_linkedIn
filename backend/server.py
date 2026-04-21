@@ -17,6 +17,9 @@ app.add_middleware(
 class ConfigData(BaseModel):
     content: str
 
+def get_config_path(filename: str):
+    return os.path.join(os.path.dirname(__file__), "config", filename)
+
 # Global state to track the supervisor process
 supervisor_process = None
 
