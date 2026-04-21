@@ -183,13 +183,23 @@ export default function Dashboard() {
 
         {/* Status Message */}
         {message && (
-          <div className={`mb-8 p-4 rounded-xl flex items-center gap-3 transition-all animate-in fade-in slide-in-from-top-2 ${
+            <div className={`mb-8 p-4 rounded-xl flex items-center justify-between gap-3 transition-all animate-in fade-in slide-in-from-top-2 ${
             message.type === 'success' 
               ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' 
               : 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
           }`}>
-            <div className={`size-2 rounded-full ${message.type === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
-            <p className="text-sm font-medium">{message.text}</p>
+            <div className="flex items-center gap-3">
+              <div className={`size-2 rounded-full ${message.type === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+              <p className="text-sm font-medium">{message.text}</p>
+            </div>
+            {message.type === 'error' && (
+              <button 
+                onClick={() => fetchConfig(activeTab)}
+                className="text-xs font-bold uppercase tracking-wider px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 rounded-lg transition-colors"
+              >
+                Retry
+              </button>
+            )}
           </div>
         )}
 

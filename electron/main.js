@@ -150,7 +150,47 @@ function handleDeepLink(url) {
 app.commandLine.appendSwitch('disable-gpu');
 app.setPath('userData', path.join(app.getPath('temp'), 'linkdapply-v1'));
 
+let backendProcess;
+
+function startBackend() {
+  const backendPath = path.join(__dirname, '..', 'backend', 'server.py');
+  console.log(`[Electron] Starting backend at: ${backendPath}`);
+  
+  const spawn = require('child_process').spawn;
+  // Use 'python' for Windows, could also be 'python3' for other OSes
+  backendProcess = spawn('python', [backendPath], {
+    cwd: path.join(__dirname, '..', 'backend'),
+    shell: true
+  });
+
+  backendProcess.stdout.on('data', (data) => {
+    console.log(`[Backend INFO] ${data.toString().trim()}`);
+  });
+
+  backendProcess.stderr.on('data', (data) => {
+    console.error(`[Backend ERROR] ${data.toString().trim()}`);
+  });
+
+  backendProcess.on('close', (code) => {
+    console.log(`[Backend] Process exited with code ${code}`);
+  });
+}
+
+function stopBackend() {
+  if (backendProcess) {
+    console.log('[Electron] Stopping backend...');
+    // On Windows, killing the process tree is safer
+    if (process.platform === 'win32') {
+      const exec = require('child_process').exec;
+      exec(`taskkill /pid ${backendProcess.pid} /T /F`);
+    } else {
+      backendProcess.kill();
+    }
+  }
+}
+
 app.whenReady().then(() => {
+  startBackend();
   createSplashWindow();
   createMainWindow();
 
@@ -159,6 +199,11 @@ app.whenReady().then(() => {
     app.quit();
   });
 });
+
+app.on('before-quit', () => {
+  stopBackend();
+});
+
 
 // Handle deep links on Windows (secondary instances)
 const gotTheLock = app.requestSingleInstanceLock();
