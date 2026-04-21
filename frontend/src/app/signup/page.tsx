@@ -6,14 +6,22 @@ import { signIn } from "next-auth/react";
 import TitleBar from "@/components/TitleBar";
 
 export default function SignupPage() {
-  const handleGoogleSignup = () => {
-    // Check if running in Electron
-    const electron = typeof window !== "undefined" ? (window as any).electron : null;
+  const [electronAPI, setElectronAPI] = React.useState<any>(null);
 
-    if (electron && typeof electron.openExternal === "function") {
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && (window as any).electron) {
+      console.log("[SignupPage] Electron API detected in window");
+      setElectronAPI((window as any).electron);
+    }
+  }, []);
+
+  const handleGoogleSignup = () => {
+    if (electronAPI && typeof electronAPI.openExternal === "function") {
+        console.log("[SignupPage] Triggering external browser auth...");
         const authUrl = `http://localhost:3000/api/auth/signin/google?callbackUrl=http://localhost:3000/auth-success`;
-        electron.openExternal(authUrl);
+        electronAPI.openExternal(authUrl);
     } else {
+        console.log("[SignupPage] Using standard browser auth (fallback)...");
         signIn("google", { callbackUrl: "/dashboard" });
     }
   };
