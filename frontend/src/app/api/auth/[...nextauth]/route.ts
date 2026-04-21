@@ -20,8 +20,12 @@ const handler = NextAuth({
       return session;
     },
     async redirect({ url, baseUrl }) {
-      // Redirect to our success page which triggers the deep link
-      return `${baseUrl}/auth-success`;
+      // If we're already going to auth-success, let it through
+      if (url.includes('auth-success')) return url;
+      // Normal NextAuth redirect logic
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      else if (new URL(url).origin === baseUrl) return url;
+      return `${baseUrl}/dashboard`;
     },
   },
   pages: {

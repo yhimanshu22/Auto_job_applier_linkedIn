@@ -14,14 +14,15 @@ export default function AuthSuccessPage() {
     if (session?.accessToken) {
       console.log("Triggering deep link with token...");
       window.location.assign(`linkdapply://auth-success?token=${session.accessToken}`);
-    } else {
-      // Fallback for when session isn't loaded yet or missing token
-      window.location.assign("linkdapply://auth-success");
-    }
+    } 
     
-    // Fallback for UI
+    // Fallback for UI - redirected to dashboard in browser if no deep link triggered
     const timeout = setTimeout(() => {
-      router.push("/dashboard");
+      if (session) {
+        router.push("/dashboard");
+      } else {
+        router.push("/login");
+      }
     }, 5000);
 
     return () => clearTimeout(timeout);
