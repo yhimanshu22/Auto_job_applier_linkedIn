@@ -21,6 +21,14 @@
     "appId": "com.linkdapply.app",
     "productName": "LinkdApply",
     "copyright": "Copyright © 2024 LinkdApply",
+    "protocols": [
+      {
+        "name": "LinkdApply",
+        "schemes": [
+          "linkdapply"
+        ]
+      }
+    ],
     "win": {
       "target": [
         "nsis"

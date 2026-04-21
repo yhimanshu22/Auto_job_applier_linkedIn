@@ -53,6 +53,7 @@ function createMainWindow() {
 
   // Smooth Transition: Hide splash and show main ONLY when content is ready
   mainWindow.webContents.on('did-finish-load', () => {
+    console.log('[Electron] Main window loaded successfully');
     if (splashWindow) {
       splashWindow.close();
       splashWindow = null;
@@ -61,14 +62,32 @@ function createMainWindow() {
     mainWindow.maximize();
   });
 
+  // 📝 Terminal Logging: Pipe frontend logs to terminal
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    const levels = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
+    console.log(`[Frontend ${levels[level] || 'LOG'}] ${message} (${path.basename(sourceId)}:${line})`);
+  });
+
   // Error Handling: Handle load failures gracefully
-  mainWindow.webContents.on('did-fail-load', () => {
-    mainWindow.loadURL('data:text/html,<html><body style="background:#09090b;color:white;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;"><h1>App failed to load</h1><p>Please ensure the local server is running or check your connection.</p></body></html>');
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error(`[Electron ERROR] Failed to load ${validatedURL}: ${errorDescription} (${errorCode})`);
+    mainWindow.loadURL('data:text/html,<html><body style="background:#09090b;color:white;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;"><h1>App failed to load</h1><p>Error: ' + errorDescription + '</p><p>Check if your local server is running on port 3000.</p></body></html>');
+  });
+
+  // Log navigation starts
+  mainWindow.webContents.on('did-start-navigation', (event, url) => {
+    console.log(`[Electron] Navigating to: ${url}`);
   });
 
   // Security: Prevent unauthorized external navigation
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(APP_URL)) return { action: 'allow' };
+    console.log(`[Electron] Attempting to open window: ${url}`);
+    // Allow Google OAuth and app dashboard
+    if (url.startsWith(APP_URL) || url.includes('accounts.google.com')) {
+      console.log(`[Electron] Permitted external navigation: ${url}`);
+      return { action: 'allow' };
+    }
+    console.warn(`[Electron] Blocked unauthorized window: ${url}`);
     return { action: 'deny' };
   });
 
@@ -90,6 +109,23 @@ ipcMain.on('maximize-window', () => {
 });
 ipcMain.on('close-window', () => mainWindow?.close());
 
+// Protocol Handling Logic
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('linkdapply', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('linkdapply');
+}
+
+function handleDeepLink(url) {
+  console.log(`[Electron] Received deep link: ${url}`);
+  if (url.includes('auth-success')) {
+    // Navigate to dashboard once authenticated via browser
+    mainWindow?.loadURL(`${APP_URL.replace('/login', '/dashboard')}`);
+  }
+}
+
 // Lifecycle Management
 app.whenReady().then(() => {
   createSplashWindow();
@@ -101,16 +137,29 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
+// Handle deep links on Windows (secondary instances)
+const gotTheLock = app.requestSingleInstanceLock();
 
-app.on('activate', () => {
-  if (mainWindow === null) {
-    createMainWindow();
-  }
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (event, commandLine) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+    // Command line contains the deep link URL on Windows
+    const url = commandLine.pop();
+    if (url.startsWith('linkdapply://')) {
+      handleDeepLink(url);
+    }
+  });
+}
+
+// Handle deep links on macOS
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
 });
 
 // Auto-Updater Management

@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   description: "Automate your LinkedIn job applications with the most advanced AI bot.",
 };
 
+import AuthContext from "@/components/AuthContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,7 +30,11 @@ export default function RootLayout({
       className={`${interSizeAdjust.variable} ${ebGaramond.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <AuthContext>
+          {children}
+        </AuthContext>
+      </body>
     </html>
   );
 }
