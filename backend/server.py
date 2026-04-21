@@ -60,10 +60,9 @@ async def start_bot():
         
     try:
         cwd = os.path.dirname(__file__)
-        # On Windows, use subprocess.CREATE_NEW_CONSOLE to see the output if desired, 
-        # or just run it in the background.
+        # Use uv run python to ensure the bot runs in the correct managed environment
         supervisor_process = subprocess.Popen(
-            ["python", "supervisor.py"], 
+            ["uv", "run", "python", "supervisor.py"], 
             cwd=cwd,
             creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
         )
