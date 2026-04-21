@@ -53,6 +53,11 @@ frontend/.next/
 frontend/node_modules/
 frontend/package-lock.json
 
+# Electron
+electron/node_modules/
+electron/dist/
+electron/package-lock.json
+
 # OS
 Thumbs.db
 .DS_Store

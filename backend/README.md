@@ -43,33 +43,20 @@ You can set up the project using either `uv` (recommended) or standard `pip`.
 
 ## ⚙️ Configuration
 
-The easiest way to configure the bot is using the built-in UI.
+The easiest way to configure the bot is using the built-in Next.js Dashboard.
 
-### Method 1: Visual Configuration (Recommended)
-Run the configuration UI to easily edit your personal details, answers, and search preferences.
-
-```bash
-# If using uv
-uv run streamlit run config_ui.py
-
-# If using standard python
-streamlit run config_ui.py
-```
-
-This will open a web interface where you can set:
-*   **Personal Info**: Name, contact details, etc.
-*   **Questions**: Standard answers for experience, visa status, etc.
-*   **Search**: Job titles, locations, and filters.
-*   **Settings**: Bot behavior like stealth mode and AI providers.
-*   **Secrets**: API keys and credentials (saved to `.env`).
+### Method 1: Dashboard Configuration (Recommended)
+1. Start the servers using `./start_servers.bat` at the project root.
+2. Open your browser to `http://localhost:3000`.
+3. Navigate to the Configuration or Settings page to edit your personal details, answers, and search preferences.
 
 ### Method 2: Manual Configuration
 You can also manually edit the files in the `config/` folder:
-*   `config/personals.py`
-*   `config/questions.py`
-*   `config/search.py`
-*   `config/settings.py`
-*   `.env` for secrets (create looking at `config/secrets.py` as reference)
+- `config/personals.py`
+- `config/questions.py`
+- `config/search.py`
+- `config/settings.py`
+- `.env` for secrets (use `config/secrets.py` as reference)
 
 ---
 
@@ -103,7 +90,7 @@ You can also manually edit the files in the `config/` folder:
 
 ### Bot gets stuck or errors out
 *   Check the terminal output for error messages.
-*   If it gets stuck on a specific question, check the **Questions** tab in `config_ui.py` to ensure you have a valid answer configured for that type of question.
+*   If it gets stuck on a specific question, check your configuration in the Dashboard to ensure you have a valid answer configured for that type of question.
 
 ### AI Issues
 *   If using OpenAI/DeepSeek/Gemini, ensure your API key is correctly set in the **Secrets** tab of the UI or in your `.env` file.

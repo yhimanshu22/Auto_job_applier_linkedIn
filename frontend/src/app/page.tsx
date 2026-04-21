@@ -20,6 +20,9 @@ export default function LandingPage() {
               <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#faq">
                 FAQ
               </Link>
+              <Link className="text-sm font-medium text-accent hover:text-accent/80 transition-colors" href="#download">
+                Download
+              </Link>
             </nav>
           </div>
           <div className="flex items-center gap-4">
@@ -65,7 +68,8 @@ export default function LandingPage() {
                 Start Applying Free
               </Link>
               <Link 
-                href="#"
+                href="/download/LinkdApply-Setup.exe"
+                download="LinkdApply-Setup.exe"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white text-zinc-900 font-semibold transition-all hover:bg-zinc-50"
               >
                 <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
@@ -129,6 +133,53 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* How it Works Section */}
+        <section id="how-it-works" className="py-24 lg:py-32 bg-white">
+          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <div className="text-center space-y-4 mb-16 lg:mb-24">
+               <h2 className="font-serif text-4xl lg:text-6xl font-medium tracking-tight text-zinc-900 leading-tight">
+                  Start applying in <span className="text-accent italic">minutes</span>.
+                </h2>
+                <p className="max-w-2xl mx-auto text-lg text-zinc-500">
+                  Getting started with LinkdApply is simple. No complex setup, just pure automation.
+                </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+              {[
+                {
+                  step: "01",
+                  title: "Connect LinkedIn",
+                  description: "Securely link your account using your existing session cookies. No passwords required."
+                },
+                {
+                  step: "02",
+                  title: "Configure AI",
+                  description: "Tell LinkdApply about your experience and how you want to answer custom job questions."
+                },
+                {
+                  step: "03",
+                  title: "Set Filters",
+                  description: "Choose your target job titles, locations, and salary expectations for the automated search."
+                },
+                {
+                  step: "04",
+                  title: "Go Live",
+                  description: "Launch the bot and watch as it applies to hundreds of relevant jobs while you sleep."
+                }
+              ].map((item, idx) => (
+                <div key={idx} className="relative group p-8 rounded-3xl border border-zinc-100 bg-zinc-50/50 hover:bg-white hover:border-accent/20 transition-all hover:shadow-xl">
+                  <div className="text-4xl font-serif text-accent/20 group-hover:text-accent/40 font-bold mb-6 transition-colors">
+                    {item.step}
+                  </div>
+                  <h3 className="text-xl font-bold text-zinc-900 mb-3">{item.title}</h3>
+                  <p className="text-zinc-500 text-sm leading-relaxed">{item.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* Windows CTA Section */}
         <section className="py-24 bg-white text-zinc-900 overflow-hidden relative">
           <div className="hero-gradient absolute inset-0 opacity-10"></div>
@@ -144,9 +195,10 @@ export default function LandingPage() {
                 <p className="text-xl text-zinc-500">
                   Try LinkdApply on your Windows desktop today. Automate the boring parts of the job search while you stay focused on what matters—interviewing.
                 </p>
-                <div className="flex flex-col sm:flex-row items-center gap-4 pt-4 justify-center lg:justify-start">
+                <div id="download" className="flex flex-col sm:flex-row items-center gap-4 pt-4 justify-center lg:justify-start">
                   <Link 
-                    href="#"
+                    href="/download/LinkdApply-Setup.exe"
+                    download="LinkdApply-Setup.exe"
                     className="w-full sm:w-auto purple-gradient-button inline-flex items-center justify-center gap-2 rounded-xl px-10 py-4 text-white font-semibold shadow-2xl hover:scale-[1.02] transition-all"
                   >
                     <svg className="size-5" viewBox="0 0 24 24" fill="currentColor">

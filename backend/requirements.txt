@@ -4,7 +4,6 @@ setuptools
 openai
 flask-cors
 flask
-streamlit
 python-dotenv
 google-generativeai
 fastapi

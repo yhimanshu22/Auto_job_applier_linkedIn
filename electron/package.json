@@ -1,0 +1,45 @@
+{
+  "name": "linkdapply",
+  "version": "1.0.0",
+  "description": "Production-ready Electron wrapper for LinkdApply",
+  "main": "main.js",
+  "author": "LinkdApply",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder build --win --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "^6.1.4"
+  },
+  "devDependencies": {
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.linkdapply.app",
+    "productName": "LinkdApply",
+    "copyright": "Copyright © 2024 LinkdApply",
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LinkdApply"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "yhimanshu22",
+        "repo": "Auto_job_applier_linkedIn"
+      }
+    ]
+  }
+}
