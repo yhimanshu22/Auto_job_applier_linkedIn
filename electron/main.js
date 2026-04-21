@@ -153,27 +153,44 @@ app.setPath('userData', path.join(app.getPath('temp'), 'linkdapply-v1'));
 let backendProcess;
 
 function startBackend() {
-  const backendPath = path.join(__dirname, '..', 'backend', 'server.py');
-  console.log(`[Electron] Starting backend at: ${backendPath}`);
-  
-  const spawn = require('child_process').spawn;
-  // Use 'uv run python -u' to ensure unbuffered output for real-time logging
-  backendProcess = spawn('uv', ['run', 'python', '-u', 'server.py'], {
-    cwd: path.join(__dirname, '..', 'backend'),
-    shell: true
-  });
+  try {
+    const backendDir = path.resolve(__dirname, '..', 'backend');
+    const serverPath = path.join(backendDir, 'server.py');
+    
+    console.log(`[Electron] Attempting to start backend...`);
+    console.log(`[Electron] Backend Dir: ${backendDir}`);
+    console.log(`[Electron] Server Path: ${serverPath}`);
 
-  backendProcess.stdout.on('data', (data) => {
-    console.log(`[Backend INFO] ${data.toString().trim()}`);
-  });
+    const spawn = require('child_process').spawn;
+    
+    // Use shell: true to ensure 'uv' is found in PATH on Windows
+    backendProcess = spawn('uv', ['run', 'python', '-u', 'server.py'], {
+      cwd: backendDir,
+      shell: true,
+      env: { ...process.env, PYTHONUNBUFFERED: "1" }
+    });
 
-  backendProcess.stderr.on('data', (data) => {
-    console.error(`[Backend ERROR] ${data.toString().trim()}`);
-  });
+    backendProcess.stdout.on('data', (data) => {
+      const output = data.toString().trim();
+      if (output) console.log(`[Backend INFO] ${output}`);
+    });
 
-  backendProcess.on('close', (code) => {
-    console.log(`[Backend] Process exited with code ${code}`);
-  });
+    backendProcess.stderr.on('data', (data) => {
+      const output = data.toString().trim();
+      if (output) console.error(`[Backend ERROR] ${output}`);
+    });
+
+    backendProcess.on('error', (err) => {
+      console.error(`[Electron ERROR] Failed to spawn backend process: ${err.message}`);
+    });
+
+    backendProcess.on('close', (code) => {
+      console.log(`[Backend] Process exited with code ${code}`);
+    });
+
+  } catch (err) {
+    console.error(`[Electron ERROR] Critical failure in startBackend: ${err.stack}`);
+  }
 }
 
 function stopBackend() {
