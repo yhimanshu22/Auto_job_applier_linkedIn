@@ -162,7 +162,18 @@ function startBackend() {
     console.log(`[Electron] Server Path: ${serverPath}`);
 
     const spawn = require('child_process').spawn;
+    const execSync = require('child_process').execSync;
+
+    // 1. Ensure dependencies are synced (fast with uv)
+    console.log(`[Electron] Syncing Python dependencies...`);
+    try {
+      execSync('uv pip install -r requirements.txt', { cwd: backendDir, shell: true });
+      console.log(`[Electron] Dependencies synced successfully.`);
+    } catch (syncErr) {
+      console.warn(`[Electron WARNING] Dependency sync failed: ${syncErr.message}. Attempting to start anyway...`);
+    }
     
+    // 2. Start the backend
     // Use shell: true to ensure 'uv' is found in PATH on Windows
     backendProcess = spawn('uv', ['run', 'python', '-u', 'server.py'], {
       cwd: backendDir,
