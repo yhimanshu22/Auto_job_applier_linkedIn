@@ -69,14 +69,6 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <div className="text-center">
-              <p className="text-sm text-zinc-500">
-                  New to LinkdApply?{" "}
-                  <Link href="/signup" className="text-white hover:text-accent font-semibold transition-colors">
-                      Get Early Access
-                  </Link>
-              </p>
-          </div>
         </div>
       </div>
     </div>
