@@ -52,6 +52,8 @@ export default function Dashboard() {
   };
 
   const startBot = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
     setMessage(null);
     try {
       const res = await fetch(`http://localhost:8000/api/bot/start`, { method: "POST" });
@@ -59,6 +61,8 @@ export default function Dashboard() {
       setMessage({ type: 'success', text: 'Bot successfully started!' });
     } catch (err: any) {
       setMessage({ type: 'error', text: 'Error starting bot.' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -100,7 +104,8 @@ export default function Dashboard() {
           <div className="shrink-0">
             <button
               onClick={startBot}
-              className="purple-gradient-button inline-flex items-center px-8 py-3.5 rounded-xl text-white font-semibold shadow-2xl hover:scale-[1.02] transition-all"
+              disabled={isLoading}
+              className="purple-gradient-button inline-flex items-center px-8 py-3.5 rounded-xl text-white font-semibold shadow-2xl hover:scale-[1.02] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
             >
               <svg className="size-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />

@@ -42,7 +42,12 @@ export default function AuthSuccessPage() {
 
         <div className="py-4">
           <button 
-            onClick={() => window.location.assign("linkdapply://auth-success")}
+            onClick={() => {
+              const url = session?.accessToken 
+                ? `linkdapply://auth-success?token=${session.accessToken}`
+                : "linkdapply://auth-success";
+              window.location.assign(url);
+            }}
             className="w-full h-12 rounded-xl purple-gradient-button text-white font-bold shadow-lg hover:scale-[1.02] transition-all"
           >
             Launch LinkdApply
