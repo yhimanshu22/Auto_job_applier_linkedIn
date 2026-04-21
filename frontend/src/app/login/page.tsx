@@ -25,8 +25,8 @@ export default function LoginPage() {
     
     if (api && typeof api.openExternal === "function") {
         console.log("[LoginPage] Triggering external browser auth via IPC...");
-        // Use the deep link directly as callbackUrl
-        const authUrl = `http://localhost:3000/api/auth/signin/google?callbackUrl=http://localhost:3000/auth-success`;
+        // The server-side redirect callback handles the routing to Electron
+        const authUrl = `http://localhost:3000/api/auth/signin/google`;
         try {
             api.openExternal(authUrl);
         } catch (err) {

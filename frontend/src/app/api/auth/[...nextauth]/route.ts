@@ -1,7 +1,8 @@
 import NextAuth from "next-auth";
+import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
-const handler = NextAuth({
+export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
@@ -20,17 +21,15 @@ const handler = NextAuth({
       return session;
     },
     async redirect({ url, baseUrl }) {
-      // If we're already going to auth-success, let it through
-      if (url.includes('auth-success')) return url;
-      // Normal NextAuth redirect logic
-      if (url.startsWith("/")) return `${baseUrl}${url}`;
-      else if (new URL(url).origin === baseUrl) return url;
-      return `${baseUrl}/dashboard`;
+      // FORCE redirect to our custom handler which will bridge to Electron
+      return `${baseUrl}/api/auth/success-redirect`;
     },
   },
   pages: {
     signIn: "/login",
   },
-});
+};
+
+const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };
