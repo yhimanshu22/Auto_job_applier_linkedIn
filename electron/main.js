@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 
@@ -30,25 +30,33 @@ function createMainWindow() {
     width: 1200,
     height: 800,
     show: false, // Hide until ready-to-show
+    frame: false, // Remove default chrome UI
+    backgroundColor: '#ffffff',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
     },
-    icon: path.join(__dirname, 'icon.ico'), // Placeholder for icon
+    icon: path.join(__dirname, 'icon.ico'),
     title: 'LinkdApply',
   });
 
   // Load the web app
   mainWindow.loadURL(APP_URL);
 
+  // Native Feel: Remove default menu
+  mainWindow.removeMenu();
+
+  // Block navigation to other domains
+  mainWindow.webContents.setWindowOpenHandler(() => {
+    return { action: 'deny' };
+  });
+
   // Disable DevTools in production
   if (!isDev) {
     mainWindow.webContents.on('devtools-opened', () => {
       mainWindow.webContents.closeDevTools();
     });
-    // Remove default menu in production
-    Menu.setApplicationMenu(null);
   }
 
   // Show main window when ready
@@ -68,9 +76,25 @@ function createMainWindow() {
   }
 }
 
+// IPC Handlers for Window Controls
+ipcMain.on('minimize-window', () => {
+  mainWindow.minimize();
+});
+
+ipcMain.on('maximize-window', () => {
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow.maximize();
+  }
+});
+
+ipcMain.on('close-window', () => {
+  mainWindow.close();
+});
+
 app.on('ready', () => {
   createSplashWindow();
-  // Brief delay to ensure splash is visible before main starts loading
   setTimeout(createMainWindow, 500);
 });
 

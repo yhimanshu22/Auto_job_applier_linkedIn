@@ -67,21 +67,22 @@ export default function Dashboard() {
       <nav className="border-b border-zinc-800/50 bg-zinc-950/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            <Link href="/" className="flex items-center group">
-              <div className="size-8 rounded-lg bg-gradient-to-br from-accent to-purple-800 flex items-center justify-center text-white font-serif font-bold text-xl shadow-lg shadow-accent/20 group-hover:shadow-accent/40 transition-all">
+          <div className="flex justify-between h-16 items-center">
+            <div className="flex items-center group cursor-default">
+              <div className="size-8 rounded-lg bg-gradient-to-br from-accent to-purple-800 flex items-center justify-center text-white font-serif font-bold text-xl shadow-lg shadow-accent/20">
                 A
               </div>
-              <span className="ml-3 font-serif text-xl font-semibold tracking-tight text-white group-hover:text-accent transition-colors">
-                LinkdApply
+              <span className="ml-3 font-serif text-xl font-semibold tracking-tight text-white transition-colors">
+                LinkdApply Dashboard
               </span>
-            </Link>
-            <div className="flex items-center space-x-6">
-               <div className="hidden sm:flex items-center gap-3 px-4 py-1.5 rounded-full bg-zinc-900 border border-zinc-800">
-                  <div className="size-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                  <span className="text-xs font-medium text-zinc-400">Live Backend</span>
-               </div>
-               <Link href="/" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">Sign Out</Link>
             </div>
+            <div className="flex items-center space-x-6">
+               <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-zinc-900 border border-zinc-800">
+                  <div className="size-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                  <span className="text-xs font-medium text-zinc-400">System Online</span>
+               </div>
+            </div>
+          </div>
           </div>
         </div>
       </nav>

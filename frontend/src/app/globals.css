@@ -84,3 +84,12 @@ body {
   background: linear-gradient(180deg, #7c3aed 0%, #6d28d9 100%);
   box-shadow: 0 4px 14px 0 rgba(124, 58, 237, 0.39);
 }
+
+/* Electron Titlebar Helpers */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
