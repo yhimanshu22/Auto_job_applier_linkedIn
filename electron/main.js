@@ -108,6 +108,10 @@ ipcMain.on('maximize-window', () => {
   else mainWindow?.maximize();
 });
 ipcMain.on('close-window', () => mainWindow?.close());
+ipcMain.on('open-external-url', (event, url) => {
+  console.log(`[Electron] Opening external URL: ${url}`);
+  require('electron').shell.openExternal(url);
+});
 
 // Protocol Handling Logic
 if (process.defaultApp) {

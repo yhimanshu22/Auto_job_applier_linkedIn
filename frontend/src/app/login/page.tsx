@@ -16,12 +16,20 @@ export default function LoginPage() {
   }, []);
 
   const handleGoogleSignIn = () => {
-    if (electronAPI && typeof electronAPI.openExternal === "function") {
-        console.log("[LoginPage] Triggering external browser auth...");
+    // Direct, real-time check of the window object
+    const api = typeof window !== "undefined" ? (window as any).electron : null;
+    
+    if (api && typeof api.openExternal === "function") {
+        console.log("[LoginPage] Triggering external browser auth via IPC...");
         const authUrl = `http://localhost:3000/api/auth/signin/google?callbackUrl=http://localhost:3000/auth-success`;
-        electronAPI.openExternal(authUrl);
+        try {
+            api.openExternal(authUrl);
+        } catch (err) {
+            console.error("[LoginPage] IPC Call failed:", err);
+            signIn("google", { callbackUrl: "/dashboard" });
+        }
     } else {
-        console.log("[LoginPage] Using standard browser auth (fallback)...");
+        console.log("[LoginPage] Electron API not found, using browser fallback...");
         signIn("google", { callbackUrl: "/dashboard" });
     }
   };
