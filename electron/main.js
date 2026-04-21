@@ -7,7 +7,7 @@ let splashWindow;
 
 const isDev = process.argv.includes('--dev');
 // ❗ Update this with your production URL when ready
-const APP_URL = isDev ? 'http://localhost:3000/dashboard' : 'http://localhost:3000/dashboard'; 
+const APP_URL = isDev ? 'http://localhost:3000/login' : 'http://localhost:3000/login'; 
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
