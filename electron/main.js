@@ -6,7 +6,7 @@ let mainWindow;
 let splashWindow;
 
 const isDev = process.argv.includes('--dev');
-const APP_URL = isDev ? 'http://localhost:3000' : 'http://localhost:3000'; // Replace with deployed URL
+const APP_URL = isDev ? 'http://localhost:3000/dashboard' : 'http://localhost:3000/dashboard'; // Replace with deployed URL
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
