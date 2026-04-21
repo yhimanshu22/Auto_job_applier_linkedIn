@@ -8,11 +8,12 @@ import TitleBar from "@/components/TitleBar";
 export default function LoginPage() {
   const handleGoogleSignIn = () => {
     // Check if running in Electron
-    if (typeof window !== "undefined" && (window as any).electron?.openExternal) {
+    const electron = typeof window !== "undefined" ? (window as any).electron : null;
+    
+    if (electron && typeof electron.openExternal === "function") {
         // Open Google sign-in in the real system browser (Chrome/Edge)
-        // NextAuth signin URL with custom callback
         const authUrl = `http://localhost:3000/api/auth/signin/google?callbackUrl=http://localhost:3000/auth-success`;
-        (window as any).electron.openExternal(authUrl);
+        electron.openExternal(authUrl);
     } else {
         // Fallback for standard browser usage
         signIn("google", { callbackUrl: "/dashboard" });

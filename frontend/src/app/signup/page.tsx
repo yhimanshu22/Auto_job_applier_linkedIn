@@ -7,7 +7,15 @@ import TitleBar from "@/components/TitleBar";
 
 export default function SignupPage() {
   const handleGoogleSignup = () => {
-    signIn("google", { callbackUrl: "/dashboard" });
+    // Check if running in Electron
+    const electron = typeof window !== "undefined" ? (window as any).electron : null;
+
+    if (electron && typeof electron.openExternal === "function") {
+        const authUrl = `http://localhost:3000/api/auth/signin/google?callbackUrl=http://localhost:3000/auth-success`;
+        electron.openExternal(authUrl);
+    } else {
+        signIn("google", { callbackUrl: "/dashboard" });
+    }
   };
 
   return (

@@ -1,10 +1,10 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, shell } = require('electron');
 
 contextBridge.exposeInMainWorld('electron', {
   minimize: () => ipcRenderer.send('minimize-window'),
   maximize: () => ipcRenderer.send('maximize-window'),
   close: () => ipcRenderer.send('close-window'),
-  openExternal: (url) => require('electron').shell.openExternal(url),
+  openExternal: (url) => shell.openExternal(url),
 });
 
 window.addEventListener('DOMContentLoaded', () => {
