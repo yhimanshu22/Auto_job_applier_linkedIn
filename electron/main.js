@@ -157,8 +157,8 @@ function startBackend() {
   console.log(`[Electron] Starting backend at: ${backendPath}`);
   
   const spawn = require('child_process').spawn;
-  // Use 'python' for Windows, could also be 'python3' for other OSes
-  backendProcess = spawn('python', [backendPath], {
+  // Use 'uv run python -u' to ensure unbuffered output for real-time logging
+  backendProcess = spawn('uv', ['run', 'python', '-u', 'server.py'], {
     cwd: path.join(__dirname, '..', 'backend'),
     shell: true
   });
