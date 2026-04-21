@@ -66,18 +66,14 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-/* Custom Scrollbar for Cluely look */
-.cluely-scrollbar::-webkit-scrollbar {
-  width: 6px;
+/* Global Scrollbar Hiding (Native Look) */
+::-webkit-scrollbar {
+  display: none;
 }
 
-.cluely-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.cluely-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+* {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }
 
 .purple-gradient-button {
