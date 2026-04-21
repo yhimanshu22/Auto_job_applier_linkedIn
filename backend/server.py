@@ -17,8 +17,8 @@ app.add_middleware(
 class ConfigData(BaseModel):
     content: str
 
-def get_config_path(filename: str):
-    return os.path.join(os.path.dirname(__file__), "config", filename)
+# Global state to track the supervisor process
+supervisor_process = None
 
 @app.get("/api/config/{filename}")
 async def read_config(filename: str):
@@ -43,14 +43,61 @@ async def write_config(filename: str, data: ConfigData):
     return {"status": "success"}
 
 @app.post("/api/bot/start")
-async def start_bot(background_tasks: BackgroundTasks):
+async def start_bot():
+    global supervisor_process
+    if supervisor_process and supervisor_process.poll() is None:
+        return {"status": "already_running"}
+        
     try:
-        # Start supervisor or runAiBot
         cwd = os.path.dirname(__file__)
-        subprocess.Popen(["python", "supervisor.py"], cwd=cwd)
+        # On Windows, use subprocess.CREATE_NEW_CONSOLE to see the output if desired, 
+        # or just run it in the background.
+        supervisor_process = subprocess.Popen(
+            ["python", "supervisor.py"], 
+            cwd=cwd,
+            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
+        )
         return {"status": "started"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/bot/stop")
+async def stop_bot():
+    global supervisor_process
+    if supervisor_process and supervisor_process.poll() is None:
+        try:
+            if os.name == 'nt':
+                # Forcefully kill the process tree on Windows
+                subprocess.run(["taskkill", "/F", "/PID", str(supervisor_process.pid), "/T"], capture_output=True)
+            else:
+                supervisor_process.terminate()
+            
+            supervisor_process = None
+            return {"status": "stopped"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "not_running"}
+
+@app.get("/api/bot/status")
+async def get_bot_status():
+    global supervisor_process
+    if supervisor_process and supervisor_process.poll() is None:
+        return {"status": "running"}
+    return {"status": "stopped"}
+
+@app.get("/api/bot/logs")
+async def get_bot_logs():
+    log_path = os.path.join(os.path.dirname(__file__), "logs", "supervisor.log")
+    if not os.path.exists(log_path):
+        return {"logs": "No logs found."}
+    
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            # Return last 100 lines
+            lines = f.readlines()
+            return {"logs": "".join(lines[-100:])}
+    except Exception as e:
+        return {"logs": f"Error reading logs: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn

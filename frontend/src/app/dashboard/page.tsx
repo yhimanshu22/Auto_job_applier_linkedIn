@@ -12,10 +12,45 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [botStatus, setBotStatus] = useState<"running" | "stopped">("stopped");
+  const [botLogs, setBotLogs] = useState<string>("");
 
   useEffect(() => {
     fetchConfig(activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const res = await fetch("http://localhost:8000/api/bot/status");
+        const data = await res.json();
+        setBotStatus(data.status);
+      } catch (err) {
+        setBotStatus("stopped");
+      }
+    };
+
+    const fetchLogs = async () => {
+      if (botStatus === "running") {
+        try {
+          const res = await fetch("http://localhost:8000/api/bot/logs");
+          const data = await res.json();
+          setBotLogs(data.logs);
+        } catch (err) {}
+      }
+    };
+
+    checkStatus();
+    fetchLogs();
+    
+    const statusInterval = setInterval(checkStatus, 5000);
+    const logsInterval = setInterval(fetchLogs, 3000);
+    
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(logsInterval);
+    };
+  }, [botStatus]);
 
   const fetchConfig = async (filename: string) => {
     setIsLoading(true);
@@ -59,8 +94,24 @@ export default function Dashboard() {
       const res = await fetch(`http://localhost:8000/api/bot/start`, { method: "POST" });
       if (!res.ok) throw new Error("Failed to start bot");
       setMessage({ type: 'success', text: 'Bot successfully started!' });
+      setBotStatus("running");
     } catch (err: any) {
       setMessage({ type: 'error', text: 'Error starting bot.' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const stopBot = async () => {
+    setIsLoading(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`http://localhost:8000/api/bot/stop`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to stop bot");
+      setMessage({ type: 'success', text: 'Bot stopped successfully.' });
+      setBotStatus("stopped");
+    } catch (err: any) {
+      setMessage({ type: 'error', text: 'Error stopping bot.' });
     } finally {
       setIsLoading(false);
     }
@@ -101,18 +152,32 @@ export default function Dashboard() {
             </h1>
             <p className="text-zinc-500 text-sm max-w-lg">Manage your application parameters, adjust search settings, and verify bot credentials in real-time.</p>
           </div>
-          <div className="shrink-0">
-            <button
-              onClick={startBot}
-              disabled={isLoading}
-              className="purple-gradient-button inline-flex items-center px-8 py-3.5 rounded-xl text-white font-semibold shadow-2xl hover:scale-[1.02] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              <svg className="size-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Start Bot Sequence
-            </button>
+          <div className="shrink-0 flex gap-3">
+            {botStatus === "running" ? (
+              <button
+                onClick={stopBot}
+                disabled={isLoading}
+                className="inline-flex items-center px-8 py-3.5 rounded-xl bg-rose-600 text-white font-semibold shadow-2xl hover:bg-rose-700 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                <svg className="size-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h6v4H9z" />
+                </svg>
+                Stop Sequence
+              </button>
+            ) : (
+              <button
+                onClick={startBot}
+                disabled={isLoading}
+                className="purple-gradient-button inline-flex items-center px-8 py-3.5 rounded-xl text-white font-semibold shadow-2xl hover:scale-[1.02] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                <svg className="size-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Start Bot Sequence
+              </button>
+            )}
           </div>
         </header>
 
@@ -159,8 +224,10 @@ export default function Dashboard() {
                 <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] mb-4">System Info</h2>
                 <div className="bg-zinc-900/50 rounded-xl p-4 space-y-3">
                    <div className="flex justify-between text-[11px]">
-                     <span className="text-zinc-500">Status</span>
-                     <span className="text-emerald-500 font-bold">ACTIVE</span>
+                     <span className="text-zinc-500">Bot Service</span>
+                     <span className={botStatus === "running" ? "text-emerald-500 font-bold" : "text-rose-500 font-bold"}>
+                       {botStatus.toUpperCase()}
+                     </span>
                    </div>
                    <div className="flex justify-between text-[11px]">
                      <span className="text-zinc-500">Auto-Apply</span>
@@ -204,9 +271,9 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              <div className="flex-1 p-6">
-                <div className="relative h-full rounded-xl overflow-hidden border border-zinc-800/50 shadow-inner group">
-                  <div className="absolute top-0 left-0 w-full h-8 bg-zinc-900 border-b border-zinc-800/50 flex items-center px-4 gap-1.5">
+               <div className="flex-1 p-6 flex flex-col gap-6">
+                <div className="flex-1 relative rounded-xl overflow-hidden border border-zinc-800/50 shadow-inner group">
+                  <div className="absolute top-0 left-0 w-full h-8 bg-zinc-900 border-b border-zinc-800/50 flex items-center px-4 gap-1.5 z-10">
                     <div className="size-2 rounded-full bg-zinc-800"></div>
                     <div className="size-2 rounded-full bg-zinc-800"></div>
                     <div className="size-2 rounded-full bg-zinc-800"></div>
@@ -214,10 +281,24 @@ export default function Dashboard() {
                   <textarea
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    className="w-full h-full min-h-[500px] pt-12 pb-6 px-6 bg-zinc-950/80 text-zinc-300 font-mono text-sm leading-loose resize-none focus:outline-none transition-all cluely-scrollbar"
+                    className="w-full h-full min-h-[400px] pt-12 pb-6 px-6 bg-zinc-950/80 text-zinc-300 font-mono text-sm leading-loose resize-none focus:outline-none transition-all cluely-scrollbar"
                     spellCheck="false"
                     placeholder={isLoading ? "Loading configuration..." : "# Your configuration content here"}
                   />
+                </div>
+
+                {/* Log Viewer */}
+                <div className="h-64 rounded-xl overflow-hidden border border-zinc-800/50 bg-zinc-900/30 flex flex-col">
+                  <div className="px-4 py-2 border-b border-zinc-800/50 bg-zinc-950/50 flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Automation Logs</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className={`size-1.5 rounded-full ${botStatus === "running" ? "bg-emerald-500 animate-pulse" : "bg-zinc-600"}`}></div>
+                      <span className="text-[10px] text-zinc-500 font-medium">{botStatus === "running" ? "Live" : "Idle"}</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 p-4 font-mono text-[11px] text-zinc-400 overflow-auto scrollbar-thin scrollbar-thumb-zinc-800 whitespace-pre">
+                    {botLogs || "No logs available. Start the bot to see activity."}
+                  </div>
                 </div>
               </div>
             </section>
