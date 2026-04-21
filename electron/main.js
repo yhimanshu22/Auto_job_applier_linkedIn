@@ -173,7 +173,8 @@ function startBackend() {
     if (process.platform === 'win32') {
       try {
         console.log('[Electron] Checking for existing processes on port 8000...');
-        execSync('for /f "tokens=5" %a in (\'netstat -aon ^| findstr :8000\') do taskkill /f /pid %a', { stdio: 'ignore' });
+        // Use powershell to find and kill the process on port 8000
+        execSync('powershell -Command "Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }"', { stdio: 'ignore' });
         console.log('[Electron] Port 8000 cleared.');
       } catch (e) {
         // This will throw if nothing is on port 8000, which is fine

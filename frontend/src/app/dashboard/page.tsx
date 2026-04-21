@@ -56,7 +56,8 @@ export default function Dashboard() {
     setIsLoading(true);
     setMessage(null);
     try {
-      const cleanName = filename.replace('.py', '');
+      // More robust cleaning of filename
+      const cleanName = filename.split('.')[0];
       const res = await fetch(`http://localhost:8000/api/config/${cleanName}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
@@ -72,7 +73,7 @@ export default function Dashboard() {
     setIsSaving(true);
     setMessage(null);
     try {
-      const cleanName = activeTab.replace('.py', '');
+      const cleanName = activeTab.split('.')[0];
       const res = await fetch(`http://localhost:8000/api/config/${cleanName}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -125,7 +126,6 @@ export default function Dashboard() {
       <nav className="border-b border-zinc-800/50 bg-zinc-950/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-          <div className="flex justify-between h-16 items-center">
             <div className="flex items-center group cursor-default">
               <div className="size-8 rounded-lg bg-gradient-to-br from-accent to-purple-800 flex items-center justify-center text-white font-serif font-bold text-xl shadow-lg shadow-accent/20">
                 A
@@ -140,7 +140,6 @@ export default function Dashboard() {
                   <span className="text-xs font-medium text-zinc-400">System Online</span>
                </div>
             </div>
-          </div>
           </div>
         </div>
       </nav>
