@@ -12,7 +12,7 @@ export default function TitleBar() {
     }
   }, []);
 
-  if (!isElectron) return null;
+  if (!isElectron || (window as any).electron.isDev) return null;
 
   const handleMinimize = () => (window as any).electron.minimize();
   const handleMaximize = () => (window as any).electron.maximize();

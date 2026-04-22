@@ -1,5 +1,0 @@
-2026-03-16T03:02:54.536+05:30 Gateway failed to start: gateway already running (pid 17636); lock timeout after 5000ms
-If the gateway is supervised, stop it with: openclaw gateway stop
-2026-03-16T03:02:54.908+05:30 Port 3000 is already in use.
-2026-03-16T03:02:54.917+05:30 - pid 17636: C:\nvm4w\nodejs\node.exe --disable-warning=ExperimentalWarning C:\Users\91811\AppData\Roaming\npm\node_modules\openclaw\openclaw.mjs gateway --force --allow-unconfigured --port 3000 --verbose (127.0.0.1:3000)
-2026-03-16T03:02:54.923+05:30 - Gateway already running locally. Stop it (openclaw gateway stop) or use a different port.

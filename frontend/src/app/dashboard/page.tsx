@@ -13,7 +13,8 @@ export default function Dashboard() {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [botStatus, setBotStatus] = useState<"running" | "stopped">("stopped");
-  const [botLogs, setBotLogs] = useState<string>("");
+  const [appliedCount, setAppliedCount] = useState<number>(0);
+  const [applyLimit, setApplyLimit] = useState<number>(0);
 
   useEffect(() => {
     fetchConfig(activeTab);
@@ -25,32 +26,22 @@ export default function Dashboard() {
         const res = await fetch("http://localhost:8000/api/bot/status");
         const data = await res.json();
         setBotStatus(data.status);
+        if (data.applied_count !== undefined) setAppliedCount(data.applied_count);
+        if (data.limit !== undefined) setApplyLimit(data.limit);
       } catch (err) {
         setBotStatus("stopped");
       }
     };
 
-    const fetchLogs = async () => {
-      if (botStatus === "running") {
-        try {
-          const res = await fetch("http://localhost:8000/api/bot/logs");
-          const data = await res.json();
-          setBotLogs(data.logs);
-        } catch (err) {}
-      }
-    };
-
     checkStatus();
-    fetchLogs();
     
-    const statusInterval = setInterval(checkStatus, 5000);
-    const logsInterval = setInterval(fetchLogs, 3000);
+    // Optimized Polling: 10s for status
+    const statusInterval = setInterval(checkStatus, 10000);
     
     return () => {
       clearInterval(statusInterval);
-      clearInterval(logsInterval);
     };
-  }, [botStatus]);
+  }, []);
 
   const fetchConfig = async (filename: string) => {
     setIsLoading(true);
@@ -241,6 +232,12 @@ export default function Dashboard() {
                      </span>
                    </div>
                    <div className="flex justify-between text-[11px]">
+                     <span className="text-zinc-500">Progress</span>
+                     <span className="text-zinc-300 font-bold">
+                       {appliedCount} / {applyLimit}
+                     </span>
+                   </div>
+                   <div className="flex justify-between text-[11px]">
                      <span className="text-zinc-500">Auto-Apply</span>
                      <span className="text-zinc-300">ENABLED</span>
                    </div>
@@ -298,20 +295,7 @@ export default function Dashboard() {
                   />
                 </div>
 
-                {/* Log Viewer */}
-                <div className="h-64 rounded-xl overflow-hidden border border-zinc-800/50 bg-zinc-900/30 flex flex-col">
-                  <div className="px-4 py-2 border-b border-zinc-800/50 bg-zinc-950/50 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Automation Logs</span>
-                    <div className="flex items-center gap-1.5">
-                      <div className={`size-1.5 rounded-full ${botStatus === "running" ? "bg-emerald-500 animate-pulse" : "bg-zinc-600"}`}></div>
-                      <span className="text-[10px] text-zinc-500 font-medium">{botStatus === "running" ? "Live" : "Idle"}</span>
-                    </div>
-                  </div>
-                  <div className="flex-1 p-4 font-mono text-[11px] text-zinc-400 overflow-auto scrollbar-thin scrollbar-thumb-zinc-800 whitespace-pre">
-                    {botLogs || "No logs available. Start the bot to see activity."}
-                  </div>
                 </div>
-              </div>
             </section>
           </div>
         </div>

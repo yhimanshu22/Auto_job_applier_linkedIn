@@ -1727,6 +1727,10 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     current_count += 1
                     if application_link == "Easy Applied":
                         easy_applied_count += 1
+                        if easy_applied_count >= daily_apply_limit:
+                            print_lg(f"Daily Easy Apply limit reached: {daily_apply_limit}")
+                            dailyEasyApplyLimitReached = True
+                            return
                     else:
                         external_jobs_count += 1
                     applied_jobs.add(job_id)

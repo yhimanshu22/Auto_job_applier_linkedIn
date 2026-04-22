@@ -41,6 +41,9 @@ file_name = "all excels/all_applied_applications_history.csv"
 failed_file_name = "all excels/all_failed_applications_history.csv"
 logs_folder_path = "logs/"
 
+# Daily application limit
+daily_apply_limit = 50 
+
 import os
 # --- BOT_ID Isolation logic ---
 bot_id = os.getenv("BOT_ID", "")

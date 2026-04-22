@@ -63,11 +63,16 @@ class BotSupervisor:
             logging.info("Starting OpenClaw gateway...")
             # Redirect OpenClaw output to a log file for debugging
             log_file = open("logs/openclaw.log", "a")
+            # Avoid shell=True to prevent cmd.exe dependency
+            cmd = ["openclaw", "gateway", "--allow-unconfigured", "--port", "3000"]
+            if os.name == 'nt':
+                cmd[0] = "openclaw.exe" # Explicitly use .exe on Windows
+            
             self.openclaw_process = subprocess.Popen(
-                ["openclaw", "gateway", "--allow-unconfigured", "--port", "3000"],
+                cmd,
                 stdout=log_file,
                 stderr=log_file,
-                shell=True
+                shell=False
             )
             logging.info(f"OpenClaw started (PID: {self.openclaw_process.pid})")
         except Exception as e:
@@ -85,8 +90,10 @@ class BotSupervisor:
             env["LINKEDIN_PASSWORD"] = account["password"]
             env["BOT_ID"] = bot_id
             
+            # When running as an EXE, sys.executable is the EXE itself.
+            # We use the --bot flag to trigger the bot logic in server.py
             self.bot_processes[bot_id] = subprocess.Popen(
-                [sys.executable, "runAiBot.py"],
+                [sys.executable, "--bot"],
                 cwd=os.getcwd(),
                 env=env,
                 creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0

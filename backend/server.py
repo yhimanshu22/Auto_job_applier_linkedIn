@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import subprocess
 import os
+import sys
+import uvicorn
 
 app = FastAPI(title="LinkedIn Bot API")
 
@@ -17,8 +19,20 @@ app.add_middleware(
 class ConfigData(BaseModel):
     content: str
 
+def get_base_path():
+    """Returns the base path for the application, handling both script and EXE modes."""
+    if getattr(sys, 'frozen', False):
+        # Running as EXE (PyInstaller)
+        base_path = os.path.dirname(sys.executable)
+        # In dev mode, if running from dist/, the config folder is one level up
+        if os.path.basename(base_path) == "dist":
+             return os.path.dirname(base_path)
+        return base_path
+    # Running as plain Python script
+    return os.path.dirname(os.path.abspath(__file__))
+
 def get_config_path(filename: str):
-    return os.path.join(os.path.dirname(__file__), "config", filename)
+    return os.path.join(get_base_path(), "config", filename)
 
 # Global state to track the supervisor process
 supervisor_process = None
@@ -59,10 +73,15 @@ async def start_bot():
         return {"status": "already_running"}
         
     try:
-        cwd = os.path.dirname(__file__)
-        # Use uv run python to ensure the bot runs in the correct managed environment
+        # Use sys.executable to spawn the current runner (Python or EXE)
+        # This is critical for standalone EXE production environments
+        cmd = [sys.executable, "--supervisor"]
+        
+        cwd = get_base_path()
+        logging.info(f"Starting supervisor with {cmd} in {cwd}")
+        
         supervisor_process = subprocess.Popen(
-            ["uv", "run", "python", "supervisor.py"], 
+            cmd, 
             cwd=cwd,
             creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
         )
@@ -90,15 +109,36 @@ async def stop_bot():
 @app.get("/api/bot/status")
 async def get_bot_status():
     global supervisor_process
+    
+    # Get limit from settings
+    from config.settings import daily_apply_limit
+    
+    # Get current count from CSV
+    applied_count = 0
+    from config.settings import file_name
+    if os.path.exists(file_name):
+        try:
+            with open(file_name, "r", encoding="utf-8") as f:
+                # Subtract 1 for header
+                applied_count = max(0, len(f.readlines()) - 1)
+        except:
+            pass
+
+    status = "stopped"
     if supervisor_process and supervisor_process.poll() is None:
-        return {"status": "running"}
-    return {"status": "stopped"}
+        status = "running"
+        
+    return {
+        "status": status,
+        "applied_count": applied_count,
+        "limit": daily_apply_limit
+    }
 
 @app.get("/api/bot/logs")
 async def get_bot_logs():
-    log_path = os.path.join(os.path.dirname(__file__), "logs", "supervisor.log")
+    log_path = os.path.join(os.getcwd(), "logs", "supervisor.log")
     if not os.path.exists(log_path):
-        return {"logs": "No logs found."}
+        return {"logs": "No logs available. Start the bot to see activity."}
     
     try:
         with open(log_path, "r", encoding="utf-8") as f:
@@ -109,5 +149,17 @@ async def get_bot_logs():
         return {"logs": f"Error reading logs: {str(e)}"}
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import logging
+    # Set up basic logging for when running via spawned process
+    logging.basicConfig(level=logging.INFO)
+    
+    # Path/Mode logic
+    if "--bot" in sys.argv:
+        from runAiBot import main
+        main()
+    elif "--supervisor" in sys.argv:
+        from supervisor import main
+        main()
+    else:
+        # Standard server startup
+        uvicorn.run(app, host="0.0.0.0", port=8000)

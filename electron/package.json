@@ -11,7 +11,8 @@
     "build": "electron-builder build --win --publish never"
   },
   "dependencies": {
-    "electron-updater": "^6.1.4"
+    "electron-updater": "^6.1.4",
+    "picocolors": "^1.1.1"
   },
   "devDependencies": {
     "electron": "^28.1.0",
@@ -47,6 +48,16 @@
         "provider": "github",
         "owner": "yhimanshu22",
         "repo": "Auto_job_applier_linkedIn"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/dist/server.exe",
+        "to": "backend/server.exe"
+      },
+      {
+        "from": "../backend/config",
+        "to": "backend/config"
       }
     ]
   }
