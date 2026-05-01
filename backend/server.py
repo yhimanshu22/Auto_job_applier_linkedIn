@@ -5,10 +5,15 @@ import subprocess
 import os
 import sys
 import uvicorn
+import logging
 from db_manager import db
 import json
 
+from routes.billing import router as billing_router
+
 app = FastAPI(title="LinkedIn Bot API")
+
+app.include_router(billing_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -108,8 +113,64 @@ async def write_config(category: str, data: ConfigData):
                 
     return {"status": "success"}
 
+PLAN_LIMITS = {
+    "free": {
+        "max_accounts": 0,
+        "max_active_bots": 0,
+        "monthly_applications": 0,
+    },
+    "starter": {
+        "max_accounts": 1,
+        "max_active_bots": 1,
+        "monthly_applications": 100,
+    },
+    "pro": {
+        "max_accounts": 3,
+        "max_active_bots": 2,
+        "monthly_applications": 500,
+    },
+    "agency": {
+        "max_accounts": 10,
+        "max_active_bots": 5,
+        "monthly_applications": 3000,
+    },
+}
+
+def assert_can_start_bot(user_id: str):
+    subscription = db.get_user_subscription(user_id)
+
+    if not subscription or subscription["status"] not in ["active", "trialing"]:
+        raise HTTPException(
+            status_code=402,
+            detail="Active subscription required to start the bot",
+        )
+
+    plan = subscription.get("plan", "free")
+    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
+
+    # For now, we count configured accounts in .env as active bots
+    # You would typically query DB to see how many bots are actually running
+    active_accounts = []
+    for key in os.environ:
+        if key.startswith("LINKEDIN_USERNAME_") and key[18:]:
+            active_accounts.append(key)
+    
+    active_bots = len(active_accounts) or 1 # Fallback to 1 if no suffix is used but default is set
+
+    if active_bots > limits["max_active_bots"]:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Your {plan} plan allows only {limits['max_active_bots']} active bot(s). You have {active_bots} configured."
+        )
+
+
 @app.post("/api/bot/start")
-async def start_bot():
+async def start_bot(payload: dict = None):
+    # Hardcoded local user for MVP
+    user_id = payload.get("user_id", "local-user") if payload else "local-user"
+    
+    assert_can_start_bot(user_id)
+
     global supervisor_process
     if supervisor_process and supervisor_process.poll() is None:
         return {"status": "already_running"}

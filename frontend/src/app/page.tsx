@@ -20,6 +20,9 @@ export default function LandingPage() {
               <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#faq">
                 FAQ
               </Link>
+              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/pricing">
+                Pricing
+              </Link>
               <Link className="text-sm font-medium text-accent hover:text-accent/80 transition-colors" href="#download">
                 Download
               </Link>
@@ -268,6 +271,24 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* Pricing CTA Section */}
+        <section className="py-24 bg-zinc-50 border-t border-zinc-100">
+          <div className="mx-auto max-w-4xl px-6 text-center space-y-8">
+            <h2 className="font-serif text-4xl lg:text-5xl font-medium tracking-tight text-zinc-900">
+              Ready to automate your job search?
+            </h2>
+            <p className="text-xl text-zinc-500">
+              Choose a plan that fits your needs and start applying to hundreds of jobs automatically.
+            </p>
+            <Link 
+              href="/pricing"
+              className="inline-flex items-center justify-center rounded-full px-8 py-4 text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-all hover:scale-[1.02] shadow-lg"
+            >
+              View Pricing Plans
+            </Link>
           </div>
         </section>
 
