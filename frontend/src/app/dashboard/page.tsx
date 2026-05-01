@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 const CONFIG_FILES = ["personals.py", "search.py", "settings.py", "questions.py"];
 
@@ -20,6 +21,12 @@ export default function Dashboard() {
   const [isBackendHealthy, setIsBackendHealthy] = useState(true);
   const [showConfirm, setShowConfirm] = useState(false);
   const [subscription, setSubscription] = useState<any>(null);
+  const [stats, setStats] = useState<any>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  const userId = session?.user?.email || "local-user";
 
   useEffect(() => {
     fetchConfig(activeTab);
@@ -28,7 +35,7 @@ export default function Dashboard() {
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/bot/status");
+        const res = await fetch(`http://127.0.0.1:8000/api/bot/status?user_id=${userId}`);
         if (res.ok) {
           const data = await res.json();
           setBotStatus(data.status);
@@ -55,7 +62,7 @@ export default function Dashboard() {
 
     const fetchSubscription = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/billing/subscription");
+        const res = await fetch(`http://127.0.0.1:8000/api/billing/subscription?user_id=${userId}`);
         if (res.ok) {
           const data = await res.json();
           setSubscription(data);
@@ -67,15 +74,40 @@ export default function Dashboard() {
 
     checkStatus();
     fetchResumeInfo();
+    const fetchStats = async () => {
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/api/applications/stats?user_id=${userId}`);
+        if (res.ok) setStats(await res.json());
+      } catch (err) {}
+    };
+
+    const fetchHistory = async () => {
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/api/applications/history?user_id=${userId}&limit=10`);
+        if (res.ok) {
+            const data = await res.json();
+            setHistory(data.history);
+        }
+      } catch (err) {}
+    };
+
+    if (status === "loading") return;
+
+    checkStatus();
+    fetchResumeInfo();
     fetchSubscription();
+    fetchStats();
+    fetchHistory();
     
     // Poll every 10 seconds
     const statusInterval = setInterval(() => {
       checkStatus();
       fetchSubscription();
+      fetchStats();
+      fetchHistory();
     }, 10000);
     return () => clearInterval(statusInterval);
-  }, []);
+  }, [userId, status, router]);
 
   const fetchConfig = async (filename: string) => {
     setIsLoading(true);
@@ -120,7 +152,11 @@ export default function Dashboard() {
     setIsLoading(true);
     setMessage(null);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/bot/start`, { method: "POST" });
+      const res = await fetch(`http://127.0.0.1:8000/api/bot/start`, { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId })
+      });
       if (!res.ok) throw new Error("Failed to start bot");
       setMessage({ type: 'success', text: 'Bot successfully started!' });
       setBotStatus("running");
@@ -200,6 +236,12 @@ export default function Dashboard() {
               )}
             </div>
             <div className="flex items-center space-x-6">
+               <Link 
+                  href="/dashboard/billing"
+                  className="text-xs font-bold text-zinc-400 uppercase tracking-widest hover:text-white transition-colors"
+               >
+                  Billing
+               </Link>
                <div className={`flex items-center gap-3 px-4 py-1.5 rounded-full border ${isBackendHealthy ? 'bg-zinc-900 border-zinc-800' : 'bg-red-500/10 border-red-500/20'}`}>
                   <div className={`size-2 rounded-full ${isBackendHealthy ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
                   <span className="text-xs font-medium text-zinc-400">Backend {isBackendHealthy ? 'Online' : 'Offline'}</span>
@@ -306,17 +348,17 @@ export default function Dashboard() {
                 <div className="h-3 w-full bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
                   <div 
                     className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-1000 ease-out shadow-[0_0_12px_rgba(59,130,246,0.4)]" 
-                    style={{ width: `${Math.min(100, applyLimit > 0 ? (appliedCount / applyLimit) * 100 : 0)}%` }}
+                    style={{ width: `${Math.min(100, (subscription?.limit > 0) ? (stats?.monthly_count / subscription.limit) * 100 : 0)}%` }}
                   ></div>
                 </div>
                 <div className="flex justify-between mt-2 text-[11px] font-bold uppercase tracking-wider">
-                  <span className="text-zinc-500">Progress</span>
-                  <span className="text-blue-400">{applyLimit > 0 ? Math.round((appliedCount / applyLimit) * 100) : 0}%</span>
+                  <span className="text-zinc-500">Monthly Usage</span>
+                  <span className="text-blue-400">{subscription?.limit > 0 ? Math.round((stats?.monthly_count / subscription.limit) * 100) : 0}%</span>
                 </div>
             </div>
             <div className="shrink-0 text-right">
-                <div className="text-2xl font-bold text-white">{appliedCount} <span className="text-zinc-500 text-base font-medium">/ {applyLimit || '?'}</span></div>
-                <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest mt-1">Applications Today</div>
+                <div className="text-2xl font-bold text-white">{stats?.monthly_count || 0} <span className="text-zinc-500 text-base font-medium">/ {subscription?.limit || '?'}</span></div>
+                <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest mt-1">Applications this month</div>
             </div>
           </div>
 
@@ -513,6 +555,86 @@ export default function Dashboard() {
 
             </div>
           </section>
+        </div>
+
+        {/* Application History Section */}
+        <div className="mt-12">
+            <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-serif font-medium text-white flex items-center gap-3">
+                    Recent Applications
+                    <span className="text-xs font-bold bg-zinc-800 text-zinc-400 px-2 py-1 rounded-md border border-zinc-700/50 uppercase tracking-widest">Live Updates</span>
+                </h2>
+                <div className="flex gap-4">
+                   <div className="flex items-center gap-2 text-xs font-medium text-emerald-400">
+                       <div className="size-1.5 rounded-full bg-emerald-500"></div>
+                       {stats?.applied || 0} Applied
+                   </div>
+                   <div className="flex items-center gap-2 text-xs font-medium text-amber-400">
+                       <div className="size-1.5 rounded-full bg-amber-500"></div>
+                       {stats?.skipped || 0} Skipped
+                   </div>
+                   <div className="flex items-center gap-2 text-xs font-medium text-red-400">
+                       <div className="size-1.5 rounded-full bg-red-500"></div>
+                       {stats?.failed || 0} Failed
+                   </div>
+                </div>
+            </div>
+            
+            <div className="bg-[#1e293b] border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-zinc-900/40 border-b border-zinc-800/80">
+                                <th className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Time</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Company</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Job Title</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Status</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/50">
+                            {history.length > 0 ? history.map((app) => (
+                                <tr key={app.id} className="hover:bg-zinc-800/30 transition-colors group">
+                                    <td className="px-6 py-4 text-xs text-zinc-500 font-mono">
+                                        {new Date(app.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{app.company}</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="text-xs text-zinc-400 max-w-xs truncate">{app.job_title}</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                                            app.status === 'applied' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                            app.status === 'skipped' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                            'bg-red-500/10 text-red-400 border-red-500/20'
+                                        }`}>
+                                            {app.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <a 
+                                            href={app.job_url} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-xs font-bold text-zinc-600 hover:text-white transition-colors"
+                                        >
+                                            View Job
+                                        </a>
+                                    </td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-12 text-center text-zinc-500 text-sm italic">
+                                        No recent activity. Start the bot to see applications here.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
       </div>
     </div>

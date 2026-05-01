@@ -62,6 +62,21 @@ class DatabaseManager:
                 applications_count INTEGER DEFAULT 0
             )
         """)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS applications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                job_title TEXT,
+                company TEXT,
+                location TEXT,
+                job_url TEXT,
+                status TEXT NOT NULL, -- 'applied', 'skipped', 'failed'
+                reason TEXT,
+                resume_used TEXT,
+                answer_generated TEXT,
+                timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         self.conn.commit()
 
     def set_config(self, key, value, category):
@@ -157,6 +172,51 @@ class DatabaseManager:
             "SELECT * FROM bot_runs ORDER BY start_time DESC LIMIT ?",
             (limit,)
         ).fetchall()
+        return [dict(row) for row in rows]
+
+    def log_application(self, user_id, **kwargs):
+        """Logs a single job application attempt."""
+        fields = ['user_id'] + list(kwargs.keys())
+        placeholders = ', '.join(['?'] * len(fields))
+        values = [user_id] + list(kwargs.values())
+        query = f"INSERT INTO applications ({', '.join(fields)}) VALUES ({placeholders})"
+        self.conn.execute(query, values)
+        self.conn.commit()
+
+    def get_monthly_application_count(self, user_id):
+        """Returns the number of successful applications in the last 30 days."""
+        query = """
+            SELECT COUNT(*) FROM applications 
+            WHERE user_id = ? 
+            AND status = 'applied'
+            AND timestamp >= datetime('now', '-30 days')
+        """
+        row = self.conn.execute(query, (user_id,)).fetchone()
+        return row[0] if row else 0
+
+    def get_application_stats(self, user_id):
+        """Returns summary stats for a user."""
+        query = """
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'applied' THEN 1 ELSE 0 END) as applied,
+                SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) as skipped,
+                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+            FROM applications 
+            WHERE user_id = ?
+        """
+        row = self.conn.execute(query, (user_id,)).fetchone()
+        return dict(row) if row else {"total": 0, "applied": 0, "skipped": 0, "failed": 0}
+
+    def get_recent_applications(self, user_id, limit=20):
+        """Returns the most recent application attempts."""
+        query = """
+            SELECT * FROM applications 
+            WHERE user_id = ? 
+            ORDER BY timestamp DESC 
+            LIMIT ?
+        """
+        rows = self.conn.execute(query, (user_id, limit)).fetchall()
         return [dict(row) for row in rows]
 
     def close(self):

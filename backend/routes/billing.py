@@ -234,11 +234,23 @@ def handle_payment_failed(invoice):
 class PortalRequest(BaseModel):
     user_id: str = "local-user"
 
+ADMIN_EMAILS = ["himu09854@gmail.com", "local-user"]
+
 @router.get("/subscription")
 async def get_subscription(user_id: str = "local-user"):
+    # Administrative Bypass for Project Admin
+    if user_id in ["himu09854@gmail.com", "local-user"]:
+        return {
+            "plan": "agency",
+            "status": "active",
+            "current_period_end": 4102444800,  # Far future (Year 2100)
+            "billing_cycle": "yearly",
+            "limit": 3000
+        }
+        
     sub = db.get_user_subscription(user_id)
     if not sub:
-        return {"plan": "free", "status": "inactive"}
+        return {"plan": "free", "status": "inactive", "limit": 0}
     return sub
 
 

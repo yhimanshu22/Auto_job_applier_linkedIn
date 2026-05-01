@@ -62,7 +62,7 @@ def test_plan_limits_enforcement(client, test_db, monkeypatch):
     )
     
     assert response.status_code == 403
-    assert "allows only 1 active bot" in response.json()["detail"]
+    assert "allows only 1 LinkedIn account(s)" in response.json()["detail"]
 
 def test_subscription_status_includes_cycle(client, test_db):
     test_db.upsert_subscription(
@@ -77,3 +77,20 @@ def test_subscription_status_includes_cycle(client, test_db):
     data = response.json()
     assert data["plan"] == "pro"
     assert data["billing_cycle"] == "yearly"
+
+def test_monthly_limit_enforcement(client, test_db):
+    # Starter allows 100 applications (based on server.py PLAN_LIMITS)
+    test_db.upsert_subscription("starter-user", plan="starter", status="active")
+    
+    # Log 100 applications for this user
+    # Note: db_manager.log_application uses datetime('now') by default
+    for _ in range(100):
+        test_db.log_application("starter-user", status="applied", job_title="Test", company="Test")
+        
+    response = client.post(
+        "/api/bot/start",
+        json={"user_id": "starter-user"}
+    )
+    
+    assert response.status_code == 403
+    assert "limit reached" in response.json()["detail"].lower()

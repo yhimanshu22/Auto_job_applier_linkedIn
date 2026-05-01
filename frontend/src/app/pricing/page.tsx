@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 
 type PlanType = "free_trial" | "starter" | "pro" | "agency";
 type BillingCycle = "monthly" | "yearly";
@@ -90,6 +91,7 @@ const PLANS = [
 export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
+  const { data: session } = useSession();
   const router = useRouter();
 
   async function startFreeTrial() {
@@ -99,8 +101,8 @@ export default function PricingPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          user_id: "local-user",
-          email: "user@example.com"
+          user_id: session?.user?.email || "local-user",
+          email: session?.user?.email || "user@example.com"
         }),
       });
 
@@ -126,8 +128,8 @@ export default function PricingPage() {
         body: JSON.stringify({
           plan,
           billing_cycle: billingCycle,
-          user_id: "local-user",
-          email: "user@example.com",
+          user_id: session?.user?.email || "local-user",
+          email: session?.user?.email || "user@example.com",
         }),
       });
 

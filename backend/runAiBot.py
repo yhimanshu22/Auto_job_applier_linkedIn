@@ -147,6 +147,15 @@ def load_cookies():
         except Exception as e:
             print_lg("Failed to load cookies. You may need to login manually.", e)
 
+def log_to_db(status, **kwargs):
+    """Helper to log application events to the database."""
+    try:
+        user_id = os.getenv("USER_ID", "local-user")
+        from db_manager import db
+        db.log_application(user_id, status=status, **kwargs)
+    except Exception as e:
+        print_lg(f"Failed to log to DB: {e}")
+
 
 # --- 🛡️ Humanization & Anti-Ban Overrides -------------------------
 from selenium.webdriver.common.action_chains import ActionChains
@@ -440,6 +449,7 @@ def get_job_main_details(
         print_lg(
             f'Skipping "{title} | {company}" job (Blacklisted Company). Job ID: {job_id}!'
         )
+        log_to_db(status="skipped", job_title=title, company=company, job_url=f"https://www.linkedin.com/jobs/view/{job_id}/", reason="Blacklisted Company")
         skip = True
     elif job_id in rejected_jobs:
         print_lg(
@@ -580,6 +590,8 @@ def get_job_description() -> (
             print_lg("Unable to extract years of experience required!")
             # print_lg(e)
     finally:
+        if skip:
+            log_to_db(status="skipped", reason=skipReason)
         return jobDescription, experience_required, skip, skipReason, skipMessage
 
 
@@ -1243,7 +1255,15 @@ def failed_job(
                     "Screenshot Name": truncate_for_csv(screenshot_name),
                 }
             )
-            file.close()
+        
+        # Log to DB
+        log_to_db(
+            status="failed",
+            job_url=job_link,
+            resume_used=resume,
+            reason=f"{error}: {str(exception)}"
+        )
+        file.close()
     except Exception as e:
         print_lg("Failed to update failed jobs list!", e)
         pyautogui.alert(
@@ -1338,6 +1358,17 @@ def submitted_jobs(
                     "Connect Request": truncate_for_csv(connect_request),
                 }
             )
+        
+        # Log to DB
+        log_to_db(
+            status="applied",
+            job_title=title,
+            company=company,
+            location=work_location,
+            job_url=job_link,
+            resume_used=resume,
+            answer_generated=str(questions_list) if questions_list else None
+        )
         csv_file.close()
     except Exception as e:
         print_lg("Failed to update submitted jobs list!", e)

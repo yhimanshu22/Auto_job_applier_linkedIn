@@ -6,8 +6,17 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db_manager import db
 
 def load_config_to_module(module_name):
+    # Default values to prevent crashes if DB keys are missing
+    config_dict = {
+        "file_name": "all excels/all_applied_applications_history.csv",
+        "failed_file_name": "all excels/all_failed_applications_history.csv",
+        "logs_folder_path": "logs/",
+        "daily_apply_limit": 50,
+        "run_in_background": False,
+        "use_AI": True
+    }
+    
     categories = ["personals", "search", "settings", "questions", "secrets"]
-    config_dict = {}
     for cat in categories:
         config_dict.update(db.get_all_by_category(cat))
         
@@ -22,7 +31,14 @@ def load_config_to_module(module_name):
     return config_dict
 
 # Initial load into this module so it can be imported with *
-config_data = {}
+config_data = {
+    "file_name": "all excels/all_applied_applications_history.csv",
+    "failed_file_name": "all excels/all_failed_applications_history.csv",
+    "logs_folder_path": "logs/",
+    "daily_apply_limit": 50,
+    "run_in_background": False,
+    "use_AI": True
+}
 categories = ["personals", "search", "settings", "questions", "secrets"]
 for cat in categories:
     config_data.update(db.get_all_by_category(cat))

@@ -11,17 +11,24 @@ from db_manager import db
 import json
 
 from routes.billing import router as billing_router
+from routes.applications import router as applications_router
 
 app = FastAPI(title="LinkedIn Bot API")
 
 app.include_router(billing_router)
+app.include_router(applications_router, prefix="/api/applications")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://192.168.56.1:3000",
+        os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip('/')
+    ],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.get("/api/health")
@@ -164,6 +171,10 @@ PLAN_LIMITS = {
 }
 
 def assert_can_start_bot(user_id: str):
+    # Administrative Bypass for Project Admin
+    if user_id in ["himu09854@gmail.com", "local-user"]:
+        return
+
     subscription = db.get_user_subscription(user_id)
 
     if not subscription or subscription["status"] not in ["active", "trialing"]:
@@ -193,19 +204,41 @@ def assert_can_start_bot(user_id: str):
 
     plan = subscription.get("plan", "free_trial")
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
-
-    # For now, we count configured accounts in .env as active bots
-    active_accounts = []
-    for key in os.environ:
-        if key.startswith("LINKEDIN_USERNAME_") and key[18:]:
-            active_accounts.append(key)
     
-    active_bots = len(active_accounts) or 1 
+    # 1. Enforce Account Limits
+    active_accounts = []
+    # Identify all configured accounts
+    for i in range(1, 11):
+        if os.getenv(f"LINKEDIN_USERNAME_{i}"):
+            active_accounts.append(i)
+    
+    # Also check the default LINKEDIN_USERNAME
+    if os.getenv("LINKEDIN_USERNAME") and not active_accounts:
+        active_accounts = ["main"]
 
+    if len(active_accounts) > limits["max_accounts"]:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Your '{plan}' plan allows only {limits['max_accounts']} LinkedIn account(s). You have {len(active_accounts)} configured."
+        )
+
+    # 2. Enforce Monthly Application Limits
+    applied_this_month = db.get_monthly_application_count(user_id)
+    if applied_this_month >= limits["monthly_applications"]:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Monthly application limit reached ({applied_this_month}/{limits['monthly_applications']}). Please upgrade your plan."
+        )
+
+    # 3. Enforce Active Bot Limits
+    # Currently we count the accounts as "bots" if they were to run
+    # In a real SaaS, we would check how many are ACTUALLY running via supervisor
+    # For now, we block if they try to start more than their plan allows
+    active_bots = len(active_accounts)
     if active_bots > limits["max_active_bots"]:
         raise HTTPException(
             status_code=403,
-            detail=f"Your {plan} plan allows only {limits['max_active_bots']} active bot(s). You have {active_bots} configured."
+            detail=f"Your '{plan}' plan allows only {limits['max_active_bots']} active bot(s). Please reduce your active accounts."
         )
 
 
@@ -216,7 +249,7 @@ async def start_bot(payload: dict = None):
     
     assert_can_start_bot(user_id)
 
-    global supervisor_process
+    global supervisor_process, current_run_id
     if supervisor_process and supervisor_process.poll() is None:
         return {"status": "already_running"}
         
@@ -232,13 +265,17 @@ async def start_bot(payload: dict = None):
         cwd = get_base_path()
         logging.info(f"Starting supervisor with {cmd} in {cwd}")
         
+        env = os.environ.copy()
+        env["USER_ID"] = user_id
+        
         supervisor_process = subprocess.Popen(
             cmd, 
             cwd=cwd,
+            env=env,
             creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
         )
         
-        current_run_id = db.start_bot_run("local-user")
+        current_run_id = db.start_bot_run(user_id)
         
         return {"status": "started"}
     except Exception as e:
@@ -263,45 +300,47 @@ async def upload_resume(file: UploadFile = File(...)):
 
 @app.post("/api/bot/stop")
 async def stop_bot():
-    global supervisor_process
-    if supervisor_process and supervisor_process.poll() is None:
-        try:
+    global supervisor_process, current_run_id
+    try:
+        if supervisor_process and supervisor_process.poll() is None:
             if os.name == 'nt':
                 # Forcefully kill the process tree on Windows
                 subprocess.run(["taskkill", "/F", "/PID", str(supervisor_process.pid), "/T"], capture_output=True)
             else:
                 supervisor_process.terminate()
+        
+        # Always reset state even if process was already dead
+        supervisor_process = None
+        
+        if current_run_id:
+            db.end_bot_run(current_run_id, 0)
+            current_run_id = None
             
-            supervisor_process = None
-            
-            if current_run_id:
-                # Basic session count calculation logic could go here
-                db.end_bot_run(current_run_id, 0)
-                current_run_id = None
-                
-            return {"status": "stopped"}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-    return {"status": "not_running"}
+        return {"status": "stopped"}
+    except Exception as e:
+        print(f"Error in stop_bot: {e}")
+        # Even if killing fails, try to reset state
+        supervisor_process = None
+        current_run_id = None
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/bot/status")
-async def get_bot_status():
+async def get_bot_status(user_id: str = "local-user"):
     global supervisor_process
     
-    # Get limit from settings
-    # Get limit from DB
-    daily_apply_limit = db.get_config("daily_apply_limit", 50)
+    # Get limits from plan
+    subscription = db.get_user_subscription(user_id)
+    plan = subscription.get("plan", "free_trial") if subscription else "free_trial"
     
-    # Get current count from CSV
-    applied_count = 0
-    file_name = db.get_config("file_name", "all excels/all_applied_applications_history.csv")
-    if os.path.exists(file_name):
-        try:
-            with open(file_name, "r", encoding="utf-8") as f:
-                # Subtract 1 for header
-                applied_count = max(0, len(f.readlines()) - 1)
-        except:
-            pass
+    # Handle admin bypass for status display
+    if user_id in ["himu09854@gmail.com", "local-user"]:
+        plan = "agency"
+
+    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
+    
+    # Get current count from DB
+    stats = db.get_application_stats(user_id)
+    applied_count = stats.get("applied", 0)
 
     status = "stopped"
     if supervisor_process and supervisor_process.poll() is None:
@@ -310,7 +349,7 @@ async def get_bot_status():
     return {
         "status": status,
         "applied_count": applied_count,
-        "limit": daily_apply_limit
+        "limit": limits["monthly_applications"]
     }
 
 @app.get("/api/bot/logs")
