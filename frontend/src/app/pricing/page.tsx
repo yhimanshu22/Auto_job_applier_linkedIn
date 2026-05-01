@@ -2,18 +2,110 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-type PlanType = "starter" | "pro" | "agency";
+type PlanType = "free_trial" | "starter" | "pro" | "agency";
 
-const PRICING = {
-  symbol: "$",
-  starter: 15,
-  pro: 30,
-  agency: 60,
-};
+const PLANS = [
+  {
+    key: "free_trial",
+    title: "Free Trial",
+    price: 0,
+    suffix: "1 day",
+    badge: "No card required",
+    description: "Try LinkdApply for 24 hours with limited applications.",
+    features: [
+      "1 LinkedIn account",
+      "1 active bot",
+      "10 applications total",
+      "Basic dashboard access",
+      "Application history preview",
+      "Manual start/stop control",
+      "Upgrade anytime",
+    ],
+  },
+  {
+    key: "starter",
+    title: "Starter",
+    price: 19,
+    suffix: "mo",
+    description: "For individual job seekers who want consistent applications.",
+    features: [
+      "1 LinkedIn account",
+      "1 active bot",
+      "100 applications/month",
+      "Basic dashboard",
+      "Application history",
+      "Job filters",
+      "Safe daily limits",
+      "Email support",
+    ],
+  },
+  {
+    key: "pro",
+    title: "Pro",
+    price: 49,
+    suffix: "mo",
+    badge: "Most Popular",
+    highlighted: true,
+    description: "For serious job seekers who want AI answers and higher limits.",
+    features: [
+      "3 LinkedIn accounts",
+      "2 active bots",
+      "500 applications/month",
+      "AI dynamic answers",
+      "Resume-aware responses",
+      "Advanced job filters",
+      "Priority queue",
+      "Export application history",
+      "Priority support",
+    ],
+  },
+  {
+    key: "agency",
+    title: "Agency",
+    price: 149,
+    suffix: "mo",
+    description: "For agencies and power users managing multiple accounts.",
+    features: [
+      "10 LinkedIn accounts",
+      "5 active bots",
+      "3000 applications/month",
+      "Team-ready usage",
+      "Multi-account dashboard",
+      "Advanced reporting",
+      "Export reports",
+      "Priority support",
+      "Dedicated onboarding help",
+    ],
+  },
+] as const;
 
 export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null);
+  const router = useRouter();
+
+  async function startFreeTrial() {
+    setLoading("free_trial");
+    try {
+      const res = await fetch("http://localhost:8000/api/billing/start-free-trial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: "local-user" }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to start trial");
+      
+      alert("Trial activated! Redirecting to dashboard...");
+      router.push("/dashboard");
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message || "Failed to initiate trial. Is the backend running?");
+    } finally {
+      setLoading(null);
+    }
+  }
 
   async function startStripeCheckout(plan: PlanType) {
     setLoading(plan);
@@ -39,8 +131,12 @@ export default function PricingPage() {
     }
   }
 
-  function handleBuy(plan: PlanType) {
-    startStripeCheckout(plan);
+  async function handleBuy(plan: PlanType) {
+    if (plan === "free_trial") {
+      await startFreeTrial();
+      return;
+    }
+    await startStripeCheckout(plan);
   }
 
   return (
@@ -96,47 +192,32 @@ export default function PricingPage() {
         <div className="max-w-7xl mx-auto relative z-10 w-full">
           <div className="text-center space-y-6 pt-12">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20 text-[10px] font-bold uppercase tracking-widest text-accent">
-              Secure Payments via Stripe
+              Start free. Upgrade when your job search scales.
             </div>
             <p className="font-serif text-[40px] lg:text-[64px] leading-[1.1] font-medium tracking-tight text-zinc-900">
               Choose your plan
             </p>
+            <p className="text-zinc-500 max-w-2xl mx-auto text-lg">
+              Try LinkdApply for 24 hours, then choose the plan that matches your application volume.
+            </p>
           </div>
 
-          <div className="mt-20 space-y-12 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-x-8 items-stretch mb-24">
-            <PricingCard 
-              title="Starter"
-              price={PRICING.starter}
-              symbol={PRICING.symbol}
-              description="Perfect for individuals starting their job search."
-              features={["1 LinkedIn account", "1 Active Bot", "100 applications / mo"]}
-              loading={loading === "starter"}
-              onBuy={() => handleBuy("starter")}
-              accent={false}
-            />
-
-            <PricingCard 
-              title="Pro"
-              price={PRICING.pro}
-              symbol={PRICING.symbol}
-              description="Most popular for serious job seekers."
-              features={["3 LinkedIn accounts", "2 Active Bots", "500 applications / mo", "AI dynamic answers"]}
-              loading={loading === "pro"}
-              onBuy={() => handleBuy("pro")}
-              accent={true}
-              badge="Most Popular"
-            />
-
-            <PricingCard 
-              title="Agency"
-              price={PRICING.agency}
-              symbol={PRICING.symbol}
-              description="For teams and heavy recruitment needs."
-              features={["10+ LinkedIn accounts", "5 Active Bots", "3000 applications / mo", "Priority support"]}
-              loading={loading === "agency"}
-              onBuy={() => handleBuy("agency")}
-              accent={false}
-            />
+          <div className="mt-20 space-y-12 lg:space-y-0 lg:grid lg:grid-cols-4 lg:gap-x-4 items-stretch mb-24">
+            {PLANS.map((plan) => (
+              <PricingCard 
+                key={plan.key}
+                title={plan.title}
+                price={plan.price}
+                symbol="$"
+                suffix={plan.suffix}
+                description={plan.description}
+                features={plan.features}
+                loading={loading === plan.key}
+                onBuy={() => handleBuy(plan.key as PlanType)}
+                accent={plan.highlighted}
+                badge={plan.badge}
+              />
+            ))}
           </div>
         </div>
       </main>
@@ -158,7 +239,7 @@ export default function PricingPage() {
   );
 }
 
-function PricingCard({ title, price, symbol, description, features, loading, onBuy, accent, badge }: any) {
+function PricingCard({ title, price, symbol, suffix, description, features, loading, onBuy, accent, badge }: any) {
   return (
     <div className={`relative p-8 rounded-3xl transition-all flex flex-col ${
       accent 
@@ -166,7 +247,7 @@ function PricingCard({ title, price, symbol, description, features, loading, onB
       : "bg-zinc-50/50 border border-zinc-100 shadow-lg hover:bg-white hover:border-accent/20 hover:shadow-xl"
     }`}>
       {badge && (
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-accent text-white text-[10px] font-bold uppercase tracking-widest rounded-full shadow-lg">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-accent text-white text-[10px] font-bold uppercase tracking-widest rounded-full shadow-lg whitespace-nowrap">
           {badge}
         </div>
       )}
@@ -174,16 +255,16 @@ function PricingCard({ title, price, symbol, description, features, loading, onB
         <h3 className="text-xl font-bold text-zinc-900">{title}</h3>
         <div className="mt-4 flex items-baseline gap-1">
           <span className="text-5xl font-extrabold tracking-tight text-zinc-900">{symbol}{price}</span>
-          <span className="text-zinc-500 font-medium">/mo</span>
+          <span className="text-zinc-500 font-medium">/{suffix}</span>
         </div>
-        <p className="mt-6 text-sm text-zinc-500 leading-relaxed">{description}</p>
+        <p className="mt-6 text-sm text-zinc-500 leading-relaxed min-h-[40px]">{description}</p>
         <ul className="mt-8 space-y-4">
           {features.map((f: string, i: number) => (
-            <li key={i} className="flex items-center gap-3 text-sm text-zinc-600">
-              <svg className="size-5 text-accent shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+            <li key={i} className="flex items-start gap-3 text-sm text-zinc-600">
+              <svg className="size-5 text-accent shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
-              {f}
+              <span>{f}</span>
             </li>
           ))}
         </ul>
@@ -197,7 +278,7 @@ function PricingCard({ title, price, symbol, description, features, loading, onB
           : "bg-white border border-zinc-200 text-zinc-900 shadow-sm hover:border-accent/20"
         }`}
       >
-        {loading ? "Processing..." : accent ? `Subscribe ${title}` : "Get Started"}
+        {loading ? "Processing..." : title === "Free Trial" ? "Start Free Trial" : `Subscribe ${title}`}
       </button>
     </div>
   );

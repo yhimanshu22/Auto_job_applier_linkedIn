@@ -127,25 +127,38 @@ async def write_config(category: str, data: ConfigData):
     return {"status": "success"}
 
 PLAN_LIMITS = {
-    "free": {
-        "max_accounts": 0,
-        "max_active_bots": 0,
-        "monthly_applications": 0,
+    "free_trial": {
+        "max_accounts": 1,
+        "max_active_bots": 1,
+        "monthly_applications": 10,
+        "trial_hours": 24,
+        "ai_answers": False,
+        "priority_support": False,
+        "export_history": False,
     },
     "starter": {
         "max_accounts": 1,
         "max_active_bots": 1,
         "monthly_applications": 100,
+        "ai_answers": False,
+        "priority_support": False,
+        "export_history": False,
     },
     "pro": {
         "max_accounts": 3,
         "max_active_bots": 2,
         "monthly_applications": 500,
+        "ai_answers": True,
+        "priority_support": True,
+        "export_history": True,
     },
     "agency": {
         "max_accounts": 10,
         "max_active_bots": 5,
         "monthly_applications": 3000,
+        "ai_answers": True,
+        "priority_support": True,
+        "export_history": True,
     },
 }
 
@@ -155,20 +168,34 @@ def assert_can_start_bot(user_id: str):
     if not subscription or subscription["status"] not in ["active", "trialing"]:
         raise HTTPException(
             status_code=402,
-            detail="Active subscription required to start the bot",
+            detail="Active subscription or trial required to start the bot",
         )
 
-    plan = subscription.get("plan", "free")
-    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
+    # Check for trial expiration
+    if subscription["status"] == "trialing" and subscription.get("current_period_end"):
+        try:
+            # ISO format date string from DB
+            expiry = datetime.fromisoformat(subscription["current_period_end"])
+            if datetime.utcnow() > expiry:
+                # Mark as expired in DB
+                db.upsert_subscription(user_id=user_id, status="expired")
+                raise HTTPException(
+                    status_code=402,
+                    detail="Your 24-hour free trial has expired. Please upgrade to a paid plan to continue."
+                )
+        except Exception as e:
+            print(f"Error checking trial expiry: {e}")
+
+    plan = subscription.get("plan", "free_trial")
+    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
 
     # For now, we count configured accounts in .env as active bots
-    # You would typically query DB to see how many bots are actually running
     active_accounts = []
     for key in os.environ:
         if key.startswith("LINKEDIN_USERNAME_") and key[18:]:
             active_accounts.append(key)
     
-    active_bots = len(active_accounts) or 1 # Fallback to 1 if no suffix is used but default is set
+    active_bots = len(active_accounts) or 1 
 
     if active_bots > limits["max_active_bots"]:
         raise HTTPException(

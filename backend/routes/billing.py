@@ -2,6 +2,7 @@ import os
 import stripe
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from db_manager import db
 
@@ -60,6 +61,37 @@ async def create_checkout_session(payload: CheckoutRequest):
 
         return {"url": session.url}
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class FreeTrialRequest(BaseModel):
+    user_id: str = "local-user"
+
+
+@router.post("/start-free-trial")
+async def start_free_trial(payload: FreeTrialRequest):
+    # Check if user already has/had a trial or paid plan
+    sub = db.get_user_subscription(payload.user_id)
+    
+    if sub and sub.get("plan") != "free":
+        # If they already have a plan (trial or paid), don't allow another trial
+        raise HTTPException(
+            status_code=400, 
+            detail="You have already used your trial or have an active plan."
+        )
+
+    # Set trial to expire in 24 hours
+    expiry = datetime.utcnow() + timedelta(hours=24)
+    
+    try:
+        db.upsert_subscription(
+            user_id=payload.user_id,
+            plan="free_trial",
+            status="trialing",
+            current_period_end=expiry.isoformat()
+        )
+        return {"status": "success", "expires_at": expiry.isoformat()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
