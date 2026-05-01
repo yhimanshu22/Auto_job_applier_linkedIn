@@ -149,7 +149,7 @@ export default function AboutPage() {
                   </div>
                   <div className="space-y-2">
                     <h4 className="text-accent font-bold uppercase tracking-widest text-xs">Security & Billing</h4>
-                    <p className="text-sm text-zinc-400">Secure AES-256 data encryption with regional payment support via Stripe and Razorpay for global accessibility.</p>
+                    <p className="text-sm text-zinc-400">Secure AES-256 data encryption with global payment support via Stripe for a seamless checkout experience.</p>
                   </div>
                 </div>
              </div>

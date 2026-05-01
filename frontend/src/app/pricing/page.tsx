@@ -1,64 +1,19 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 
 type PlanType = "starter" | "pro" | "agency";
 
 const PRICING = {
-  USD: {
-    symbol: "$",
-    starter: 15,
-    pro: 30,
-    agency: 60,
-  },
-  INR: {
-    symbol: "₹",
-    starter: 1000,
-    pro: 2000,
-    agency: 4000,
-  }
+  symbol: "$",
+  starter: 15,
+  pro: 30,
+  agency: 60,
 };
-
-const RAZORPAY_KEY_ID = "rzp_test_Sk0DHEFDwbgFb2";
 
 export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null);
-  const [region, setRegion] = useState<"USD" | "INR">("INR");
-  const [sdkReady, setSdkReady] = useState(false);
-
-  // Resilient script loading
-  useEffect(() => {
-    const checkSdk = () => {
-      if ((window as any).Razorpay) {
-        console.log("Razorpay SDK detected");
-        setSdkReady(true);
-        return true;
-      }
-      return false;
-    };
-
-    if (checkSdk()) return;
-
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.onload = () => {
-      console.log("Razorpay SDK Loaded via useEffect");
-      setSdkReady(true);
-    };
-    script.onerror = () => {
-      console.error("Failed to load Razorpay SDK");
-    };
-    document.body.appendChild(script);
-
-    // Periodic check as fallback
-    const interval = setInterval(() => {
-      if (checkSdk()) clearInterval(interval);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   async function startStripeCheckout(plan: PlanType) {
     setLoading(plan);
@@ -84,84 +39,8 @@ export default function PricingPage() {
     }
   }
 
-  async function startRazorpayCheckout(plan: PlanType) {
-    setLoading(plan);
-    console.log(`Starting Razorpay checkout for ${plan}...`);
-    try {
-      const amount = PRICING.INR[plan];
-      
-      const res = await fetch("http://localhost:8000/api/razorpay/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, amount }),
-      });
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Backend Error: ${res.status} - ${errorText}`);
-      }
-
-      const order = await res.json();
-      console.log("Order created successfully:", order);
-
-      const options = {
-        key: RAZORPAY_KEY_ID,
-        amount: order.amount,
-        currency: order.currency,
-        name: "LinkdApply",
-        description: `Subscription for ${plan} plan`,
-        order_id: order.id,
-        handler: async function (response: any) {
-          console.log("Payment Success Callback Received:", response);
-          
-          const verifyRes = await fetch("http://localhost:8000/api/razorpay/verify-payment", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(response),
-          });
-          
-          if (verifyRes.ok) {
-            alert("Payment Verified! Your subscription is active.");
-            window.location.href = "/billing/success";
-          } else {
-            alert("Payment received but verification failed. Please contact support.");
-          }
-        },
-        modal: {
-          ondismiss: function() {
-            setLoading(null);
-          }
-        },
-        prefill: {
-          name: "User",
-          email: "user@example.com",
-        },
-        theme: {
-          color: "#6d28d9",
-        },
-      };
-
-      const rzp = new (window as any).Razorpay(options);
-      rzp.open();
-      
-    } catch (error: any) {
-      console.error("Razorpay Integration Error:", error);
-      alert(`Razorpay Error: ${error.message || "Failed to initialize checkout"}`);
-    } finally {
-      setLoading(null);
-    }
-  }
-
   function handleBuy(plan: PlanType) {
-    if (region === "USD") {
-      startStripeCheckout(plan);
-    } else {
-      if (!sdkReady) {
-        alert("Payment system is still loading. Please wait a second or check your internet connection.");
-        return;
-      }
-      startRazorpayCheckout(plan);
-    }
+    startStripeCheckout(plan);
   }
 
   return (
@@ -217,35 +96,18 @@ export default function PricingPage() {
         <div className="max-w-7xl mx-auto relative z-10 w-full">
           <div className="text-center space-y-6 pt-12">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20 text-[10px] font-bold uppercase tracking-widest text-accent">
-              Secure Payments via Stripe & Razorpay
+              Secure Payments via Stripe
             </div>
             <p className="font-serif text-[40px] lg:text-[64px] leading-[1.1] font-medium tracking-tight text-zinc-900">
               Choose your plan
             </p>
-            
-            <div className="flex items-center justify-center pt-4">
-              <div className="bg-zinc-100 p-1 rounded-xl flex gap-1 border border-zinc-200">
-                <button 
-                  onClick={() => setRegion("USD")}
-                  className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${region === "USD" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
-                >
-                  Global (USD)
-                </button>
-                <button 
-                  onClick={() => setRegion("INR")}
-                  className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${region === "INR" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
-                >
-                  India (INR)
-                </button>
-              </div>
-            </div>
           </div>
 
           <div className="mt-20 space-y-12 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-x-8 items-stretch mb-24">
             <PricingCard 
               title="Starter"
-              price={PRICING[region].starter}
-              symbol={PRICING[region].symbol}
+              price={PRICING.starter}
+              symbol={PRICING.symbol}
               description="Perfect for individuals starting their job search."
               features={["1 LinkedIn account", "1 Active Bot", "100 applications / mo"]}
               loading={loading === "starter"}
@@ -255,8 +117,8 @@ export default function PricingPage() {
 
             <PricingCard 
               title="Pro"
-              price={PRICING[region].pro}
-              symbol={PRICING[region].symbol}
+              price={PRICING.pro}
+              symbol={PRICING.symbol}
               description="Most popular for serious job seekers."
               features={["3 LinkedIn accounts", "2 Active Bots", "500 applications / mo", "AI dynamic answers"]}
               loading={loading === "pro"}
@@ -267,8 +129,8 @@ export default function PricingPage() {
 
             <PricingCard 
               title="Agency"
-              price={PRICING[region].agency}
-              symbol={PRICING[region].symbol}
+              price={PRICING.agency}
+              symbol={PRICING.symbol}
               description="For teams and heavy recruitment needs."
               features={["10+ LinkedIn accounts", "5 Active Bots", "3000 applications / mo", "Priority support"]}
               loading={loading === "agency"}
