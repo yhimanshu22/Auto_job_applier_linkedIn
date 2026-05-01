@@ -46,8 +46,19 @@ export default function LandingPage() {
       </header>
 
       <main className="relative flex flex-col pt-32 overflow-hidden">
-        {/* Background Gradients - Light Mode */}
+        {/* Background Gradients & Video - Light Mode */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] hero-gradient opacity-10 pointer-events-none"></div>
+        <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-[0.03] overflow-hidden">
+          <video 
+            autoPlay 
+            loop 
+            muted 
+            playsInline
+            className="w-full h-full object-cover"
+          >
+            <source src="https://assets.mixkit.co/videos/preview/mixkit-abstract-technology-elements-loop-2423-large.mp4" type="video/mp4" />
+          </video>
+        </div>
 
         {/* Hero Section */}
         <section className="relative flex flex-col items-center gap-12 lg:gap-20 px-6 pt-12">
@@ -90,13 +101,18 @@ export default function LandingPage() {
 
           {/* Hero Demo Image */}
           <div className="relative w-full max-w-6xl mx-auto px-4 perspective-midrange animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-700">
-            <div className="glass-card rounded-2xl overflow-hidden shadow-2xl border border-zinc-200/50 p-2 bg-white">
-              <div className="bg-zinc-950 rounded-xl aspect-[1.7] flex items-center justify-center overflow-hidden border border-zinc-100">
-                <div className="text-white flex flex-col items-center gap-4">
-                  <div className="size-16 rounded-full bg-accent/20 flex items-center justify-center text-accent">
+            <div className="glass-card rounded-2xl overflow-hidden shadow-2xl border border-zinc-200/50 p-2 bg-white cursor-pointer hover:scale-[1.01] transition-transform duration-500">
+              <div className="bg-zinc-950 rounded-xl aspect-[1.7] flex items-center justify-center overflow-hidden border border-zinc-100 relative">
+                <img 
+                  src="/images/hero_dashboard.png" 
+                  alt="Dashboard Preview" 
+                  className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-1000"
+                />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-zinc-950/20 backdrop-blur-[2px]">
+                  <div className="size-16 rounded-full bg-accent/20 flex items-center justify-center text-accent border border-accent/40 shadow-2xl">
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-play fill-current"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                   </div>
-                  <span className="text-zinc-500 font-medium tracking-widest text-xs uppercase">Dashboard Live Preview</span>
+                  <span className="text-white font-medium tracking-widest text-xs uppercase bg-black/40 px-3 py-1 rounded-full border border-white/10">Dashboard Live Preview</span>
                 </div>
               </div>
             </div>
@@ -132,9 +148,16 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
-              <div className="relative aspect-square lg:aspect-video rounded-3xl bg-zinc-950 overflow-hidden glass-card p-4 border border-zinc-100 shadow-xl">
-                <div className="size-full bg-zinc-900 rounded-2xl flex items-center justify-center border border-white/5 shadow-inner">
-                   <span className="text-zinc-600 text-sm italic font-mono uppercase tracking-[0.2em]">Application Engine Active</span>
+              <div className="relative aspect-square lg:aspect-video rounded-3xl bg-zinc-950 overflow-hidden glass-card p-4 border border-zinc-100 shadow-xl cursor-pointer group/engine">
+                <div className="size-full bg-zinc-900 rounded-2xl flex items-center justify-center border border-white/5 shadow-inner relative overflow-hidden">
+                   <img 
+                    src="/images/application_engine.png" 
+                    alt="Application Engine" 
+                    className="w-full h-full object-cover opacity-60 group-hover/engine:scale-110 transition-transform duration-700"
+                   />
+                   <div className="absolute inset-0 flex items-center justify-center">
+                     <span className="text-white text-sm italic font-mono uppercase tracking-[0.2em] bg-black/60 px-4 py-2 rounded-lg border border-white/10 backdrop-blur-sm group-hover/engine:bg-accent/40 transition-colors">Application Engine Active</span>
+                   </div>
                 </div>
               </div>
             </div>
@@ -176,7 +199,7 @@ export default function LandingPage() {
                   description: "Launch the bot and watch as it applies to hundreds of relevant jobs while you sleep."
                 }
               ].map((item, idx) => (
-                <div key={idx} className="relative group p-8 rounded-3xl border border-zinc-100 bg-zinc-50/50 hover:bg-white hover:border-accent/20 transition-all hover:shadow-xl">
+                <div key={idx} className="relative group p-8 rounded-3xl border border-zinc-100 bg-zinc-50/50 hover:bg-white hover:border-accent/20 transition-all hover:shadow-xl cursor-pointer">
                   <div className="text-4xl font-serif text-accent/20 group-hover:text-accent/40 font-bold mb-6 transition-colors">
                     {item.step}
                   </div>
@@ -220,9 +243,16 @@ export default function LandingPage() {
                   </span>
                 </div>
               </div>
-              <div className="relative w-full max-w-xl aspect-square glass-card rounded-3xl p-8 border-white/10 flex items-center justify-center bg-white/5">
-                 <div className="size-full bg-zinc-900 rounded-2xl flex items-center justify-center border border-white/5 shadow-inner">
-                    <span className="text-zinc-700 text-xs font-mono uppercase tracking-[0.3em]">Desktop Environment</span>
+              <div className="relative w-full max-w-xl aspect-square glass-card rounded-3xl p-8 border-white/10 flex items-center justify-center bg-white/5 cursor-pointer hover:bg-white/10 transition-colors">
+                 <div className="size-full bg-zinc-900 rounded-2xl flex items-center justify-center border border-white/5 shadow-inner relative overflow-hidden">
+                    <img 
+                      src="/images/desktop_app.png" 
+                      alt="Desktop App Preview" 
+                      className="w-full h-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-1000"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-white text-xs font-mono uppercase tracking-[0.3em] bg-black/60 px-4 py-2 rounded-lg border border-white/10 backdrop-blur-sm">Desktop Environment</span>
+                    </div>
                  </div>
               </div>
             </div>
@@ -258,7 +288,7 @@ export default function LandingPage() {
                   a: "Absolutely. You can pre-configure answers to common custom questions in the 'Questions' tab of your dashboard." 
                 }
               ].map((item, idx) => (
-                <div key={idx} className="group glass-card p-8 rounded-2xl border border-zinc-100 bg-zinc-50/50 hover:border-accent/30 transition-all hover:bg-white">
+                <div key={idx} className="group glass-card p-8 rounded-2xl border border-zinc-100 bg-zinc-50/50 hover:border-accent/30 transition-all hover:bg-white cursor-pointer">
                   <h4 className="text-lg font-semibold text-zinc-900 mb-3 flex items-center gap-3">
                     <span className="size-6 rounded-full bg-accent/20 text-accent text-xs flex items-center justify-center shrink-0 border border-accent/20 font-bold">
                       {idx + 1}
