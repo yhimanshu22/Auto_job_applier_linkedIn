@@ -165,72 +165,133 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-zinc-900 py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] hero-gradient opacity-10 pointer-events-none"></div>
-      
-      <div className="max-w-7xl mx-auto relative z-10">
-        <div className="text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20 text-[10px] font-bold uppercase tracking-widest text-accent">
-            Secure Payments via Stripe & Razorpay
+    <div className="flex flex-col min-h-screen bg-white selection:bg-accent/10">
+      {/* Header */}
+      <header className="absolute top-0 z-50 flex w-full pt-6">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 md:px-8 text-zinc-900 border-b border-zinc-100 pb-4">
+          <div className="flex items-center gap-8">
+            <Link className="inline-flex items-center justify-center font-serif text-2xl font-bold tracking-tight hover:text-accent transition-colors" href="/">
+              LinkdApply
+            </Link>
+            <nav className="hidden md:flex items-center gap-6">
+              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#features">
+                Features
+              </Link>
+              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#how-it-works">
+                How it works
+              </Link>
+              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#faq">
+                FAQ
+              </Link>
+              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/pricing">
+                Pricing
+              </Link>
+              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/about">
+                About
+              </Link>
+              <Link className="text-sm font-medium text-accent hover:text-accent/80 transition-colors" href="#download">
+                Download
+              </Link>
+            </nav>
           </div>
-          <p className="font-serif text-[40px] lg:text-[64px] leading-[1.1] font-medium tracking-tight text-zinc-900">
-            Choose your plan
-          </p>
-          
-          <div className="flex items-center justify-center pt-4">
-            <div className="bg-zinc-100 p-1 rounded-xl flex gap-1 border border-zinc-200">
-              <button 
-                onClick={() => setRegion("USD")}
-                className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${region === "USD" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
-              >
-                Global (USD)
-              </button>
-              <button 
-                onClick={() => setRegion("INR")}
-                className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${region === "INR" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
-              >
-                India (INR)
-              </button>
+          <div className="flex items-center gap-4">
+            <Link 
+              className="hidden sm:inline-flex text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
+              href="/login"
+            >
+              Sign in
+            </Link>
+            <Link 
+              className="purple-gradient-button inline-flex items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02]" 
+              href="/login"
+            >
+              Sign up
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <main className="grow py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden flex flex-col items-center">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] hero-gradient opacity-10 pointer-events-none"></div>
+        
+        <div className="max-w-7xl mx-auto relative z-10 w-full">
+          <div className="text-center space-y-6 pt-12">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20 text-[10px] font-bold uppercase tracking-widest text-accent">
+              Secure Payments via Stripe & Razorpay
+            </div>
+            <p className="font-serif text-[40px] lg:text-[64px] leading-[1.1] font-medium tracking-tight text-zinc-900">
+              Choose your plan
+            </p>
+            
+            <div className="flex items-center justify-center pt-4">
+              <div className="bg-zinc-100 p-1 rounded-xl flex gap-1 border border-zinc-200">
+                <button 
+                  onClick={() => setRegion("USD")}
+                  className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${region === "USD" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
+                >
+                  Global (USD)
+                </button>
+                <button 
+                  onClick={() => setRegion("INR")}
+                  className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${region === "INR" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
+                >
+                  India (INR)
+                </button>
+              </div>
             </div>
           </div>
+
+          <div className="mt-20 space-y-12 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-x-8 items-stretch mb-24">
+            <PricingCard 
+              title="Starter"
+              price={PRICING[region].starter}
+              symbol={PRICING[region].symbol}
+              description="Perfect for individuals starting their job search."
+              features={["1 LinkedIn account", "1 Active Bot", "100 applications / mo"]}
+              loading={loading === "starter"}
+              onBuy={() => handleBuy("starter")}
+              accent={false}
+            />
+
+            <PricingCard 
+              title="Pro"
+              price={PRICING[region].pro}
+              symbol={PRICING[region].symbol}
+              description="Most popular for serious job seekers."
+              features={["3 LinkedIn accounts", "2 Active Bots", "500 applications / mo", "AI dynamic answers"]}
+              loading={loading === "pro"}
+              onBuy={() => handleBuy("pro")}
+              accent={true}
+              badge="Most Popular"
+            />
+
+            <PricingCard 
+              title="Agency"
+              price={PRICING[region].agency}
+              symbol={PRICING[region].symbol}
+              description="For teams and heavy recruitment needs."
+              features={["10+ LinkedIn accounts", "5 Active Bots", "3000 applications / mo", "Priority support"]}
+              loading={loading === "agency"}
+              onBuy={() => handleBuy("agency")}
+              accent={false}
+            />
+          </div>
         </div>
+      </main>
 
-        <div className="mt-20 space-y-12 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-x-8 items-stretch">
-          <PricingCard 
-            title="Starter"
-            price={PRICING[region].starter}
-            symbol={PRICING[region].symbol}
-            description="Perfect for individuals starting their job search."
-            features={["1 LinkedIn account", "1 Active Bot", "100 applications / mo"]}
-            loading={loading === "starter"}
-            onBuy={() => handleBuy("starter")}
-            accent={false}
-          />
-
-          <PricingCard 
-            title="Pro"
-            price={PRICING[region].pro}
-            symbol={PRICING[region].symbol}
-            description="Most popular for serious job seekers."
-            features={["3 LinkedIn accounts", "2 Active Bots", "500 applications / mo", "AI dynamic answers"]}
-            loading={loading === "pro"}
-            onBuy={() => handleBuy("pro")}
-            accent={true}
-            badge="Most Popular"
-          />
-
-          <PricingCard 
-            title="Agency"
-            price={PRICING[region].agency}
-            symbol={PRICING[region].symbol}
-            description="For teams and heavy recruitment needs."
-            features={["10+ LinkedIn accounts", "5 Active Bots", "3000 applications / mo", "Priority support"]}
-            loading={loading === "agency"}
-            onBuy={() => handleBuy("agency")}
-            accent={false}
-          />
+      {/* Footer */}
+      <footer className="py-12 border-t border-zinc-100 bg-white">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-8">
+          <span className="font-serif text-2xl font-bold tracking-tight text-zinc-900">LinkdApply</span>
+          <div className="flex gap-10 text-sm font-medium text-zinc-500">
+            <Link href="/about" className="hover:text-zinc-900 transition-colors">About</Link>
+            <Link href="/terms" className="hover:text-zinc-900 transition-colors">Terms</Link>
+            <Link href="/privacy" className="hover:text-zinc-900 transition-colors">Privacy</Link>
+            <Link href="/support" className="hover:text-zinc-900 transition-colors">Support</Link>
+          </div>
+          <p className="text-xs font-bold text-zinc-400 tracking-[0.2em] uppercase">© 2026 LinkdApply v1.1.0. All Rights Reserved.</p>
         </div>
-      </div>
+      </footer>
     </div>
   );
 }

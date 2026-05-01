@@ -1,0 +1,191 @@
+import Link from "next/link";
+
+export default function AboutPage() {
+  return (
+    <div className="flex grow flex-col bg-white text-zinc-900 selection:bg-accent/10">
+      {/* Header */}
+      <header className="absolute top-0 z-50 flex w-full pt-6">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 md:px-8 text-zinc-900 border-b border-zinc-100 pb-4">
+          <div className="flex items-center gap-8">
+            <Link className="inline-flex items-center justify-center font-serif text-2xl font-bold tracking-tight hover:text-accent transition-colors" href="/">
+              LinkdApply
+            </Link>
+            <nav className="hidden md:flex items-center gap-6">
+              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#features">
+                Features
+              </Link>
+              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#how-it-works">
+                How it works
+              </Link>
+              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#faq">
+                FAQ
+              </Link>
+              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/pricing">
+                Pricing
+              </Link>
+              <Link className="text-sm font-medium text-accent hover:text-accent/80 transition-colors" href="/about">
+                About
+              </Link>
+              <Link className="text-sm font-medium text-accent hover:text-accent/80 transition-colors" href="#download">
+                Download
+              </Link>
+            </nav>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link 
+              className="hidden sm:inline-flex text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
+              href="/login"
+            >
+              Sign in
+            </Link>
+            <Link 
+              className="purple-gradient-button inline-flex items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02]" 
+              href="/login"
+            >
+              Sign up
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <main className="grow pt-32 pb-24">
+        <div className="mx-auto max-w-4xl px-6">
+          {/* Mission Hero */}
+          <section className="mb-20 text-center">
+            <h1 className="font-serif text-[40px] md:text-[56px] leading-[1.1] font-medium tracking-tight text-zinc-900 mb-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+              We're on a Mission to <br />
+              <span className="text-accent italic">Fix Job Hunting</span>
+            </h1>
+            <p className="text-xl md:text-2xl text-zinc-600 leading-relaxed max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
+              LinkdApply was born from a simple frustration: why do job seekers spend more time filling out forms than actually preparing for interviews?
+            </p>
+          </section>
+
+          {/* Our Story */}
+          <section className="mb-20 space-y-6">
+            <h2 className="text-2xl font-bold text-zinc-900">Our Story</h2>
+            <div className="space-y-6 text-lg text-zinc-600 leading-relaxed">
+              <p>
+                In 2026, our founder — a software developer — found himself spending 3+ hours every single day copying and pasting the same resume details, answering the same screening questions, and clicking the same buttons across dozens of job boards. The process was soul-crushingly repetitive.
+              </p>
+              <p>
+                So he built a tool to automate it. What started as a personal script became a full platform: an AI-powered system that reads your resume, understands your career goals, matches you with relevant openings, and submits applications on your behalf — intelligently, not blindly.
+              </p>
+              <p>
+                Today, LinkdApply helps hundreds of job seekers reclaim their time and apply to more jobs without the burnout. We believe your time is better spent preparing for interviews, networking, and building skills — not filling repetitive forms.
+              </p>
+            </div>
+          </section>
+
+          {/* What We Believe */}
+          <section className="mb-24">
+            <h2 className="text-2xl font-bold text-zinc-900 mb-12">What We Believe</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {[
+                {
+                  icon: "🎯",
+                  title: "Quality Over Quantity",
+                  text: "We don't spray-and-pray. Our AI matches your resume to jobs where you're genuinely qualified. Every application is tailored — not generic."
+                },
+                {
+                  icon: "🔒",
+                  title: "Privacy First",
+                  text: "Your data is yours. We use AES-256 encryption for all stored credentials, and we never sell or share your personal information with anyone."
+                },
+                {
+                  icon: "⚡",
+                  title: "Time is Everything",
+                  text: "Every hour spent filling forms is an hour you could spend learning, networking, or interview prepping. We give that time back to you."
+                },
+                {
+                  icon: "🤝",
+                  title: "Transparent & Fair",
+                  text: "No contracts, no lock-ins, no hidden fees. Our free trial requires zero credit card. Cancel anytime. We earn your trust, not trap you."
+                }
+              ].map((belief, idx) => (
+                <div key={idx} className="p-8 rounded-3xl border border-zinc-100 bg-zinc-50/50 hover:border-accent/20 transition-all hover:bg-white hover:shadow-xl group">
+                  <div className="text-3xl mb-4 group-hover:scale-110 transition-transform inline-block">{belief.icon}</div>
+                  <h3 className="text-xl font-bold text-zinc-900 mb-3">{belief.title}</h3>
+                  <p className="text-zinc-600 leading-relaxed text-sm">{belief.text}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Technology */}
+          <section className="mb-24 p-10 rounded-[32px] bg-zinc-950 text-white relative overflow-hidden group">
+             <div className="absolute top-0 left-0 w-full h-full hero-gradient opacity-30 pointer-events-none"></div>
+             <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-10 overflow-hidden">
+                <video 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline
+                  className="w-full h-full object-cover"
+                >
+                  <source src="https://assets.mixkit.co/videos/preview/mixkit-abstract-technology-elements-loop-2423-large.mp4" type="video/mp4" />
+                </video>
+             </div>
+             <div className="relative z-10 space-y-8">
+                <div className="space-y-4">
+                  <h2 className="text-2xl font-bold">Our Technology</h2>
+                  <p className="text-zinc-400 leading-relaxed">
+                    LinkdApply is built on a high-performance, modern stack designed for reliability, speed, and undetectability. 
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <h4 className="text-accent font-bold uppercase tracking-widest text-xs">Core Frameworks</h4>
+                    <p className="text-sm text-zinc-400">Next.js 15 for a lightning-fast frontend, FastAPI for a robust Python backend, and Electron for a seamless desktop experience.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-accent font-bold uppercase tracking-widest text-xs">AI Engine</h4>
+                    <p className="text-sm text-zinc-400">Integrated with OpenAI, Google Gemini, and DeepSeek to intelligently parse job descriptions and generate human-like responses.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-accent font-bold uppercase tracking-widest text-xs">Automation</h4>
+                    <p className="text-sm text-zinc-400">Powered by Selenium and Playwright with custom behavioral scripts to mimic human interaction and bypass anti-bot detections.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-accent font-bold uppercase tracking-widest text-xs">Security & Billing</h4>
+                    <p className="text-sm text-zinc-400">Secure AES-256 data encryption with regional payment support via Stripe and Razorpay for global accessibility.</p>
+                  </div>
+                </div>
+             </div>
+          </section>
+
+          {/* Get in Touch */}
+          <section className="text-center space-y-6">
+            <h2 className="text-3xl font-serif font-medium text-zinc-900">Get in Touch</h2>
+            <p className="text-lg text-zinc-600 max-w-2xl mx-auto">
+              Have questions, feedback, or partnership inquiries? We'd love to hear from you.
+            </p>
+            <div className="pt-4">
+              <Link 
+                href="/support"
+                className="inline-flex items-center justify-center rounded-full px-10 py-4 text-base font-semibold text-white purple-gradient-button hover:scale-[1.02] transition-all shadow-xl"
+              >
+                Contact Support
+              </Link>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="py-12 border-t border-zinc-100 bg-white">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8 flex flex-col md:row items-center justify-between gap-8">
+          <span className="font-serif text-2xl font-bold tracking-tight text-zinc-900">LinkdApply</span>
+          <div className="flex gap-10 text-sm font-medium text-zinc-500">
+            <Link href="/about" className="hover:text-zinc-900 transition-colors">About</Link>
+            <Link href="/terms" className="hover:text-zinc-900 transition-colors">Terms</Link>
+            <Link href="/privacy" className="hover:text-zinc-900 transition-colors">Privacy</Link>
+            <Link href="/support" className="hover:text-zinc-900 transition-colors">Support</Link>
+          </div>
+          <p className="text-xs font-bold text-zinc-400 tracking-[0.2em] uppercase">© 2026 LinkdApply v1.1.0. All Rights Reserved.</p>
+        </div>
+      </footer>
+    </div>
+  );
+}

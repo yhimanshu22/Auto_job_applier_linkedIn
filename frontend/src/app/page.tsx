@@ -23,6 +23,9 @@ export default function LandingPage() {
               <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/pricing">
                 Pricing
               </Link>
+              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/about">
+                About
+              </Link>
               <Link className="text-sm font-medium text-accent hover:text-accent/80 transition-colors" href="#download">
                 Download
               </Link>
@@ -327,6 +330,7 @@ export default function LandingPage() {
           <div className="mx-auto max-w-7xl px-6 lg:px-8 flex flex-col md:row items-center justify-between gap-8">
             <span className="font-serif text-2xl font-bold tracking-tight text-zinc-900">LinkdApply</span>
             <div className="flex gap-10 text-sm font-medium text-zinc-500">
+              <Link href="/about" className="hover:text-zinc-900 transition-colors">About</Link>
               <Link href="/terms" className="hover:text-zinc-900 transition-colors">Terms</Link>
               <Link href="/privacy" className="hover:text-zinc-900 transition-colors">Privacy</Link>
               <Link href="/support" className="hover:text-zinc-900 transition-colors">Support</Link>
