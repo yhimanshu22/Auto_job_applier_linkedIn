@@ -12,6 +12,7 @@ from pyautogui import alert
 from pprint import pprint
 
 from config.config_bridge import *
+from utils.logger import logger as cloud_logger
 
 
 #### Common functions ####
@@ -126,25 +127,24 @@ def print_lg(
     from_critical: bool = False,
 ) -> None:
     """
-    Function to log and print. **Note that, `end` and `flush` parameters are ignored if `pretty = True`**
+    Function to log and print. 
+    Now integrates with Google Cloud Logging.
     """
     try:
-        for message in msgs:
-            pprint(message) if pretty else print(message, end=end, flush=flush)
-            with open(__logs_file_path, "a+", encoding="utf-8") as file:
-                file.write(str(message) + end)
+        combined_msg = " ".join([str(m) for m in msgs])
+        
+        # Log to Cloud/Console via our new logger
+        if from_critical:
+            cloud_logger.error(combined_msg)
+        else:
+            cloud_logger.info(combined_msg)
+
+        # Still keep local file logging for redundancy/dev
+        with open(__logs_file_path, "a+", encoding="utf-8") as file:
+            file.write(combined_msg + end)
+            
     except Exception as e:
-        trail = (
-            f'Skipped saving this message: "{message}" to log.txt!'
-            if from_critical
-            else "We'll try one more time to log..."
-        )
-        alert(
-            f"log.txt in {logs_folder_path} is open or is occupied by another program! Please close it! {trail}",
-            "Failed Logging",
-        )
-        if not from_critical:
-            critical_error_log("Log.txt is open or is occupied by another program!", e)
+        print(f"Logging error: {e}")
 
 
 # >

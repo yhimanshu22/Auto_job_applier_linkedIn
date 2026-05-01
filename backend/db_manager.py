@@ -1,226 +1,247 @@
-import sqlite3
-import json
 import os
+import json
+from sqlalchemy import create_engine, select, update, insert, func
+from sqlalchemy.orm import sessionmaker, Session
+from models import Base, Config, Subscription, BotRun, Application, UserSession, Asset, ResumeMetadata
+from utils.encryption import encrypt_data, decrypt_data
+
+SENSITIVE_KEYS = ["llm_api_key", "openai_api_key", "password", "username"]
 
 class DatabaseManager:
-    def __init__(self, db_path=None):
-        if db_path is None:
+    def __init__(self):
+        # Database URL from environment variable, default to local SQLite
+        # For GCP Cloud SQL, this would be: postgresql://user:pass@host:port/dbname
+        self.db_url = os.getenv("DATABASE_URL")
+        
+        if not self.db_url:
             base_dir = os.path.dirname(os.path.abspath(__file__))
-            self.db_path = os.path.join(base_dir, "data.db")
-        else:
-            self.db_path = db_path
+            db_path = os.path.join(base_dir, "data.db")
+            self.db_url = f"sqlite:///{db_path}"
             
-        # Ensure directory exists
-        db_dir = os.path.dirname(os.path.abspath(self.db_path))
-        if not os.path.exists(db_dir):
-            os.makedirs(db_dir, exist_ok=True)
-            
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self.create_tables()
+        # Create engine
+        self.engine = create_engine(self.db_url, connect_args={"check_same_thread": False} if "sqlite" in self.db_url else {})
+        
+        # Ensure all tables exist
+        Base.metadata.create_all(self.engine)
+        
+        # Create session factory
+        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
 
-    def create_tables(self):
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS configs (
-                key TEXT PRIMARY KEY,
-                value TEXT,
-                category TEXT
-            )
-        """)
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS assets (
-                key TEXT PRIMARY KEY,
-                filename TEXT,
-                content BLOB,
-                category TEXT
-            )
-        """)
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS subscriptions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                stripe_customer_id TEXT,
-                stripe_subscription_id TEXT,
-                stripe_price_id TEXT,
-                plan TEXT DEFAULT 'free',
-                billing_cycle TEXT DEFAULT 'monthly',
-                status TEXT DEFAULT 'inactive',
-                current_period_end TEXT,
-                cancel_at_period_end INTEGER DEFAULT 0,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id)
-            )
-        """)
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS bot_runs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                status TEXT DEFAULT 'running',
-                start_time TEXT DEFAULT CURRENT_TIMESTAMP,
-                end_time TEXT,
-                applications_count INTEGER DEFAULT 0
-            )
-        """)
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS applications (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                job_title TEXT,
-                company TEXT,
-                location TEXT,
-                job_url TEXT,
-                status TEXT NOT NULL, -- 'applied', 'skipped', 'failed'
-                reason TEXT,
-                resume_used TEXT,
-                answer_generated TEXT,
-                timestamp TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        self.conn.commit()
+    def get_session(self) -> Session:
+        return self.SessionLocal()
 
     def set_config(self, key, value, category):
-        # Convert values to JSON for database storage
-        val_json = json.dumps(value)
-        self.conn.execute(
-            "INSERT OR REPLACE INTO configs (key, value, category) VALUES (?, ?, ?)", 
-            (key, val_json, category)
-        )
-        self.conn.commit()
-
-    def set_asset(self, key, filename, content, category):
-        """Stores a binary asset (e.g., PDF) as a BLOB."""
-        self.conn.execute(
-            "INSERT OR REPLACE INTO assets (key, filename, content, category) VALUES (?, ?, ?, ?)",
-            (key, filename, content, category)
-        )
-        self.conn.commit()
-
-    def get_asset(self, key):
-        """Retrieves a binary asset and its metadata."""
-        row = self.conn.execute("SELECT filename, content FROM assets WHERE key = ?", (key,)).fetchone()
-        if row:
-            return {"filename": row["filename"], "content": row["content"]}
-        return None
+        is_encrypted = 1 if key in SENSITIVE_KEYS else 0
+        val_str = json.dumps(value)
+        
+        if is_encrypted:
+            val_str = encrypt_data(val_str)
+            
+        with self.get_session() as session:
+            config = session.get(Config, key)
+            if config:
+                config.value = val_str
+                config.category = category
+                config.is_encrypted = is_encrypted
+            else:
+                config = Config(key=key, value=val_str, category=category, is_encrypted=is_encrypted)
+                session.add(config)
+            session.commit()
 
     def get_config(self, key, default=None):
-        row = self.conn.execute("SELECT value FROM configs WHERE key = ?", (key,)).fetchone()
-        if row:
-            return json.loads(row["value"])
-        return default
+        with self.get_session() as session:
+            config = session.get(Config, key)
+            if config:
+                val_str = config.value
+                if config.is_encrypted:
+                    val_str = decrypt_data(val_str)
+                return json.loads(val_str)
+            return default
 
     def get_all_by_category(self, category):
-        rows = self.conn.execute("SELECT key, value FROM configs WHERE category = ?", (category,)).fetchall()
-        return {row["key"]: json.loads(row["value"]) for row in rows}
-        
+        with self.get_session() as session:
+            configs = session.query(Config).filter(Config.category == category).all()
+            result = {}
+            for config in configs:
+                val_str = config.value
+                if config.is_encrypted:
+                    val_str = decrypt_data(val_str)
+                result[config.key] = json.loads(val_str)
+            return result
+
     def upsert_subscription(self, user_id, **kwargs):
-        """Upsert a subscription record for a given user."""
-        # First check if the user exists
-        row = self.conn.execute("SELECT id FROM subscriptions WHERE user_id = ?", (user_id,)).fetchone()
-        
-        if not row:
-            # Insert default with kwargs overrides
-            fields = ['user_id'] + list(kwargs.keys())
-            placeholders = ', '.join(['?'] * len(fields))
-            values = [user_id] + list(kwargs.values())
-            query = f"INSERT INTO subscriptions ({', '.join(fields)}) VALUES ({placeholders})"
-            self.conn.execute(query, values)
-        else:
-            # Update
-            kwargs['updated_at'] = 'CURRENT_TIMESTAMP'
-            set_clause = ', '.join([f"{k} = ?" for k in kwargs.keys()])
-            # For CURRENT_TIMESTAMP we should technically not use ? if we want the DB to evaluate it,
-            # but since we're using SQLite, we can just pass the string or use datetime.
-            # Let's clean that up to use actual SQLite functions
-            
-            clean_kwargs = {k: v for k, v in kwargs.items() if k != 'updated_at'}
-            set_clause = ', '.join([f"{k} = ?" for k in clean_kwargs.keys()]) + ", updated_at = CURRENT_TIMESTAMP"
-            
-            query = f"UPDATE subscriptions SET {set_clause} WHERE user_id = ?"
-            values = list(clean_kwargs.values()) + [user_id]
-            self.conn.execute(query, values)
-            
-        self.conn.commit()
+        with self.get_session() as session:
+            sub = session.query(Subscription).filter(Subscription.user_id == user_id).first()
+            if sub:
+                for k, v in kwargs.items():
+                    setattr(sub, k, v)
+            else:
+                sub = Subscription(user_id=user_id, **kwargs)
+                session.add(sub)
+            session.commit()
 
     def get_user_subscription(self, user_id):
-        """Retrieves subscription details for a user."""
-        row = self.conn.execute("SELECT * FROM subscriptions WHERE user_id = ?", (user_id,)).fetchone()
-        if row:
-            return dict(row)
-        return None
+        with self.get_session() as session:
+            sub = session.query(Subscription).filter(Subscription.user_id == user_id).first()
+            if sub:
+                # Convert to dict for compatibility
+                return {c.name: getattr(sub, c.name) for c in sub.__table__.columns}
+            return None
 
     def start_bot_run(self, user_id):
-        """Creates a new bot run record and returns its ID."""
-        cursor = self.conn.execute(
-            "INSERT INTO bot_runs (user_id, status) VALUES (?, 'running')",
-            (user_id,)
-        )
-        self.conn.commit()
-        return cursor.lastrowid
+        with self.get_session() as session:
+            run = BotRun(user_id=user_id, status='running')
+            session.add(run)
+            session.commit()
+            session.refresh(run)
+            return run.id
 
     def end_bot_run(self, run_id, count=0):
-        """Marks a bot run as completed."""
-        self.conn.execute(
-            "UPDATE bot_runs SET status = 'completed', end_time = CURRENT_TIMESTAMP, applications_count = ? WHERE id = ?",
-            (count, run_id)
-        )
-        self.conn.commit()
-
-    def get_recent_bot_runs(self, limit=10):
-        """Retrieves recent bot run history."""
-        rows = self.conn.execute(
-            "SELECT * FROM bot_runs ORDER BY start_time DESC LIMIT ?",
-            (limit,)
-        ).fetchall()
-        return [dict(row) for row in rows]
+        with self.get_session() as session:
+            run = session.get(BotRun, run_id)
+            if run:
+                run.status = 'completed'
+                run.end_time = func.now()
+                run.applications_count = count
+                session.commit()
 
     def log_application(self, user_id, **kwargs):
-        """Logs a single job application attempt."""
-        fields = ['user_id'] + list(kwargs.keys())
-        placeholders = ', '.join(['?'] * len(fields))
-        values = [user_id] + list(kwargs.values())
-        query = f"INSERT INTO applications ({', '.join(fields)}) VALUES ({placeholders})"
-        self.conn.execute(query, values)
-        self.conn.commit()
+        with self.get_session() as session:
+            app = Application(user_id=user_id, **kwargs)
+            session.add(app)
+            session.commit()
 
     def get_monthly_application_count(self, user_id):
-        """Returns the number of successful applications in the last 30 days."""
-        query = """
-            SELECT COUNT(*) FROM applications 
-            WHERE user_id = ? 
-            AND status = 'applied'
-            AND timestamp >= datetime('now', '-30 days')
-        """
-        row = self.conn.execute(query, (user_id,)).fetchone()
-        return row[0] if row else 0
+        from datetime import datetime, timedelta
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        with self.get_session() as session:
+            count = session.query(func.count(Application.id)).filter(
+                Application.user_id == user_id,
+                Application.status == 'applied',
+                Application.timestamp >= thirty_days_ago
+            ).scalar()
+            return count or 0
 
     def get_application_stats(self, user_id):
-        """Returns summary stats for a user."""
-        query = """
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'applied' THEN 1 ELSE 0 END) as applied,
-                SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) as skipped,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
-            FROM applications 
-            WHERE user_id = ?
-        """
-        row = self.conn.execute(query, (user_id,)).fetchone()
-        return dict(row) if row else {"total": 0, "applied": 0, "skipped": 0, "failed": 0}
+        with self.get_session() as session:
+            stats = session.query(
+                func.count(Application.id).label('total'),
+                func.sum(func.case((Application.status == 'applied', 1), else_=0)).label('applied'),
+                func.sum(func.case((Application.status == 'skipped', 1), else_=0)).label('skipped'),
+                func.sum(func.case((Application.status == 'failed', 1), else_=0)).label('failed')
+            ).filter(Application.user_id == user_id).first()
+            
+            return {
+                "total": stats.total or 0,
+                "applied": int(stats.applied or 0),
+                "skipped": int(stats.skipped or 0),
+                "failed": int(stats.failed or 0)
+            }
 
     def get_recent_applications(self, user_id, limit=20):
-        """Returns the most recent application attempts."""
-        query = """
-            SELECT * FROM applications 
-            WHERE user_id = ? 
-            ORDER BY timestamp DESC 
-            LIMIT ?
-        """
-        rows = self.conn.execute(query, (user_id, limit)).fetchall()
-        return [dict(row) for row in rows]
+        with self.get_session() as session:
+            apps = session.query(Application).filter(
+                Application.user_id == user_id
+            ).order_by(Application.timestamp.desc()).limit(limit).all()
+            
+            return [{c.name: getattr(app, c.name) for c in app.__table__.columns} for app in apps]
+
+    def set_user_session(self, user_id, cookies_dict):
+        cookies_json = json.dumps(cookies_dict)
+        encrypted_cookies = encrypt_data(cookies_json)
+        with self.get_session() as session:
+            sess = session.get(UserSession, user_id)
+            if sess:
+                sess.cookies_blob = encrypted_cookies
+                sess.updated_at = func.now()
+            else:
+                sess = UserSession(user_id=user_id, cookies_blob=encrypted_cookies)
+                session.add(sess)
+            session.commit()
+
+    def get_user_session(self, user_id):
+        with self.get_session() as session:
+            sess = session.get(UserSession, user_id)
+            if sess:
+                decrypted_json = decrypt_data(sess.cookies_blob)
+                return json.loads(decrypted_json)
+            return None
+
+    def upsert_resume_metadata(self, user_id, file_name, storage_path, is_default=False):
+        """Stores resume metadata in the database."""
+        with self.get_session() as session:
+            # If setting as default, unset others
+            if is_default:
+                session.query(ResumeMetadata).filter(
+                    ResumeMetadata.user_id == user_id
+                ).update({ResumeMetadata.is_default: False})
+            
+            # Check if this file already exists for this user
+            resume = session.query(ResumeMetadata).filter(
+                ResumeMetadata.user_id == user_id,
+                ResumeMetadata.file_name == file_name
+            ).first()
+            
+            if resume:
+                resume.storage_path = storage_path
+                resume.is_default = is_default
+            else:
+                resume = ResumeMetadata(
+                    user_id=user_id,
+                    file_name=file_name,
+                    storage_path=storage_path,
+                    is_default=is_default
+                )
+                session.add(resume)
+            session.commit()
+            return resume.id
+
+    def get_user_resumes(self, user_id):
+        """Retrieves all resumes for a user."""
+        with self.get_session() as session:
+            resumes = session.query(ResumeMetadata).filter(
+                ResumeMetadata.user_id == user_id
+            ).all()
+            return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in resumes]
+
+    def set_default_resume(self, user_id, resume_id):
+        """Sets a specific resume as the default for a user."""
+        with self.get_session() as session:
+            # Unset all
+            session.query(ResumeMetadata).filter(
+                ResumeMetadata.user_id == user_id
+            ).update({ResumeMetadata.is_default: False})
+            
+            # Set target
+            resume = session.get(ResumeMetadata, resume_id)
+            if resume and resume.user_id == user_id:
+                resume.is_default = True
+                session.commit()
+                return True
+            return False
+
+    def set_asset(self, key, filename, content, category):
+        with self.get_session() as session:
+            asset = session.get(Asset, key)
+            if asset:
+                asset.filename = filename
+                asset.content = content
+                asset.category = category
+            else:
+                asset = Asset(key=key, filename=filename, content=content, category=category)
+                session.add(asset)
+            session.commit()
+
+    def get_asset(self, key):
+        with self.get_session() as session:
+            asset = session.get(Asset, key)
+            if asset:
+                return {"filename": asset.filename, "content": asset.content}
+            return None
 
     def close(self):
-        self.conn.close()
+        # SQLAlchemy handles connections automatically via engine pooling
+        pass
 
 # Singleton instance
 db = DatabaseManager()

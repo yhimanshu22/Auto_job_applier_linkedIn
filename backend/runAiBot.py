@@ -114,13 +114,16 @@ about_company_for_ai = None  # TODO extract about company for AI
 # >
 
 # --- Session Management Functions ---
-import pickle
+import json
+from db_manager import db
+from services.storage import storage_service
 
 
 def save_cookies():
     """Saves current cookies to a file."""
     try:
-        pickle.dump(driver.get_cookies(), open(cookies_file, "wb"))
+        # Encrypted DB storage instead of local pickle
+        db.set_user_session(user_id, driver.get_cookies())
         print_lg("Session cookies saved successfully!")
     except Exception as e:
         print_lg("Failed to save cookies!", e)
@@ -128,9 +131,10 @@ def save_cookies():
 
 def load_cookies():
     """Loads cookies from file and refreshes the page."""
-    if os.path.exists(cookies_file):
+    # Load from encrypted DB
+    cookies = db.get_user_session(user_id)
+    if cookies:
         try:
-            cookies = pickle.load(open(cookies_file, "rb"))
             # You must be on the domain before adding cookies
             if "linkedin.com" not in driver.current_url:
                 driver.get("https://www.linkedin.com")
@@ -598,22 +602,37 @@ def get_job_description() -> (
 # Function to upload resume
 def upload_resume(modal: WebElement, resume: str) -> tuple[bool, str]:
     try:
-        # 1. Attempt to get from database first (New Full-DB method)
-        from db_manager import db
-        asset = db.get_asset("default_resume")
+        # 1. Attempt to get default resume metadata from database
+        user_id = os.getenv("USER_ID", "local-user")
+        resumes = db.get_user_resumes(user_id)
+        default_resume = next((r for r in resumes if r['is_default']), None)
         
+        if default_resume:
+            print_lg(f"Fetching default resume: {default_resume['file_name']} from storage...")
+            file_content = storage_service.get_file_content(default_resume['storage_path'])
+            
+            if file_content:
+                # Create a localized temporary file for Selenium to pick up
+                # Note: This is necessary because Selenium's send_keys requires a local file path
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    tmp.write(file_content)
+                    tmp_path = tmp.name
+                
+                print_lg(f"Uploading resume: {default_resume['file_name']}")
+                modal.find_element(By.NAME, "file").send_keys(tmp_path)
+                return True, default_resume["file_name"]
+
+        # 2. Legacy Fallback: Try the Asset BLOB (backwards compatibility)
+        asset = db.get_asset("default_resume")
         if asset:
-            # Create a localized temporary file for Selenium to pick up
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                 tmp.write(asset["content"])
                 tmp_path = tmp.name
-            
-            print_lg(f"Uploading resume from database: {asset['filename']}")
+            print_lg(f"Uploading resume from database asset: {asset['filename']}")
             modal.find_element(By.NAME, "file").send_keys(tmp_path)
-            # We return the original filename for logging
             return True, asset["filename"]
             
-        # 2. Legacy Fallback: Local file path
+        # 3. Last Resort: Local file path
         if os.path.exists(resume):
             modal.find_element(By.NAME, "file").send_keys(os.path.abspath(resume))
             return True, os.path.basename(resume)

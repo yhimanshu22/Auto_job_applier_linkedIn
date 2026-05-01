@@ -9,9 +9,22 @@ import uvicorn
 import logging
 from db_manager import db
 import json
+from utils.secrets import load_all_secrets
+
+# Load critical secrets from GCP Secret Manager in production
+load_all_secrets([
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "NEXTAUTH_SECRET",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "ENCRYPTION_KEY",
+    "DATABASE_URL"
+])
 
 from routes.billing import router as billing_router
 from routes.applications import router as applications_router
+from services.storage import storage_service
 
 app = FastAPI(title="LinkedIn Bot API")
 
@@ -286,15 +299,22 @@ async def upload_resume(file: UploadFile = File(...)):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF resumes are supported")
         
+    # Hardcoded local user for MVP
+    user_id = "local-user"
+    
     try:
         content = await file.read()
-        db.set_asset("default_resume", file.filename, content, "resumes")
         
-        # Also update the default_resume_path in configs to point to a virtual path
-        # Actually, we keep it as just "analyst.pdf" or whatever the filename is
+        # 1. Upload to storage (Local or Cloud)
+        storage_path = storage_service.upload_file(content, file.filename, user_id)
+        
+        # 2. Update metadata in DB
+        db.upsert_resume_metadata(user_id, file.filename, storage_path, is_default=True)
+        
+        # 3. Maintain compatibility with old system for now
         db.set_config("default_resume_path", file.filename, "questions")
         
-        return {"status": "success", "filename": file.filename}
+        return {"status": "success", "filename": file.filename, "storage_path": storage_path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
