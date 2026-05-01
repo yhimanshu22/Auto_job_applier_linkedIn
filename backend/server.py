@@ -10,10 +10,12 @@ from db_manager import db
 import json
 
 from routes.billing import router as billing_router
+from routes.razorpay import router as razorpay_router
 
 app = FastAPI(title="LinkedIn Bot API")
 
 app.include_router(billing_router)
+app.include_router(razorpay_router)
 
 app.add_middleware(
     CORSMiddleware,

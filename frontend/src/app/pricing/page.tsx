@@ -1,18 +1,71 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+
+type PlanType = "starter" | "pro" | "agency";
+
+const PRICING = {
+  USD: {
+    symbol: "$",
+    starter: 15,
+    pro: 30,
+    agency: 60,
+  },
+  INR: {
+    symbol: "₹",
+    starter: 1000,
+    pro: 2000,
+    agency: 4000,
+  }
+};
+
+const RAZORPAY_KEY_ID = "rzp_test_Sk0DHEFDwbgFb2";
 
 export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null);
+  const [region, setRegion] = useState<"USD" | "INR">("INR");
+  const [sdkReady, setSdkReady] = useState(false);
 
-  async function startCheckout(plan: "starter" | "pro" | "agency") {
+  // Resilient script loading
+  useEffect(() => {
+    const checkSdk = () => {
+      if ((window as any).Razorpay) {
+        console.log("Razorpay SDK detected");
+        setSdkReady(true);
+        return true;
+      }
+      return false;
+    };
+
+    if (checkSdk()) return;
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => {
+      console.log("Razorpay SDK Loaded via useEffect");
+      setSdkReady(true);
+    };
+    script.onerror = () => {
+      console.error("Failed to load Razorpay SDK");
+    };
+    document.body.appendChild(script);
+
+    // Periodic check as fallback
+    const interval = setInterval(() => {
+      if (checkSdk()) clearInterval(interval);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  async function startStripeCheckout(plan: PlanType) {
     setLoading(plan);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/billing/create-checkout-session", {
+      const res = await fetch("http://localhost:8000/api/billing/create-checkout-session", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           plan,
           user_id: "local-user",
@@ -21,11 +74,7 @@ export default function PricingPage() {
       });
 
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.detail || "Failed to start checkout");
-      }
-
+      if (!res.ok) throw new Error(data.detail || "Failed to start checkout");
       window.location.href = data.url;
     } catch (error) {
       console.error(error);
@@ -35,100 +84,198 @@ export default function PricingPage() {
     }
   }
 
+  async function startRazorpayCheckout(plan: PlanType) {
+    setLoading(plan);
+    console.log(`Starting Razorpay checkout for ${plan}...`);
+    try {
+      const amount = PRICING.INR[plan];
+      
+      const res = await fetch("http://localhost:8000/api/razorpay/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan, amount }),
+      });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Backend Error: ${res.status} - ${errorText}`);
+      }
+
+      const order = await res.json();
+      console.log("Order created successfully:", order);
+
+      const options = {
+        key: RAZORPAY_KEY_ID,
+        amount: order.amount,
+        currency: order.currency,
+        name: "LinkdApply",
+        description: `Subscription for ${plan} plan`,
+        order_id: order.id,
+        handler: async function (response: any) {
+          console.log("Payment Success Callback Received:", response);
+          
+          const verifyRes = await fetch("http://localhost:8000/api/razorpay/verify-payment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(response),
+          });
+          
+          if (verifyRes.ok) {
+            alert("Payment Verified! Your subscription is active.");
+            window.location.href = "/billing/success";
+          } else {
+            alert("Payment received but verification failed. Please contact support.");
+          }
+        },
+        modal: {
+          ondismiss: function() {
+            setLoading(null);
+          }
+        },
+        prefill: {
+          name: "User",
+          email: "user@example.com",
+        },
+        theme: {
+          color: "#6d28d9",
+        },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+      
+    } catch (error: any) {
+      console.error("Razorpay Integration Error:", error);
+      alert(`Razorpay Error: ${error.message || "Failed to initialize checkout"}`);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  function handleBuy(plan: PlanType) {
+    if (region === "USD") {
+      startStripeCheckout(plan);
+    } else {
+      if (!sdkReady) {
+        alert("Payment system is still loading. Please wait a second or check your internet connection.");
+        return;
+      }
+      startRazorpayCheckout(plan);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white text-zinc-900 py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] hero-gradient opacity-10 pointer-events-none"></div>
       
       <div className="max-w-7xl mx-auto relative z-10">
-        <div className="text-center space-y-4">
-          <h2 className="text-sm font-bold text-accent tracking-[0.2em] uppercase">Pricing</h2>
-          <p className="font-serif text-[40px] lg:text-[56px] leading-[1.1] font-medium tracking-tight text-zinc-900">
-            Choose the right plan for your bot
+        <div className="text-center space-y-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20 text-[10px] font-bold uppercase tracking-widest text-accent">
+            Secure Payments via Stripe & Razorpay
+          </div>
+          <p className="font-serif text-[40px] lg:text-[64px] leading-[1.1] font-medium tracking-tight text-zinc-900">
+            Choose your plan
           </p>
-          <p className="max-w-2xl text-lg lg:text-xl text-zinc-500 mx-auto">
-            Scale your LinkedIn automation safely and securely.
-          </p>
+          
+          <div className="flex items-center justify-center pt-4">
+            <div className="bg-zinc-100 p-1 rounded-xl flex gap-1 border border-zinc-200">
+              <button 
+                onClick={() => setRegion("USD")}
+                className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${region === "USD" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
+              >
+                Global (USD)
+              </button>
+              <button 
+                onClick={() => setRegion("INR")}
+                className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${region === "INR" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
+              >
+                India (INR)
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="mt-20 space-y-12 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-x-8 items-center">
-          {/* Starter Plan */}
-          <div className="relative p-8 bg-zinc-50/50 border border-zinc-100 rounded-3xl shadow-lg flex flex-col hover:bg-white hover:border-accent/20 transition-all hover:shadow-xl">
-            <div className="flex-1">
-              <h3 className="text-2xl font-bold text-zinc-900">Starter</h3>
-              <p className="mt-4 flex items-baseline text-zinc-900">
-                <span className="text-5xl font-extrabold tracking-tight">$19</span>
-                <span className="ml-1 text-xl font-medium text-zinc-500">/mo</span>
-              </p>
-              <p className="mt-6 text-zinc-500">For individuals getting started with automation.</p>
-              <ul role="list" className="mt-8 space-y-6">
-                <li className="flex items-center text-zinc-600"><span className="text-accent mr-3 font-bold text-lg">✓</span>1 LinkedIn account</li>
-                <li className="flex items-center text-zinc-600"><span className="text-accent mr-3 font-bold text-lg">✓</span>1 Active Bot</li>
-                <li className="flex items-center text-zinc-600"><span className="text-accent mr-3 font-bold text-lg">✓</span>100 applications / month</li>
-              </ul>
-            </div>
-            <button
-              onClick={() => startCheckout("starter")}
-              disabled={loading === "starter"}
-              className="mt-8 block w-full py-4 px-6 border border-zinc-200 rounded-xl text-center font-semibold text-zinc-900 bg-white hover:bg-zinc-50 transition-all disabled:opacity-50 shadow-sm"
-            >
-              {loading === "starter" ? "Loading..." : "Get Started"}
-            </button>
-          </div>
+        <div className="mt-20 space-y-12 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-x-8 items-stretch">
+          <PricingCard 
+            title="Starter"
+            price={PRICING[region].starter}
+            symbol={PRICING[region].symbol}
+            description="Perfect for individuals starting their job search."
+            features={["1 LinkedIn account", "1 Active Bot", "100 applications / mo"]}
+            loading={loading === "starter"}
+            onBuy={() => handleBuy("starter")}
+            accent={false}
+          />
 
-          {/* Pro Plan */}
-          <div className="relative p-8 bg-white border-2 border-accent/30 rounded-3xl shadow-2xl flex flex-col transform lg:-translate-y-4">
-            <div className="absolute top-0 py-1.5 px-4 bg-accent rounded-full text-xs font-bold uppercase tracking-widest text-white transform -translate-y-1/2 left-1/2 -translate-x-1/2 shadow-lg">
-              Most Popular
-            </div>
-            <div className="flex-1">
-              <h3 className="text-2xl font-bold text-zinc-900">Pro</h3>
-              <p className="mt-4 flex items-baseline text-zinc-900">
-                <span className="text-6xl font-extrabold tracking-tight">$49</span>
-                <span className="ml-1 text-xl font-medium text-zinc-500">/mo</span>
-              </p>
-              <p className="mt-6 text-zinc-500">For power users and small teams.</p>
-              <ul role="list" className="mt-8 space-y-6">
-                <li className="flex items-center text-zinc-600"><span className="text-accent mr-3 font-bold text-lg">✓</span>3 LinkedIn accounts</li>
-                <li className="flex items-center text-zinc-600"><span className="text-accent mr-3 font-bold text-lg">✓</span>2 Active Bots</li>
-                <li className="flex items-center text-zinc-600"><span className="text-accent mr-3 font-bold text-lg">✓</span>500 applications / month</li>
-                <li className="flex items-center text-zinc-600"><span className="text-accent mr-3 font-bold text-lg">✓</span>AI dynamic answers</li>
-              </ul>
-            </div>
-            <button
-              onClick={() => startCheckout("pro")}
-              disabled={loading === "pro"}
-              className="mt-8 block w-full py-4 px-6 rounded-xl text-center font-semibold text-white purple-gradient-button hover:scale-[1.02] transition-all disabled:opacity-50 shadow-xl"
-            >
-              {loading === "pro" ? "Loading..." : "Upgrade to Pro"}
-            </button>
-          </div>
+          <PricingCard 
+            title="Pro"
+            price={PRICING[region].pro}
+            symbol={PRICING[region].symbol}
+            description="Most popular for serious job seekers."
+            features={["3 LinkedIn accounts", "2 Active Bots", "500 applications / mo", "AI dynamic answers"]}
+            loading={loading === "pro"}
+            onBuy={() => handleBuy("pro")}
+            accent={true}
+            badge="Most Popular"
+          />
 
-          {/* Agency Plan */}
-          <div className="relative p-8 bg-zinc-50/50 border border-zinc-100 rounded-3xl shadow-lg flex flex-col hover:bg-white hover:border-accent/20 transition-all hover:shadow-xl">
-            <div className="flex-1">
-              <h3 className="text-2xl font-bold text-zinc-900">Agency</h3>
-              <p className="mt-4 flex items-baseline text-zinc-900">
-                <span className="text-5xl font-extrabold tracking-tight">$149</span>
-                <span className="ml-1 text-xl font-medium text-zinc-500">/mo</span>
-              </p>
-              <p className="mt-6 text-zinc-500">For scaling recruitment teams and agencies.</p>
-              <ul role="list" className="mt-8 space-y-6">
-                <li className="flex items-center text-zinc-600"><span className="text-accent mr-3 font-bold text-lg">✓</span>10+ LinkedIn accounts</li>
-                <li className="flex items-center text-zinc-600"><span className="text-accent mr-3 font-bold text-lg">✓</span>5 Active Bots</li>
-                <li className="flex items-center text-zinc-600"><span className="text-accent mr-3 font-bold text-lg">✓</span>3000 applications / month</li>
-                <li className="flex items-center text-zinc-600"><span className="text-accent mr-3 font-bold text-lg">✓</span>Priority support</li>
-              </ul>
-            </div>
-            <button
-              onClick={() => startCheckout("agency")}
-              disabled={loading === "agency"}
-              className="mt-8 block w-full py-4 px-6 border border-zinc-200 rounded-xl text-center font-semibold text-zinc-900 bg-white hover:bg-zinc-50 transition-all disabled:opacity-50 shadow-sm"
-            >
-              {loading === "agency" ? "Loading..." : "Go Agency"}
-            </button>
-          </div>
+          <PricingCard 
+            title="Agency"
+            price={PRICING[region].agency}
+            symbol={PRICING[region].symbol}
+            description="For teams and heavy recruitment needs."
+            features={["10+ LinkedIn accounts", "5 Active Bots", "3000 applications / mo", "Priority support"]}
+            loading={loading === "agency"}
+            onBuy={() => handleBuy("agency")}
+            accent={false}
+          />
         </div>
       </div>
+    </div>
+  );
+}
+
+function PricingCard({ title, price, symbol, description, features, loading, onBuy, accent, badge }: any) {
+  return (
+    <div className={`relative p-8 rounded-3xl transition-all flex flex-col ${
+      accent 
+      ? "bg-white border-2 border-accent shadow-2xl scale-105 z-10" 
+      : "bg-zinc-50/50 border border-zinc-100 shadow-lg hover:bg-white hover:border-accent/20 hover:shadow-xl"
+    }`}>
+      {badge && (
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-accent text-white text-[10px] font-bold uppercase tracking-widest rounded-full shadow-lg">
+          {badge}
+        </div>
+      )}
+      <div className="flex-1">
+        <h3 className="text-xl font-bold text-zinc-900">{title}</h3>
+        <div className="mt-4 flex items-baseline gap-1">
+          <span className="text-5xl font-extrabold tracking-tight text-zinc-900">{symbol}{price}</span>
+          <span className="text-zinc-500 font-medium">/mo</span>
+        </div>
+        <p className="mt-6 text-sm text-zinc-500 leading-relaxed">{description}</p>
+        <ul className="mt-8 space-y-4">
+          {features.map((f: string, i: number) => (
+            <li key={i} className="flex items-center gap-3 text-sm text-zinc-600">
+              <svg className="size-5 text-accent shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              {f}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <button
+        onClick={onBuy}
+        disabled={loading}
+        className={`mt-10 w-full py-4 rounded-xl font-bold transition-all hover:scale-[1.02] disabled:opacity-50 ${
+          accent 
+          ? "purple-gradient-button text-white shadow-xl" 
+          : "bg-white border border-zinc-200 text-zinc-900 shadow-sm hover:border-accent/20"
+        }`}
+      >
+        {loading ? "Processing..." : accent ? `Subscribe ${title}` : "Get Started"}
+      </button>
     </div>
   );
 }
