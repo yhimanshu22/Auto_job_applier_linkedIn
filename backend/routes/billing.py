@@ -181,18 +181,31 @@ def handle_payment_failed(invoice):
 
 
 class PortalRequest(BaseModel):
-    stripe_customer_id: str
+    user_id: str = "local-user"
+
+@router.get("/subscription")
+async def get_subscription(user_id: str = "local-user"):
+    sub = db.get_user_subscription(user_id)
+    if not sub:
+        return {"plan": "free", "status": "inactive"}
+    return sub
 
 
 @router.post("/create-portal-session")
 async def create_portal_session(payload: PortalRequest):
     try:
+        sub = db.get_user_subscription(payload.user_id)
+        if not sub or not sub.get("stripe_customer_id"):
+            raise HTTPException(status_code=400, detail="No active Stripe customer found for this user.")
+
         session = stripe.billing_portal.Session.create(
-            customer=payload.stripe_customer_id,
+            customer=sub["stripe_customer_id"],
             return_url=f"{FRONTEND_URL}/settings/billing",
         )
 
         return {"url": session.url}
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

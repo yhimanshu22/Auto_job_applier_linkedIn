@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [isUploading, setIsUploading] = useState(false);
   const [isBackendHealthy, setIsBackendHealthy] = useState(true);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [subscription, setSubscription] = useState<any>(null);
 
   useEffect(() => {
     fetchConfig(activeTab);
@@ -52,11 +53,27 @@ export default function Dashboard() {
         } catch (err) {}
     };
 
+    const fetchSubscription = async () => {
+      try {
+        const res = await fetch("http://127.0.0.1:8000/api/billing/subscription");
+        if (res.ok) {
+          const data = await res.json();
+          setSubscription(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch subscription");
+      }
+    };
+
     checkStatus();
     fetchResumeInfo();
+    fetchSubscription();
     
     // Poll every 10 seconds
-    const statusInterval = setInterval(checkStatus, 10000);
+    const statusInterval = setInterval(() => {
+      checkStatus();
+      fetchSubscription();
+    }, 10000);
     return () => clearInterval(statusInterval);
   }, []);
 
@@ -170,6 +187,17 @@ export default function Dashboard() {
               <span className="ml-3 font-serif text-xl font-semibold tracking-tight text-white transition-colors">
                 LinkdApply
               </span>
+              {subscription && (
+                <div className="ml-4 px-2.5 py-0.5 rounded-full border border-zinc-700/50 bg-zinc-800/50 flex items-center">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                    subscription.plan === 'pro' ? 'text-indigo-400' :
+                    subscription.plan === 'agency' ? 'text-amber-400' :
+                    'text-zinc-400'
+                  }`}>
+                    {subscription.plan} Plan
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex items-center space-x-6">
                <div className={`flex items-center gap-3 px-4 py-1.5 rounded-full border ${isBackendHealthy ? 'bg-zinc-900 border-zinc-800' : 'bg-red-500/10 border-red-500/20'}`}>
@@ -212,8 +240,33 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Subscription Banner */}
+      {subscription && subscription.status !== 'active' && subscription.status !== 'trialing' && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+          <div className="bg-indigo-600/20 border border-indigo-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="size-10 bg-indigo-500/20 rounded-full flex items-center justify-center text-indigo-400">
+                <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="text-white font-bold">Upgrade to {subscription.plan === 'free' ? 'Start Applying' : 'Reactivate'}</h4>
+                <p className="text-sm text-indigo-200/80">You need an active subscription to launch the bot and automate your applications.</p>
+              </div>
+            </div>
+            <Link 
+              href="/pricing"
+              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shrink-0"
+            >
+              View Plans
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Hero Status Card */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
         <div className="bg-[#1e293b] border border-zinc-800/80 rounded-3xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl shadow-black/20">
           
           <div className="flex items-center gap-6">
@@ -279,12 +332,33 @@ export default function Dashboard() {
               </button>
             ) : (
               <button
-                onClick={() => setShowConfirm(true)}
+                onClick={() => {
+                  if (subscription && subscription.status !== 'active' && subscription.status !== 'trialing') {
+                    window.location.href = '/pricing';
+                  } else {
+                    setShowConfirm(true);
+                  }
+                }}
                 disabled={isLoading || !isBackendHealthy}
-                className="inline-flex items-center px-8 py-4 rounded-xl bg-blue-600 text-white font-semibold shadow-xl shadow-blue-600/20 hover:bg-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`inline-flex items-center px-8 py-4 rounded-xl font-semibold shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                  subscription && subscription.status !== 'active' && subscription.status !== 'trialing'
+                    ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                    : "bg-blue-600 text-white shadow-blue-600/20 hover:bg-blue-500"
+                }`}
               >
-                <svg className="size-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
-                Launch Bot
+                {subscription && subscription.status !== 'active' && subscription.status !== 'trialing' ? (
+                  <>
+                    <svg className="size-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    Upgrade to Launch
+                  </>
+                ) : (
+                  <>
+                    <svg className="size-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
+                    Launch Bot
+                  </>
+                )}
               </button>
             )}
           </div>

@@ -25,6 +25,18 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+@app.get("/api/health")
+async def health_check():
+    return {
+        "status": "ok",
+        "service": "backend",
+        "version": "1.1.0"
+    }
+
+@app.get("/api/version")
+async def get_version():
+    return {"version": "1.1.0"}
+
 class ConfigData(BaseModel):
     content: str
 
@@ -45,6 +57,7 @@ def get_config_path(filename: str):
 
 # Global state to track the supervisor process
 supervisor_process = None
+current_run_id = None
 
 @app.get("/api/config/{category}")
 async def read_config(category: str):
@@ -194,6 +207,9 @@ async def start_bot(payload: dict = None):
             cwd=cwd,
             creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
         )
+        
+        current_run_id = db.start_bot_run("local-user")
+        
         return {"status": "started"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -227,6 +243,12 @@ async def stop_bot():
                 supervisor_process.terminate()
             
             supervisor_process = None
+            
+            if current_run_id:
+                # Basic session count calculation logic could go here
+                db.end_bot_run(current_run_id, 0)
+                current_run_id = None
+                
             return {"status": "stopped"}
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
@@ -274,6 +296,11 @@ async def get_bot_logs():
             return {"logs": "".join(lines[-100:])}
     except Exception as e:
         return {"logs": f"Error reading logs: {str(e)}"}
+
+@app.get("/api/bot/runs")
+async def get_bot_runs(limit: int = 10):
+    runs = db.get_recent_bot_runs(limit)
+    return {"runs": runs}
 
 if __name__ == "__main__":
     import logging

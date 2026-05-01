@@ -51,6 +51,16 @@ class DatabaseManager:
                 UNIQUE(user_id)
             )
         """)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS bot_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                status TEXT DEFAULT 'running',
+                start_time TEXT DEFAULT CURRENT_TIMESTAMP,
+                end_time TEXT,
+                applications_count INTEGER DEFAULT 0
+            )
+        """)
         self.conn.commit()
 
     def set_config(self, key, value, category):
@@ -122,6 +132,31 @@ class DatabaseManager:
         if row:
             return dict(row)
         return None
+
+    def start_bot_run(self, user_id):
+        """Creates a new bot run record and returns its ID."""
+        cursor = self.conn.execute(
+            "INSERT INTO bot_runs (user_id, status) VALUES (?, 'running')",
+            (user_id,)
+        )
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def end_bot_run(self, run_id, count=0):
+        """Marks a bot run as completed."""
+        self.conn.execute(
+            "UPDATE bot_runs SET status = 'completed', end_time = CURRENT_TIMESTAMP, applications_count = ? WHERE id = ?",
+            (count, run_id)
+        )
+        self.conn.commit()
+
+    def get_recent_bot_runs(self, limit=10):
+        """Retrieves recent bot run history."""
+        rows = self.conn.execute(
+            "SELECT * FROM bot_runs ORDER BY start_time DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
+        return [dict(row) for row in rows]
 
     def close(self):
         self.conn.close()

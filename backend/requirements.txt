@@ -11,3 +11,7 @@ uvicorn
 python-multipart
 stripe
 razorpay
+pytest
+httpx
+pytest-asyncio
+pytest-cov

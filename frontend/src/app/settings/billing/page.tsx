@@ -14,7 +14,7 @@ export default function BillingSettingsPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          stripe_customer_id: "cus_mock123", 
+          user_id: "local-user", 
         }),
       });
 
