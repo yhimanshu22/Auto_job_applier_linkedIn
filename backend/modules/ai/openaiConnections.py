@@ -1,9 +1,5 @@
 
-from config.secrets import *
-from config.settings import showAiErrorAlerts
-from config.personals import ethnicity, gender, disability_status, veteran_status
-from config.questions import *
-from config.search import security_clearance, did_masters
+from config.config_bridge import *
 
 from modules.helpers import print_lg, critical_error_log, convert_to_json
 from modules.ai.prompts import *

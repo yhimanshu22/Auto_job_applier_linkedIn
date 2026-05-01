@@ -1,4 +1,4 @@
-from config.settings import click_gap, smooth_scroll
+from config.config_bridge import *
 from modules.helpers import buffer, print_lg, sleep
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait

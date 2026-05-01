@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from pyautogui import alert
 from pprint import pprint
 
-from config.settings import logs_folder_path
+from config.config_bridge import *
 
 
 #### Common functions ####
@@ -337,7 +337,7 @@ def check_deal_breakers(description_text: str) -> tuple[bool, str]:
     Returns: (bool, str) -> (Should_Skip, Reason)
     """
     import re
-    from config.settings import (
+    from config.config_bridge import (
         visa_deal_breakers,
         location_blacklists,
         tech_blacklists,
@@ -345,7 +345,7 @@ def check_deal_breakers(description_text: str) -> tuple[bool, str]:
     )
 
     try:
-        from config.personals import require_visa
+        from config.config_bridge import require_visa
     except ImportError:
         require_visa = False
 

@@ -1,10 +1,12 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import subprocess
 import os
 import sys
 import uvicorn
+from db_manager import db
+import json
 
 app = FastAPI(title="LinkedIn Bot API")
 
@@ -37,33 +39,73 @@ def get_config_path(filename: str):
 # Global state to track the supervisor process
 supervisor_process = None
 
-@app.get("/api/config/{filename}")
-async def read_config(filename: str):
+@app.get("/api/config/{category}")
+async def read_config(category: str):
     # Support both "personals" and "personals.py"
-    if not filename.endswith(".py"):
-        filename += ".py"
+    if category.endswith(".py"):
+        category = category[:-3]
         
-    if filename not in ["personals.py", "search.py", "settings.py", "questions.py"]:
-        raise HTTPException(status_code=400, detail="Invalid config file")
+    if category not in ["personals", "search", "settings", "questions", "secrets"]:
+        raise HTTPException(status_code=400, detail="Invalid config category")
         
-    path = get_config_path(filename)
-    if not os.path.exists(path):
-        return {"content": ""}
-        
-    with open(path, "r", encoding="utf-8") as f:
-        return {"content": f.read()}
+    config_data = db.get_all_by_category(category)
+    
+    # Synthesize "pseudo-Python" content for the frontend editor to maintain compatibility
+    # This keeps the current UI working while data is in DB
+    content = f"################ {category.upper()} CONFIGURATION ################\n\n"
+    for key, value in config_data.items():
+        if isinstance(value, str):
+            content += f'{key} = "{value}"\n'
+        else:
+            content += f'{key} = {value}\n'
+            
+    return {"content": content}
 
-@app.post("/api/config/{filename}")
-async def write_config(filename: str, data: ConfigData):
-    if not filename.endswith(".py"):
-        filename += ".py"
+@app.post("/api/config/{category}")
+async def write_config(category: str, data: ConfigData):
+    if category.endswith(".py"):
+        category = category[:-3]
         
-    if filename not in ["personals.py", "search.py", "settings.py", "questions.py"]:
-        raise HTTPException(status_code=400, detail="Invalid config file")
+    if category not in ["personals", "search", "settings", "questions", "secrets"]:
+        raise HTTPException(status_code=400, detail="Invalid config category")
         
-    path = get_config_path(filename)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(data.content)
+    # Parse the pseudo-Python back into keys/values
+    # Note: This is an intermediate step until the UI is updated to use forms
+    lines = data.content.split("\n")
+    for line in lines:
+        if "=" in line and not line.startswith("#"):
+            try:
+                parts = line.split("=", 1)
+                key = parts[0].strip()
+                value_str = parts[1].strip()
+                
+                # Basic parsing for strings, ints, bools, lists
+                if (value_str.startswith('"') and value_str.endswith('"')) or (value_str.startswith("'") and value_str.endswith("'")):
+                    value = value_str[1:-1]
+                elif value_str.lower() == "true":
+                    value = True
+                elif value_str.lower() == "false":
+                    value = False
+                elif value_str.isdigit():
+                    value = int(value_str)
+                elif value_str.startswith("[") and value_str.endswith("]"):
+                    # Use JSON parser for lists
+                    try:
+                        # Clean up python-style list for JSON parser if needed, 
+                        # but simple lists like ["a", "b"] are valid JSON
+                        value = json.loads(value_str.replace("'", '"'))
+                    except:
+                        value = value_str # Fallback to string
+                else:
+                    try:
+                        value = float(value_str)
+                    except:
+                        value = value_str
+                        
+                db.set_config(key, value, category)
+            except Exception as e:
+                print(f"Error parsing line: {line} - {e}")
+                
     return {"status": "success"}
 
 @app.post("/api/bot/start")
@@ -75,7 +117,11 @@ async def start_bot():
     try:
         # Use sys.executable to spawn the current runner (Python or EXE)
         # This is critical for standalone EXE production environments
-        cmd = [sys.executable, "--supervisor"]
+        if getattr(sys, 'frozen', False):
+            cmd = [sys.executable, "--supervisor"]
+        else:
+            server_script = os.path.join(get_base_path(), "server.py")
+            cmd = [sys.executable, server_script, "--supervisor"]
         
         cwd = get_base_path()
         logging.info(f"Starting supervisor with {cmd} in {cwd}")
@@ -86,6 +132,23 @@ async def start_bot():
             creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
         )
         return {"status": "started"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/upload/resume")
+async def upload_resume(file: UploadFile = File(...)):
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF resumes are supported")
+        
+    try:
+        content = await file.read()
+        db.set_asset("default_resume", file.filename, content, "resumes")
+        
+        # Also update the default_resume_path in configs to point to a virtual path
+        # Actually, we keep it as just "analyst.pdf" or whatever the filename is
+        db.set_config("default_resume_path", file.filename, "questions")
+        
+        return {"status": "success", "filename": file.filename}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -111,11 +174,12 @@ async def get_bot_status():
     global supervisor_process
     
     # Get limit from settings
-    from config.settings import daily_apply_limit
+    # Get limit from DB
+    daily_apply_limit = db.get_config("daily_apply_limit", 50)
     
     # Get current count from CSV
     applied_count = 0
-    from config.settings import file_name
+    file_name = db.get_config("file_name", "all excels/all_applied_applications_history.csv")
     if os.path.exists(file_name):
         try:
             with open(file_name, "r", encoding="utf-8") as f:
@@ -162,4 +226,4 @@ if __name__ == "__main__":
         main()
     else:
         # Standard server startup
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+        uvicorn.run(app, host="127.0.0.1", port=8000)

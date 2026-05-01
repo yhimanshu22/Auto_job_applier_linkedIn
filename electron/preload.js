@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('electron', {
   close: () => ipcRenderer.send('close-window'),
   openExternal: (url) => {
     // Basic validation before sending to main process
-    if (typeof url === 'string' && url.startsWith('http')) {
+    if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
       ipcRenderer.send('open-external-url', url);
     }
   },
@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.on('auth-success', subscription);
     return () => ipcRenderer.removeListener('auth-success', subscription);
   },
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  getPlatform: () => process.platform,
   isDev: process.argv.includes('--is-dev'),
 });
 

@@ -5,6 +5,7 @@ import re
 import pyautogui
 import json
 import sys
+import tempfile
 
 # Set CSV field size limit to prevent field size errors
 csv.field_size_limit(1000000)  # Set to 1MB instead of default 131KB
@@ -25,11 +26,7 @@ from selenium.common.exceptions import (
     WebDriverException,
 )
 
-from config.personals import *
-from config.questions import *
-from config.search import *
-from config.secrets import use_AI, username, password, ai_provider
-from config.settings import *
+from config.config_bridge import *
 
 from modules.open_chrome import *
 from modules.helpers import *
@@ -589,9 +586,29 @@ def get_job_description() -> (
 # Function to upload resume
 def upload_resume(modal: WebElement, resume: str) -> tuple[bool, str]:
     try:
-        modal.find_element(By.NAME, "file").send_keys(os.path.abspath(resume))
-        return True, os.path.basename(default_resume_path)
-    except:
+        # 1. Attempt to get from database first (New Full-DB method)
+        from db_manager import db
+        asset = db.get_asset("default_resume")
+        
+        if asset:
+            # Create a localized temporary file for Selenium to pick up
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                tmp.write(asset["content"])
+                tmp_path = tmp.name
+            
+            print_lg(f"Uploading resume from database: {asset['filename']}")
+            modal.find_element(By.NAME, "file").send_keys(tmp_path)
+            # We return the original filename for logging
+            return True, asset["filename"]
+            
+        # 2. Legacy Fallback: Local file path
+        if os.path.exists(resume):
+            modal.find_element(By.NAME, "file").send_keys(os.path.abspath(resume))
+            return True, os.path.basename(resume)
+            
+        return False, "Previous resume"
+    except Exception as e:
+        print_lg(f"Resume upload failed: {e}")
         return False, "Previous resume"
 
 

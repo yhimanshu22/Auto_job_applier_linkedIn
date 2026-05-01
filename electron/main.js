@@ -1,23 +1,208 @@
-const { app, BrowserWindow, Menu, ipcMain, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, shell, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
-const { spawn, spawnSync, execSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
+const http = require('http');
 const logger = require('./logger');
 
-let mainWindow;
-let splashWindow;
-
+// ==========================================
+// 1. CONSTANTS & CONFIG
+// ==========================================
 const isDev = !app.isPackaged || process.argv.includes('--dev');
-// ❗ Update this with your production URL when ready
-const APP_URL = isDev ? 'http://localhost:3000/login' : 'http://localhost:3000/login'; 
+const FRONTEND_HOST = 'localhost';
+const FRONTEND_PORT = 3000;
+const FRONTEND_URL = `http://${FRONTEND_HOST}:${FRONTEND_PORT}`;
+const APP_URL = `${FRONTEND_URL}/login`;
 
-const BACKEND_URL = 'http://localhost:8000/api/bot/status'; // Health check endpoint
+const BACKEND_HOST = '127.0.0.1';
+const BACKEND_PORT = 8000;
+const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
+const BACKEND_HEALTH_URL = `${BACKEND_URL}/api/bot/status`;
+
 const MAX_RESTARTS = 3;
+
+// Global State
+let mainWindow = null;
+let splashWindow = null;
+let backendProcess = null;
+let frontendProcess = null;
 let backendRestartCount = 0;
 let frontendRestartCount = 0;
 let isShuttingDown = false;
 
+// ==========================================
+// 2. PATH RESOLUTION
+// ==========================================
+const getBackendDir = () => app.isPackaged 
+  ? path.join(process.resourcesPath, 'backend')
+  : path.resolve(__dirname, '..', 'backend');
+
+const getFrontendDir = () => app.isPackaged
+  ? path.join(process.resourcesPath, 'frontend_standalone')
+  : path.resolve(__dirname, '..', 'frontend');
+
+// ==========================================
+// 3. UTILITY FUNCTIONS
+// ==========================================
+function clearPort(port) {
+  if (process.platform !== 'win32') return;
+  try {
+    const netstat = spawnSync('netstat', ['-ano'], { shell: false });
+    const lines = netstat.stdout.toString().split('\n');
+    lines.forEach(line => {
+      if (line.includes(`:${port}`) && line.includes('LISTENING')) {
+        const parts = line.trim().split(/\s+/);
+        const pid = parts[parts.length - 1];
+        if (pid && !isNaN(pid) && pid !== '0') {
+           logger.electron(`Forcefully clearing port ${port} (PID: ${pid})`);
+           spawnSync('taskkill', ['/F', '/T', '/PID', pid], { shell: false });
+        }
+      }
+    });
+  } catch (err) {
+    logger.electronError(`Error clearing port ${port}: ${err.message}`);
+  }
+}
+
+function stopProcess(proc, name) {
+  if (proc && !proc.killed) {
+    logger.electron(`Stopping ${name}...`);
+    try {
+      if (process.platform === 'win32') {
+        spawnSync('taskkill', ['/F', '/T', '/PID', proc.pid.toString()], { shell: false });
+      } else {
+        proc.kill('SIGTERM');
+      }
+    } catch (e) {
+      logger.electronError(`Failed to stop ${name}: ${e.message}`);
+    }
+  }
+}
+
+// Polling health check
+async function waitForUrl(url, retries = 60, delay = 1000) {
+  for (let i = 1; i <= retries; i++) {
+    if (isShuttingDown) return;
+    try {
+      const res = await fetch(url);
+      if (res.ok || res.status < 500) {
+        logger.electron(`Ready: ${url}`);
+        return true;
+      }
+    } catch (err) {
+      // Ignore
+    }
+    logger.electron(`Waiting for ${url} (${i}/${retries})...`);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+  throw new Error(`Timeout waiting for ${url}`);
+}
+
+// ==========================================
+// 4. PROCESS STARTUP
+// ==========================================
+function startBackend() {
+  if (backendProcess && !backendProcess.killed) return;
+  clearPort(BACKEND_PORT);
+  
+  try {
+    const backendDir = getBackendDir();
+    const serverPath = path.join(backendDir, 'server.py');
+    const pythonExe = app.isPackaged 
+      ? path.join(backendDir, 'server.exe')
+      : path.resolve(__dirname, '..', 'backend', 'dist', 'server.exe');
+
+    let spawnCommand = (app.isPackaged && fs.existsSync(pythonExe)) ? pythonExe : 'python';
+    let spawnArgs = spawnCommand === 'python' ? [serverPath] : [];
+
+    logger.electron(`Starting backend process...`);
+    
+    backendProcess = spawn(spawnCommand, spawnArgs, {
+      cwd: backendDir,
+      shell: false, 
+      env: { ...process.env, PYTHONUNBUFFERED: "1" }
+    });
+
+    backendProcess.stdout.on('data', (d) => logger.backend(d.toString()));
+    
+    // Fix 5: Filter backend stderr for actual errors
+    backendProcess.stderr.on('data', (d) => {
+      const text = d.toString();
+      if (text.includes("ERROR") || text.includes("Traceback") || text.includes("Exception")) {
+        logger.backendError(text);
+      } else {
+        logger.backend(text);
+      }
+    });
+
+    backendProcess.on('exit', (code) => {
+      logger.electron(`Backend exited with code ${code}`);
+      if (!isShuttingDown && backendRestartCount < MAX_RESTARTS) {
+        backendRestartCount++;
+        logger.electron(`Restarting backend (${backendRestartCount}/${MAX_RESTARTS})...`);
+        setTimeout(startBackend, 3000);
+      }
+    });
+
+    backendProcess.on('error', (err) => logger.electronError(`Backend spawn error: ${err.message}`));
+  } catch (err) {
+    logger.electronError(`Critical startBackend failure: ${err.message}`);
+  }
+}
+
+function startFrontend() {
+  if (frontendProcess && !frontendProcess.killed) return;
+  clearPort(FRONTEND_PORT);
+  
+  try {
+    let spawnCommand, spawnArgs, cwd;
+
+    if (app.isPackaged) {
+      cwd = getFrontendDir();
+      spawnCommand = path.join(process.resourcesPath, 'node.exe');
+      spawnArgs = ['server.js'];
+      
+      if (!fs.existsSync(spawnCommand)) {
+        logger.electronWarn('Bundled node.exe not found, falling back to system node');
+        spawnCommand = 'node';
+      }
+    } else {
+      cwd = getFrontendDir();
+      spawnCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+      spawnArgs = ['run', isDev ? 'dev' : 'start'];
+    }
+
+    logger.electron(`Starting frontend process (${spawnCommand} ${spawnArgs.join(' ')})...`);
+    
+    // Set PORT explicitly for Next.js standalone server
+    const env = { ...process.env, NEXT_TELEMETRY_DISABLED: "1", PORT: FRONTEND_PORT.toString() };
+    
+    frontendProcess = spawn(spawnCommand, spawnArgs, {
+      cwd: cwd,
+      shell: false, 
+      env: env
+    });
+
+    frontendProcess.stdout.on('data', (d) => logger.frontend(d.toString()));
+    frontendProcess.stderr.on('data', (d) => logger.frontendError(d.toString()));
+
+    frontendProcess.on('exit', (code) => {
+      logger.electron(`Frontend exited with code ${code}`);
+      if (!isShuttingDown && frontendRestartCount < MAX_RESTARTS) {
+        frontendRestartCount++;
+        logger.electron(`Restarting frontend (${frontendRestartCount}/${MAX_RESTARTS})...`);
+        setTimeout(startFrontend, 5000);
+      }
+    });
+  } catch (err) {
+    logger.electronError(`Critical startFrontend failure: ${err.message}`);
+  }
+}
+
+// ==========================================
+// 5. WINDOW MANAGEMENT
+// ==========================================
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
     width: 600,
@@ -31,22 +216,56 @@ function createSplashWindow() {
       sandbox: true,
       enableRemoteModule: false,
       webSecurity: true,
-      allowRunningInsecureContent: false,
     },
+    icon: path.join(__dirname, 'icon.ico'),
   });
 
   splashWindow.loadFile(path.join(__dirname, 'splash.html'));
+  
+  // Fix 3: Environment-aware CSP
+  const devCsp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' http://localhost:3000 ws://localhost:3000 http://127.0.0.1:8000",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+
+  const prodCsp = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' http://127.0.0.1:8000",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [isDev ? devCsp : prodCsp]
+      }
+    });
+  });
 }
 
-// Startup logic simplified at user request
-
-function createMainWindow() {
+async function createMainWindow() {
   mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 700,
+    width: 1280,
+    height: 820,
+    minWidth: 1100,
+    minHeight: 720,
     show: false,
     frame: isDev,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0f172a', // Dark theme matching slate-900
     autoHideMenuBar: true,
     resizable: true,
     minimizable: true,
@@ -54,26 +273,34 @@ function createMainWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
       sandbox: true,
       enableRemoteModule: false,
       webSecurity: true,
-      allowRunningInsecureContent: false,
+      preload: path.join(__dirname, 'preload.js'),
       additionalArguments: [isDev ? '--is-dev' : ''],
     },
     icon: path.join(__dirname, 'icon.ico'),
     title: 'LinkdApply',
   });
 
-  // Load the app after a short delay to allow services to warm up
-  setTimeout(() => {
+  mainWindow.removeMenu();
+
+  // Fix 1: Wait for BOTH backend and frontend
+  try {
+    logger.electron('Waiting for services to be ready...');
+    await waitForUrl(BACKEND_HEALTH_URL);
+    await waitForUrl(APP_URL);
+
     if (!isShuttingDown && mainWindow) {
-      logger.electron('Loading main application...');
+      logger.electron('Services ready. Loading app...');
       mainWindow.loadURL(APP_URL);
     }
-  }, 10000);
-  
-  mainWindow.removeMenu();
+  } catch (err) {
+    logger.electronError(`Startup failed: ${err.message}`);
+    if (splashWindow) {
+      splashWindow.webContents.send('backend-error', 'Failed to connect to services.');
+    }
+  }
 
   mainWindow.webContents.on('did-finish-load', () => {
     if (splashWindow) {
@@ -83,7 +310,7 @@ function createMainWindow() {
     mainWindow.show();
   });
 
-  // Native logging pipe
+  // Log pipe
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
     const levels = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
     const label = levels[level] || 'LOG';
@@ -101,7 +328,6 @@ function createMainWindow() {
       const appOrigin = new URL(APP_URL).origin;
 
       if (parsedUrl.origin === appOrigin || parsedUrl.hostname === allowedHostname) {
-        logger.electron(`Permitted external navigation: ${url}`);
         return { action: 'allow' };
       }
       logger.electronWarn(`Blocked unauthorized window: ${url}`);
@@ -135,7 +361,9 @@ function createMainWindow() {
   mainWindow.on('closed', () => (mainWindow = null));
 }
 
-// IPC Handlers
+// ==========================================
+// 6. IPC HANDLERS
+// ==========================================
 ipcMain.on('minimize-window', () => mainWindow?.minimize());
 ipcMain.on('maximize-window', () => {
   if (mainWindow?.isMaximized()) mainWindow.unmaximize();
@@ -145,15 +373,19 @@ ipcMain.on('close-window', () => mainWindow?.close());
 ipcMain.on('open-external-url', (event, url) => {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return;
-    logger.electron(`Opening external URL: ${url}`);
-    require('electron').shell.openExternal(url);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      logger.electron(`Opening external URL: ${url}`);
+      shell.openExternal(url);
+    }
   } catch (err) {
     logger.electronError(`Invalid URL blocked in open-external-url: ${url}`);
   }
 });
+ipcMain.handle('get-app-version', () => app.getVersion());
 
-// Protocol Handling
+// ==========================================
+// 7. DEEP LINKING
+// ==========================================
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
     app.setAsDefaultProtocolClient('linkdapply', process.execPath, [path.resolve(process.argv[1])]);
@@ -178,118 +410,11 @@ function handleDeepLink(url) {
   }
 }
 
+// ==========================================
+// 8. APP LIFECYCLE
+// ==========================================
 app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
-
-let backendProcess;
-let frontendProcess;
-
-function clearPort(port) {
-  if (process.platform !== 'win32') return;
-  try {
-    const netstat = spawnSync('netstat', ['-ano'], { shell: false });
-    const output = netstat.stdout.toString();
-    const lines = output.split('\n');
-    lines.forEach(line => {
-      // Look for the port in the local address column and ensure it is LISTENING
-      if (line.includes(`:${port}`) && line.includes('LISTENING')) {
-        const parts = line.trim().split(/\s+/);
-        const pid = parts[parts.length - 1];
-        if (pid && !isNaN(pid) && pid !== '0') {
-           logger.electron(`Forcefully clearing port ${port} (PID: ${pid})`);
-           spawnSync('taskkill', ['/F', '/T', '/PID', pid], { shell: false });
-        }
-      }
-    });
-  } catch (err) {
-    logger.electronError(`Error clearing port ${port}: ${err.message}`);
-  }
-}
-
-function startBackend() {
-  if (backendProcess && !backendProcess.killed) return;
-  clearPort(8000);
-  try {
-    const backendDir = app.isPackaged 
-      ? path.join(process.resourcesPath, 'backend')
-      : path.resolve(__dirname, '..', 'backend');
-    
-    const serverPath = path.join(backendDir, 'server.py');
-    const pythonExe = app.isPackaged 
-      ? path.join(backendDir, 'server.exe')
-      : path.resolve(__dirname, '..', 'backend', 'dist', 'server.exe');
-
-    let spawnCommand = fs.existsSync(pythonExe) ? pythonExe : 'python';
-    let spawnArgs = spawnCommand === 'python' ? [serverPath] : [];
-
-    logger.electron(`Starting backend process...`);
-    
-    backendProcess = spawn(spawnCommand, spawnArgs, {
-      cwd: backendDir,
-      shell: false, 
-      env: { ...process.env, PYTHONUNBUFFERED: "1" }
-    });
-
-    backendProcess.stdout.on('data', (d) => logger.backend(d.toString().trim()));
-    backendProcess.stderr.on('data', (d) => logger.backendError(d.toString().trim()));
-
-    backendProcess.on('exit', (code) => {
-      logger.electron(`Backend exited with code ${code}`);
-      if (!isShuttingDown && backendRestartCount < MAX_RESTARTS) {
-        backendRestartCount++;
-        logger.electron(`Restarting backend (${backendRestartCount}/${MAX_RESTARTS})...`);
-        setTimeout(startBackend, 3000);
-      }
-    });
-
-    backendProcess.on('error', (err) => logger.electronError(`Backend spawn error: ${err.message}`));
-  } catch (err) {
-    logger.electronError(`Critical startBackend failure: ${err.message}`);
-  }
-}
-
-function startFrontend() {
-  if (frontendProcess && !frontendProcess.killed) return;
-  clearPort(3000);
-  try {
-    const frontendDir = path.resolve(__dirname, '..', 'frontend');
-    const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    const spawnArgs = isDev ? ['run', 'dev'] : ['run', 'start'];
-
-    logger.electron(`Starting frontend process (${spawnArgs.join(' ')})...`);
-    
-    frontendProcess = spawn(npmCommand, spawnArgs, {
-      cwd: frontendDir,
-      shell: false, 
-      env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" }
-    });
-
-    frontendProcess.stdout.on('data', (d) => logger.frontend(d.toString().trim()));
-    frontendProcess.stderr.on('data', (d) => logger.frontendError(d.toString().trim()));
-
-    frontendProcess.on('exit', (code) => {
-      logger.electron(`Frontend exited with code ${code}`);
-      if (!isShuttingDown && frontendRestartCount < MAX_RESTARTS) {
-        frontendRestartCount++;
-        logger.electron(`Restarting frontend (${frontendRestartCount}/${MAX_RESTARTS})...`);
-        setTimeout(startFrontend, 5000);
-      }
-    });
-  } catch (err) {
-    logger.electronError(`Critical startFrontend failure: ${err.message}`);
-  }
-}
-
-function stopProcess(proc, name) {
-  if (proc && !proc.killed) {
-    logger.electron(`Stopping ${name}...`);
-    if (process.platform === 'win32') {
-      spawnSync('taskkill', ['/F', '/T', '/PID', proc.pid.toString()], { shell: false });
-    } else {
-      proc.kill('SIGTERM');
-    }
-  }
-}
 
 app.whenReady().then(() => {
   startBackend();

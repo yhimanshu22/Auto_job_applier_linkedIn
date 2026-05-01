@@ -1,33 +1,64 @@
+const log = require('electron-log');
 const pc = require('picocolors');
+
+// Configure electron-log
+log.transports.file.level = 'info';
+log.transports.file.maxSize = 5 * 1024 * 1024; // 5MB
+log.transports.console.level = 'debug';
+
+// Clean noisy characters (like Windows UTF-8 artifacts)
+function cleanMessage(msg) {
+  if (typeof msg !== 'string') return msg;
+  // Remove strange characters like Γû▓ and Γ£ô
+  return msg.replace(/[^\x20-\x7E\n]/g, '').trim();
+}
 
 const logger = {
   electron: (message) => {
-    console.log(`${pc.cyan('[Electron]')} ${message}`);
+    const clean = cleanMessage(message);
+    log.info(`[Electron] ${clean}`);
+    console.log(`${pc.cyan('[Electron]')} ${clean}`);
   },
   electronError: (message) => {
-    console.error(`${pc.red(pc.bold('[Electron ERROR]'))} ${message}`);
+    const clean = cleanMessage(message);
+    log.error(`[Electron ERROR] ${clean}`);
+    console.error(`${pc.red(pc.bold('[Electron ERROR]'))} ${clean}`);
   },
   electronWarn: (message) => {
-    console.warn(`${pc.yellow('[Electron WARN]')} ${message}`);
+    const clean = cleanMessage(message);
+    log.warn(`[Electron WARN] ${clean}`);
+    console.warn(`${pc.yellow('[Electron WARN]')} ${clean}`);
   },
   backend: (message) => {
-    console.log(`${pc.green('[Backend INFO]')} ${message}`);
+    const clean = cleanMessage(message);
+    log.info(`[Backend] ${clean}`);
+    console.log(`${pc.green('[Backend INFO]')} ${clean}`);
   },
   backendError: (message) => {
-    console.error(`${pc.red('[Backend ERROR]')} ${message}`);
+    const clean = cleanMessage(message);
+    log.error(`[Backend ERROR] ${clean}`);
+    console.error(`${pc.red('[Backend ERROR]')} ${clean}`);
   },
   frontend: (message) => {
-    console.log(`${pc.blue('[Frontend INFO]')} ${message}`);
+    const clean = cleanMessage(message);
+    log.info(`[Frontend] ${clean}`);
+    console.log(`${pc.blue('[Frontend INFO]')} ${clean}`);
   },
   frontendError: (message) => {
-    console.error(`${pc.red('[Frontend ERROR]')} ${message}`);
+    const clean = cleanMessage(message);
+    log.error(`[Frontend ERROR] ${clean}`);
+    console.error(`${pc.red('[Frontend ERROR]')} ${clean}`);
   },
   frontendWarn: (message) => {
-    console.warn(`${pc.yellow('[Frontend WARN]')} ${message}`);
+    const clean = cleanMessage(message);
+    log.warn(`[Frontend WARN] ${clean}`);
+    console.warn(`${pc.yellow('[Frontend WARN]')} ${clean}`);
   },
   log: (prefix, message, color = 'white') => {
+    const clean = cleanMessage(message);
+    log.info(`[${prefix}] ${clean}`);
     const coloredPrefix = pc[color] ? pc[color](prefix) : prefix;
-    console.log(`${coloredPrefix} ${message}`);
+    console.log(`${coloredPrefix} ${clean}`);
   }
 };
 

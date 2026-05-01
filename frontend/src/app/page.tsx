@@ -28,15 +28,15 @@ export default function LandingPage() {
           <div className="flex items-center gap-4">
             <Link 
               className="hidden sm:inline-flex text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
-              href="/dashboard"
+              href="/login"
             >
               Sign in
             </Link>
             <Link 
               className="purple-gradient-button inline-flex items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02]" 
-              href="/dashboard"
+              href="/login"
             >
-              Get Started
+              Sign up
             </Link>
           </div>
         </div>
@@ -54,6 +54,11 @@ export default function LandingPage() {
                 #1 Undetectable <br /> 
                 <span className="text-accent underline decoration-accent/20">AI Bot</span> for Job Seekers
               </h1>
+              <div className="flex justify-center mt-4">
+                <span className="px-3 py-1 rounded-full bg-zinc-100 border border-zinc-200 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                  Current Version: v1.1.0 (Stable)
+                </span>
+              </div>
               <p className="max-w-2xl mx-auto text-lg lg:text-xl text-zinc-500 leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
                 LinkdApply takes care of the tedious job search. It manages applications, 
                 tailors cover letters, and tracks updates—all while remaining completely undetectable.
@@ -62,7 +67,7 @@ export default function LandingPage() {
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
               <Link 
-                href="/dashboard"
+                href="/login"
                 className="purple-gradient-button w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl px-10 py-4 text-white font-semibold shadow-xl transition-all hover:scale-[1.02]"
               >
                 Start Applying Free
@@ -275,7 +280,7 @@ export default function LandingPage() {
               <Link href="/privacy" className="hover:text-zinc-900 transition-colors">Privacy</Link>
               <Link href="/support" className="hover:text-zinc-900 transition-colors">Support</Link>
             </div>
-            <p className="text-xs font-bold text-zinc-400 tracking-[0.2em] uppercase">© 2024 LinkdApply. All Rights Reserved.</p>
+            <p className="text-xs font-bold text-zinc-400 tracking-[0.2em] uppercase">© 2026 LinkdApply v1.1.0. All Rights Reserved.</p>
           </div>
         </footer>
       </main>

@@ -1,6 +1,6 @@
 {
   "name": "linkdapply",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Production-ready Electron wrapper for LinkdApply",
   "main": "main.js",
   "author": "LinkdApply",
@@ -11,6 +11,7 @@
     "build": "electron-builder build --win --publish never"
   },
   "dependencies": {
+    "electron-log": "^5.4.3",
     "electron-updater": "^6.1.4",
     "picocolors": "^1.1.1"
   },
@@ -58,6 +59,18 @@
       {
         "from": "../backend/config",
         "to": "backend/config"
+      },
+      {
+        "from": "node.exe",
+        "to": "node.exe"
+      },
+      {
+        "from": "../frontend/.next/standalone",
+        "to": "frontend_standalone"
+      },
+      {
+        "from": "../frontend/.env.local",
+        "to": "frontend_standalone/.env.local"
       }
     ]
   }

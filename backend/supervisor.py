@@ -75,6 +75,8 @@ class BotSupervisor:
                 shell=False
             )
             logging.info(f"OpenClaw started (PID: {self.openclaw_process.pid})")
+        except FileNotFoundError:
+            logging.warning("OpenClaw executable not found. AI gateway features will be disabled.")
         except Exception as e:
             logging.error(f"Failed to start OpenClaw: {e}")
 
@@ -82,7 +84,7 @@ class BotSupervisor:
         """Starts the runAiBot.py process for a specific account."""
         bot_id = account["id"]
         try:
-            logging.info(f"Starting runAiBot.py for account {bot_id} ({account['username']})...")
+            logging.info(f"Preparing to start runAiBot.py for account {bot_id} ({account['username']})...")
             
             # Create a specific environment for this bot
             env = os.environ.copy()
@@ -92,8 +94,17 @@ class BotSupervisor:
             
             # When running as an EXE, sys.executable is the EXE itself.
             # We use the --bot flag to trigger the bot logic in server.py
+            if getattr(sys, 'frozen', False):
+                cmd = [sys.executable, "--bot"]
+            else:
+                import server
+                server_script = os.path.join(os.path.dirname(os.path.abspath(server.__file__)), "server.py")
+                cmd = [sys.executable, server_script, "--bot"]
+
+            logging.info(f"[Supervisor] Starting bot with command: {cmd}")
+
             self.bot_processes[bot_id] = subprocess.Popen(
-                [sys.executable, "--bot"],
+                cmd,
                 cwd=os.getcwd(),
                 env=env,
                 creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0

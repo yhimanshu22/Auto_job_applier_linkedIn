@@ -63,7 +63,7 @@ def check_list(
     return True
 
 
-from config.personals import *
+from config.config_bridge import *
 
 
 def validate_personals() -> None | ValueError | TypeError:
@@ -106,7 +106,7 @@ def validate_personals() -> None | ValueError | TypeError:
     check_string(veteran_status, "veteran_status", ["Yes", "No", "Decline"])
 
 
-from config.questions import *
+
 
 
 def validate_questions() -> None | ValueError | TypeError:
@@ -147,7 +147,7 @@ def validate_questions() -> None | ValueError | TypeError:
     check_boolean(overwrite_previous_answers, "overwrite_previous_answers")
 
 
-from config.search import *
+
 
 
 def validate_search() -> None | ValueError | TypeError:
@@ -221,7 +221,7 @@ def validate_search() -> None | ValueError | TypeError:
     check_int(current_experience, "current_experience", -1)
 
 
-from config.secrets import *
+
 
 
 def validate_secrets() -> None | ValueError | TypeError:
@@ -256,7 +256,7 @@ def validate_secrets() -> None | ValueError | TypeError:
     ##<
 
 
-from config.settings import *
+
 
 
 def validate_settings() -> None | ValueError | TypeError:
