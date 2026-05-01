@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import subprocess
 import os
 import sys
+from datetime import datetime
 import uvicorn
 import logging
 from db_manager import db
@@ -173,18 +174,22 @@ def assert_can_start_bot(user_id: str):
 
     # Check for trial expiration
     if subscription["status"] == "trialing" and subscription.get("current_period_end"):
+        is_expired = False
         try:
             # ISO format date string from DB
             expiry = datetime.fromisoformat(subscription["current_period_end"])
             if datetime.utcnow() > expiry:
-                # Mark as expired in DB
-                db.upsert_subscription(user_id=user_id, status="expired")
-                raise HTTPException(
-                    status_code=402,
-                    detail="Your 24-hour free trial has expired. Please upgrade to a paid plan to continue."
-                )
+                is_expired = True
         except Exception as e:
             print(f"Error checking trial expiry: {e}")
+            
+        if is_expired:
+            # Mark as expired in DB
+            db.upsert_subscription(user_id=user_id, status="expired")
+            raise HTTPException(
+                status_code=402,
+                detail="Your 24-hour free trial has expired. Please upgrade to a paid plan to continue."
+            )
 
     plan = subscription.get("plan", "free_trial")
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])

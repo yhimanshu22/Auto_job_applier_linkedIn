@@ -15,24 +15,37 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 PRICE_MAP = {
-    "starter": os.getenv("STRIPE_PRICE_STARTER"),
-    "pro": os.getenv("STRIPE_PRICE_PRO"),
-    "agency": os.getenv("STRIPE_PRICE_AGENCY"),
+    "monthly": {
+        "starter": os.getenv("STRIPE_PRICE_STARTER_MONTHLY"),
+        "pro": os.getenv("STRIPE_PRICE_PRO_MONTHLY"),
+        "agency": os.getenv("STRIPE_PRICE_AGENCY_MONTHLY"),
+    },
+    "yearly": {
+        "starter": os.getenv("STRIPE_PRICE_STARTER_YEARLY"),
+        "pro": os.getenv("STRIPE_PRICE_PRO_YEARLY"),
+        "agency": os.getenv("STRIPE_PRICE_AGENCY_YEARLY"),
+    },
 }
 
 
+from typing import Literal
+
 class CheckoutRequest(BaseModel):
-    plan: str
+    plan: Literal["starter", "pro", "agency"]
+    billing_cycle: Literal["monthly", "yearly"] = "monthly"
     user_id: str
     email: str
 
 
 @router.post("/create-checkout-session")
 async def create_checkout_session(payload: CheckoutRequest):
-    price_id = PRICE_MAP.get(payload.plan)
+    price_id = PRICE_MAP.get(payload.billing_cycle, {}).get(payload.plan)
 
     if not price_id:
-        raise HTTPException(status_code=400, detail="Invalid plan selected")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid plan or billing cycle selected",
+        )
 
     try:
         session = stripe.checkout.Session.create(
@@ -50,11 +63,13 @@ async def create_checkout_session(payload: CheckoutRequest):
             metadata={
                 "user_id": payload.user_id,
                 "plan": payload.plan,
+                "billing_cycle": payload.billing_cycle,
             },
             subscription_data={
                 "metadata": {
                     "user_id": payload.user_id,
                     "plan": payload.plan,
+                    "billing_cycle": payload.billing_cycle,
                 }
             },
         )
@@ -136,14 +151,14 @@ async def stripe_webhook(request: Request):
 
 def handle_checkout_completed(session):
     try:
-        # Stripe objects might not have .get() in some versions, use getattr
         metadata = getattr(session, "metadata", {})
-        user_id = metadata.get("user_id") if metadata else None
-        plan = metadata.get("plan") if metadata else None
+        user_id = metadata.get("user_id")
+        plan = metadata.get("plan")
+        billing_cycle = metadata.get("billing_cycle", "monthly")
         customer_id = getattr(session, "customer", None)
         subscription_id = getattr(session, "subscription", None)
 
-        print(f"DEBUG: Processing checkout for user: {user_id}, plan: {plan}")
+        print(f"DEBUG: Processing checkout for user: {user_id}, plan: {plan}, cycle: {billing_cycle}")
 
         if user_id:
             db.upsert_subscription(
@@ -151,6 +166,7 @@ def handle_checkout_completed(session):
                 stripe_customer_id=customer_id,
                 stripe_subscription_id=subscription_id,
                 plan=plan,
+                billing_cycle=billing_cycle,
                 status='active'
             )
         else:
@@ -163,8 +179,10 @@ def handle_checkout_completed(session):
 def handle_subscription_updated(subscription):
     try:
         metadata = getattr(subscription, "metadata", {})
-        user_id = metadata.get("user_id") if metadata else None
-        plan = metadata.get("plan") if metadata else None
+        user_id = metadata.get("user_id")
+        plan = metadata.get("plan")
+        billing_cycle = metadata.get("billing_cycle", "monthly")
+        
         status = getattr(subscription, "status", "inactive")
         subscription_id = getattr(subscription, "id", None)
         customer_id = getattr(subscription, "customer", None)
@@ -174,7 +192,7 @@ def handle_subscription_updated(subscription):
         price_id = items[0]["price"]["id"] if items else None
         current_period_end = getattr(subscription, "current_period_end", None)
 
-        print(f"DEBUG: Subscription updated: user={user_id}, plan={plan}, status={status}")
+        print(f"DEBUG: Subscription updated: user={user_id}, plan={plan}, cycle={billing_cycle}, status={status}")
 
         if user_id:
             db.upsert_subscription(
@@ -183,6 +201,7 @@ def handle_subscription_updated(subscription):
                 stripe_subscription_id=subscription_id,
                 stripe_price_id=price_id,
                 plan=plan,
+                billing_cycle=billing_cycle,
                 status=status,
                 current_period_end=current_period_end,
                 cancel_at_period_end=1 if cancel_at_period_end else 0

@@ -43,6 +43,7 @@ class DatabaseManager:
                 stripe_subscription_id TEXT,
                 stripe_price_id TEXT,
                 plan TEXT DEFAULT 'free',
+                billing_cycle TEXT DEFAULT 'monthly',
                 status TEXT DEFAULT 'inactive',
                 current_period_end TEXT,
                 cancel_at_period_end INTEGER DEFAULT 0,

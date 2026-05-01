@@ -5,12 +5,15 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 type PlanType = "free_trial" | "starter" | "pro" | "agency";
+type BillingCycle = "monthly" | "yearly";
 
 const PLANS = [
   {
     key: "free_trial",
     title: "Free Trial",
-    price: 0,
+    monthlyPrice: 0,
+    yearlyMonthlyPrice: 0,
+    yearlyTotal: 0,
     suffix: "1 day",
     badge: "No card required",
     description: "Try LinkdApply for 24 hours with limited applications.",
@@ -27,8 +30,9 @@ const PLANS = [
   {
     key: "starter",
     title: "Starter",
-    price: 19,
-    suffix: "mo",
+    monthlyPrice: 19,
+    yearlyMonthlyPrice: 15,
+    yearlyTotal: 180,
     description: "For individual job seekers who want consistent applications.",
     features: [
       "1 LinkedIn account",
@@ -44,8 +48,9 @@ const PLANS = [
   {
     key: "pro",
     title: "Pro",
-    price: 49,
-    suffix: "mo",
+    monthlyPrice: 49,
+    yearlyMonthlyPrice: 39,
+    yearlyTotal: 468,
     badge: "Most Popular",
     highlighted: true,
     description: "For serious job seekers who want AI answers and higher limits.",
@@ -64,8 +69,9 @@ const PLANS = [
   {
     key: "agency",
     title: "Agency",
-    price: 149,
-    suffix: "mo",
+    monthlyPrice: 149,
+    yearlyMonthlyPrice: 119,
+    yearlyTotal: 1428,
     description: "For agencies and power users managing multiple accounts.",
     features: [
       "10 LinkedIn accounts",
@@ -83,15 +89,19 @@ const PLANS = [
 
 export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
   const router = useRouter();
 
   async function startFreeTrial() {
     setLoading("free_trial");
     try {
-      const res = await fetch("http://localhost:8000/api/billing/start-free-trial", {
+      const res = await fetch("http://127.0.0.1:8000/api/billing/start-free-trial", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: "local-user" }),
+        body: JSON.stringify({ 
+          user_id: "local-user",
+          email: "user@example.com"
+        }),
       });
 
       const data = await res.json();
@@ -101,20 +111,21 @@ export default function PricingPage() {
       router.push("/dashboard");
     } catch (error: any) {
       console.error(error);
-      alert(error.message || "Failed to initiate trial. Is the backend running?");
+      alert(error.message || "Failed to start free trial.");
     } finally {
       setLoading(null);
     }
   }
 
-  async function startStripeCheckout(plan: PlanType) {
+  async function startStripeCheckout(plan: Exclude<PlanType, "free_trial">) {
     setLoading(plan);
     try {
-      const res = await fetch("http://localhost:8000/api/billing/create-checkout-session", {
+      const res = await fetch("http://127.0.0.1:8000/api/billing/create-checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           plan,
+          billing_cycle: billingCycle,
           user_id: "local-user",
           email: "user@example.com",
         }),
@@ -123,20 +134,20 @@ export default function PricingPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Failed to start checkout");
       window.location.href = data.url;
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Failed to initiate checkout. Is the backend running?");
+      alert(error.message || "Failed to initiate checkout. Is the backend running?");
     } finally {
       setLoading(null);
     }
   }
 
-  async function handleBuy(plan: PlanType) {
+  function handleBuy(plan: PlanType) {
     if (plan === "free_trial") {
-      await startFreeTrial();
+      startFreeTrial();
       return;
     }
-    await startStripeCheckout(plan);
+    startStripeCheckout(plan as Exclude<PlanType, "free_trial">);
   }
 
   return (
@@ -200,22 +211,44 @@ export default function PricingPage() {
             <p className="text-zinc-500 max-w-2xl mx-auto text-lg">
               Try LinkdApply for 24 hours, then choose the plan that matches your application volume.
             </p>
+
+            {/* Billing Cycle Toggle */}
+            <div className="mt-8 inline-flex rounded-full border border-zinc-200 bg-zinc-50 p-1 shadow-sm">
+              <button
+                onClick={() => setBillingCycle("monthly")}
+                className={`rounded-full px-8 py-2.5 text-sm font-bold transition-all ${
+                  billingCycle === "monthly"
+                    ? "bg-white text-zinc-950 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-900"
+                }`}
+              >
+                Monthly
+              </button>
+
+              <button
+                onClick={() => setBillingCycle("yearly")}
+                className={`rounded-full px-8 py-2.5 text-sm font-bold transition-all flex items-center gap-2 ${
+                  billingCycle === "yearly"
+                    ? "bg-white text-zinc-950 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-900"
+                }`}
+              >
+                Annual
+                <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">
+                  Save 20%
+                </span>
+              </button>
+            </div>
           </div>
 
           <div className="mt-20 space-y-12 lg:space-y-0 lg:grid lg:grid-cols-4 lg:gap-x-4 items-stretch mb-24">
             {PLANS.map((plan) => (
               <PricingCard 
                 key={plan.key}
-                title={plan.title}
-                price={plan.price}
-                symbol="$"
-                suffix={plan.suffix}
-                description={plan.description}
-                features={plan.features}
+                plan={plan}
+                billingCycle={billingCycle}
                 loading={loading === plan.key}
                 onBuy={() => handleBuy(plan.key as PlanType)}
-                accent={plan.highlighted}
-                badge={plan.badge}
               />
             ))}
           </div>
@@ -239,27 +272,42 @@ export default function PricingPage() {
   );
 }
 
-function PricingCard({ title, price, symbol, suffix, description, features, loading, onBuy, accent, badge }: any) {
+function PricingCard({ plan, billingCycle, loading, onBuy }: any) {
+  const isFreeTrial = plan.key === "free_trial";
+  const price = billingCycle === "yearly" ? plan.yearlyMonthlyPrice : plan.monthlyPrice;
+  const accent = plan.highlighted;
+
+  const billingText = isFreeTrial
+    ? "Limited 24-hour access"
+    : billingCycle === "yearly"
+      ? `Billed yearly at $${plan.yearlyTotal}`
+      : "Billed monthly";
+
   return (
     <div className={`relative p-8 rounded-3xl transition-all flex flex-col ${
       accent 
       ? "bg-white border-2 border-accent shadow-2xl scale-105 z-10" 
       : "bg-zinc-50/50 border border-zinc-100 shadow-lg hover:bg-white hover:border-accent/20 hover:shadow-xl"
     }`}>
-      {badge && (
+      {plan.badge && (
         <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-accent text-white text-[10px] font-bold uppercase tracking-widest rounded-full shadow-lg whitespace-nowrap">
-          {badge}
+          {plan.badge}
         </div>
       )}
       <div className="flex-1">
-        <h3 className="text-xl font-bold text-zinc-900">{title}</h3>
+        <h3 className="text-xl font-bold text-zinc-900">{plan.title}</h3>
         <div className="mt-4 flex items-baseline gap-1">
-          <span className="text-5xl font-extrabold tracking-tight text-zinc-900">{symbol}{price}</span>
-          <span className="text-zinc-500 font-medium">/{suffix}</span>
+          <span className="text-5xl font-extrabold tracking-tight text-zinc-900">${price}</span>
+          <span className="text-zinc-500 font-medium">
+            {isFreeTrial ? "/trial" : "/mo"}
+          </span>
         </div>
-        <p className="mt-6 text-sm text-zinc-500 leading-relaxed min-h-[40px]">{description}</p>
+        <p className="mt-2 text-xs font-medium text-zinc-400">
+          {billingText}
+        </p>
+        <p className="mt-6 text-sm text-zinc-500 leading-relaxed min-h-[40px]">{plan.description}</p>
         <ul className="mt-8 space-y-4">
-          {features.map((f: string, i: number) => (
+          {plan.features.map((f: string, i: number) => (
             <li key={i} className="flex items-start gap-3 text-sm text-zinc-600">
               <svg className="size-5 text-accent shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -278,7 +326,7 @@ function PricingCard({ title, price, symbol, suffix, description, features, load
           : "bg-white border border-zinc-200 text-zinc-900 shadow-sm hover:border-accent/20"
         }`}
       >
-        {loading ? "Processing..." : title === "Free Trial" ? "Start Free Trial" : `Subscribe ${title}`}
+        {loading ? "Processing..." : isFreeTrial ? "Start Free Trial" : `Subscribe ${plan.title}`}
       </button>
     </div>
   );
