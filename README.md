@@ -1,9 +1,6 @@
 # 🚀 LinkedIn AI Auto Job Applier
 
-![Banner](frontend/public/images/banner.png)
-
 [![GitHub stars](https://img.shields.io/github/stars/yhimanshu22/Auto_job_applier_linkedIn?style=for-the-badge)](https://github.com/yhimanshu22/Auto_job_applier_linkedIn/stargazers)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 **Automate your job search with the power of AI.** This tool handles the tedious parts of job hunting—searching for relevant roles, answering complex application questions, and submitting applications—so you can focus on preparing for interviews.
 
@@ -92,14 +89,6 @@ Building and maintaining an AI-powered automation tool requires significant reso
 - [ ] Advanced AI personalization based on job descriptions.
 - [ ] Real-time browser view within the dashboard.
 - [ ] Mobile companion app for tracking.
-
----
-
-## 📜 License & Disclaimer
-
-This project is licensed under the MIT License. 
-
-**Disclaimer**: This tool is for educational purposes only. Use it responsibly and at your own risk. The developer is not responsible for any account restrictions or actions taken by LinkedIn.
 
 ---
 
