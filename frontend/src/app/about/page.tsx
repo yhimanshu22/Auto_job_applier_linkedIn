@@ -13,8 +13,14 @@ export default function AboutPage() {
     <div className="flex grow flex-col bg-white text-zinc-900 selection:bg-accent/10">
       <Header />
 
-      <main className="grow pt-32 pb-24">
-        <div className="mx-auto max-w-4xl px-6">
+      <main className="relative flex flex-col pt-32 pb-24 overflow-hidden">
+        {/* Background Layers */}
+        <div className="absolute top-0 left-0 w-full h-full grid-pattern pointer-events-none z-0 opacity-40"></div>
+        <div className="absolute top-0 left-0 w-full h-full noise-texture pointer-events-none z-0"></div>
+        <div className="absolute top-0 left-0 w-full h-[800px] natural-glow pointer-events-none z-0"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 w-full h-[800px] hero-gradient opacity-10 pointer-events-none z-0"></div>
+
+        <div className="relative z-10 mx-auto max-w-4xl px-6">
           {/* Mission Hero */}
           <section className="mb-20 text-center">
             <h1 className="font-serif text-[40px] md:text-[56px] leading-[1.1] font-medium tracking-tight text-zinc-900 mb-8 animate-in fade-in slide-in-from-bottom-8 duration-700">

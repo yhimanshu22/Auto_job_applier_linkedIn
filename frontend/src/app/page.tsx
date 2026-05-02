@@ -11,10 +11,19 @@ export default function LandingPage() {
 
       <main className="relative flex flex-col pt-32 overflow-hidden">
         {/* Background Gradients, Grid & Noise */}
-        <div className="absolute top-0 left-0 w-full h-[1000px] grid-pattern pointer-events-none z-0"></div>
+        <div className="absolute top-0 left-0 w-full h-full grid-pattern pointer-events-none z-0 opacity-40"></div>
         <div className="absolute top-0 left-0 w-full h-full noise-texture pointer-events-none z-0"></div>
-        <div className="absolute top-0 left-0 w-full h-[800px] natural-glow pointer-events-none z-0"></div>
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] hero-gradient opacity-10 pointer-events-none z-0"></div>
+        
+        {/* Top Glow */}
+        <div className="absolute top-0 left-0 w-full h-[1000px] natural-glow pointer-events-none z-0"></div>
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[1000px] hero-gradient opacity-15 pointer-events-none z-0"></div>
+
+        {/* Middle Glow */}
+        <div className="absolute top-[1500px] left-0 w-full h-[1000px] natural-glow opacity-50 pointer-events-none z-0 rotate-180"></div>
+        <div className="absolute top-[2000px] right-0 w-[800px] h-[800px] hero-gradient opacity-10 pointer-events-none z-0 blur-[120px]"></div>
+
+        {/* Bottom Glow */}
+        <div className="absolute bottom-0 left-0 w-full h-[1000px] natural-glow opacity-30 pointer-events-none z-0"></div>
 
         {/* Hero Section */}
         <section className="relative flex flex-col items-center gap-12 lg:gap-20 px-6 pt-12">

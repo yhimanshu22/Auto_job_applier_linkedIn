@@ -161,10 +161,14 @@ export default function PricingPage() {
     <div className="flex flex-col min-h-screen bg-white selection:bg-accent/10">
       <Header />
 
-      <main className="grow py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden flex flex-col items-center">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] hero-gradient opacity-10 pointer-events-none"></div>
+      <main className="relative flex flex-col pt-32 pb-24 overflow-hidden min-h-screen">
+        {/* Background Layers */}
+        <div className="absolute top-0 left-0 w-full h-full grid-pattern pointer-events-none z-0 opacity-40"></div>
+        <div className="absolute top-0 left-0 w-full h-full noise-texture pointer-events-none z-0"></div>
+        <div className="absolute top-0 left-0 w-full h-[800px] natural-glow pointer-events-none z-0"></div>
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] hero-gradient opacity-15 pointer-events-none z-0"></div>
         
-        <div className="max-w-7xl mx-auto relative z-10 w-full">
+        <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
           <div className="text-center space-y-6 pt-12">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20 text-[10px] font-bold uppercase tracking-widest text-accent">
               Start free. Upgrade when your job search scales.

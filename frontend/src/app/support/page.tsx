@@ -12,7 +12,13 @@ export default function SupportPage() {
     <div className="flex grow flex-col bg-white text-zinc-900 selection:bg-accent/10">
       <Header />
 
-      <main className="max-w-4xl mx-auto px-6 pt-32 pb-16 lg:py-24 lg:pt-40 space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
+      <main className="relative flex flex-col pt-32 pb-24 overflow-hidden min-h-[calc(100vh-100px)]">
+        {/* Background Layers */}
+        <div className="absolute top-0 left-0 w-full h-full grid-pattern pointer-events-none z-0 opacity-40"></div>
+        <div className="absolute top-0 left-0 w-full h-full noise-texture pointer-events-none z-0"></div>
+        <div className="absolute top-0 left-0 w-full h-[800px] natural-glow pointer-events-none z-0"></div>
+
+        <div className="relative z-10 max-w-4xl mx-auto px-6 pt-12 space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
         <div className="space-y-4">
           <h1 className="font-serif text-4xl lg:text-5xl font-medium tracking-tight text-zinc-900">Get in Touch</h1>
           <p className="text-zinc-500 text-lg">We're here to help you supercharge your job search.</p>
