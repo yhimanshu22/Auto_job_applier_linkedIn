@@ -283,6 +283,7 @@ def validate_settings() -> None | ValueError | TypeError:
     check_string(logs_folder_path, "logs_folder_path", min_length=1)
 
     check_int(click_gap, "click_gap", 0)
+    check_int(bot_speed, "bot_speed", 1)
 
     check_boolean(run_in_background, "run_in_background")
     check_boolean(disable_extensions, "disable_extensions")

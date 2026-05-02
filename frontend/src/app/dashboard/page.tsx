@@ -4,6 +4,10 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import PersonalsForm from "@/components/PersonalsForm";
+import SearchForm from "@/components/SearchForm";
+import SettingsForm from "@/components/SettingsForm";
+import QuestionsForm from "@/components/QuestionsForm";
 
 const CONFIG_FILES = ["personals.py", "search.py", "settings.py", "questions.py"];
 
@@ -16,6 +20,7 @@ export default function Dashboard() {
   const [botStatus, setBotStatus] = useState<"running" | "stopped" | "error" | "paused">("stopped");
   const [appliedCount, setAppliedCount] = useState<number>(0);
   const [applyLimit, setApplyLimit] = useState<number>(0);
+  const [botSpeed, setBotSpeed] = useState<number>(5);
   const [resumeName, setResumeName] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isBackendHealthy, setIsBackendHealthy] = useState(true);
@@ -23,6 +28,8 @@ export default function Dashboard() {
   const [subscription, setSubscription] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
+  const [isFormMode, setIsFormMode] = useState(true);
+  const [formData, setFormData] = useState<Record<string, any>>({});
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -72,8 +79,18 @@ export default function Dashboard() {
       }
     };
 
+    const fetchBotSpeed = async () => {
+      try {
+        const res = await fetch("http://127.0.0.1:8000/api/config/settings");
+        const data = await res.json();
+        const match = data.content.match(/bot_speed = (\d+)/);
+        if (match) setBotSpeed(parseInt(match[1]));
+      } catch (err) {}
+    };
+
     checkStatus();
     fetchResumeInfo();
+    fetchBotSpeed();
     const fetchStats = async () => {
       try {
         const res = await fetch(`http://127.0.0.1:8000/api/applications/stats?user_id=${userId}`);
@@ -109,6 +126,103 @@ export default function Dashboard() {
     return () => clearInterval(statusInterval);
   }, [userId, status, router]);
 
+  // Live sync: Parse code content into formData whenever content changes
+  useEffect(() => {
+    if (!content) return;
+    
+    const parsed: Record<string, any> = {};
+    
+    // Improved parser using regex to capture key-value pairs even with multi-line strings
+    // This looks for "key = value" where value can be a quoted string spanning lines
+    const regex = /^([a-zA-Z0-9_]+)\s*=\s*(.*)$/gm;
+    let match;
+    const rawContent = content;
+
+    // We'll iterate through matches, but for multi-line values, we need a better approach
+    // Let's use a simpler but more robust line-by-line with "state"
+    const lines = content.split("\n");
+    let currentKey = "";
+    let currentValue = "";
+    let inQuotedString = false;
+
+    lines.forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) return;
+
+      if (!inQuotedString) {
+        if (line.includes("=")) {
+          const [key, ...valParts] = line.split("=");
+          currentKey = key.trim();
+          let val = valParts.join("=").trim();
+          
+          if (val.startsWith('"') || val.startsWith("'")) {
+            const quote = val[0];
+            inQuotedString = true;
+            currentValue = val.slice(1);
+            
+            // Check if it ends on same line
+            if (currentValue.endsWith(quote) && currentValue.length > 0) {
+              inQuotedString = false;
+              parsed[currentKey] = currentValue.slice(0, -1).replace(/\\n/g, "\n");
+            }
+          } else {
+            // Booleans, Numbers, Lists (single line)
+            if (val.toLowerCase() === "true") parsed[currentKey] = true;
+            else if (val.toLowerCase() === "false") parsed[currentKey] = false;
+            else if (!isNaN(Number(val)) && val !== "") parsed[currentKey] = Number(val);
+            else if (val.startsWith("[") && val.endsWith("]")) {
+              try { parsed[currentKey] = JSON.parse(val.replace(/'/g, '"')); } catch (e) { parsed[currentKey] = val; }
+            } else {
+              parsed[currentKey] = val;
+            }
+          }
+        }
+      } else {
+        // We are inside a quoted string
+        const quote = content.includes(`${currentKey} = "`) ? '"' : "'";
+        if (line.endsWith(quote)) {
+          inQuotedString = false;
+          currentValue += "\n" + line.slice(0, -1);
+          parsed[currentKey] = currentValue.replace(/\\n/g, "\n");
+        } else {
+          currentValue += "\n" + line;
+        }
+      }
+    });
+
+    // Final fallback for open strings
+    if (inQuotedString && currentKey) {
+        parsed[currentKey] = currentValue.replace(/\\n/g, "\n");
+    }
+
+    if (JSON.stringify(parsed) !== JSON.stringify(formData)) {
+      setFormData(parsed);
+    }
+  }, [content]);
+
+  // Sync from Form -> Code
+  useEffect(() => {
+    if (!isFormMode || !activeTab) return;
+    
+    const category = activeTab.split('.')[0].toUpperCase();
+    let newContent = `################ ${category} CONFIGURATION ################\n\n`;
+    Object.entries(formData).forEach(([key, value]) => {
+      if (typeof value === "string") {
+        newContent += `${key} = "${value}"\n`;
+      } else if (typeof value === "boolean") {
+        newContent += `${key} = ${value ? "True" : "False"}\n`;
+      } else if (Array.isArray(value)) {
+        newContent += `${key} = ${JSON.stringify(value).replace(/"/g, "'")}\n`;
+      } else {
+        newContent += `${key} = ${value}\n`;
+      }
+    });
+    
+    if (newContent !== content) {
+      setContent(newContent);
+    }
+  }, [formData, isFormMode, activeTab]);
+
   const fetchConfig = async (filename: string) => {
     setIsLoading(true);
     setMessage(null);
@@ -118,6 +232,29 @@ export default function Dashboard() {
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setContent(data.content || "");
+      
+      // Parse for form mode
+      const parsed: Record<string, any> = {};
+      const lines = (data.content || "").split("\n");
+      lines.forEach((line: string) => {
+        if (line.includes("=") && !line.startsWith("#")) {
+          const [key, valStr] = line.split("=").map(s => s.trim());
+          let val: any = valStr;
+          
+          if (valStr.startsWith('"') || valStr.startsWith("'")) {
+            val = valStr.replace(/^["']|["']$/g, "");
+          } else if (valStr.toLowerCase() === "true") val = true;
+          else if (valStr.toLowerCase() === "false") val = false;
+          else if (!isNaN(Number(valStr)) && valStr !== "") val = Number(valStr);
+          else if (valStr.startsWith("[") && valStr.endsWith("]")) {
+            try {
+              val = JSON.parse(valStr.replace(/'/g, '"'));
+            } catch (e) { val = valStr; }
+          }
+          parsed[key] = val;
+        }
+      });
+      setFormData(parsed);
     } catch (err: any) {
       setMessage({ type: 'error', text: 'Error loading configuration. Ensure backend is running.' });
       setContent("");
@@ -129,15 +266,35 @@ export default function Dashboard() {
   const saveConfig = async () => {
     setIsSaving(true);
     setMessage(null);
+    let finalContent = content;
+
+    // If we are in form mode, we need to regenerate the content string
+    if (isFormMode) {
+      const category = activeTab.split('.')[0].toUpperCase();
+      finalContent = `################ ${category} CONFIGURATION ################\n\n`;
+      Object.entries(formData).forEach(([key, value]) => {
+        if (typeof value === "string") {
+          finalContent += `${key} = "${value}"\n`;
+        } else if (typeof value === "boolean") {
+          finalContent += `${key} = ${value ? "True" : "False"}\n`;
+        } else if (Array.isArray(value)) {
+          finalContent += `${key} = ${JSON.stringify(value).replace(/"/g, "'")}\n`;
+        } else {
+          finalContent += `${key} = ${value}\n`;
+        }
+      });
+    }
+
     try {
       const cleanName = activeTab.split('.')[0];
       const res = await fetch(`http://127.0.0.1:8000/api/config/${cleanName}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content: finalContent }),
       });
       if (!res.ok) throw new Error("Failed to save");
       setMessage({ type: 'success', text: 'Configuration saved successfully!' });
+      setContent(finalContent);
     } catch (err: any) {
       setMessage({ type: 'error', text: 'Error saving configuration.' });
     } finally {
@@ -179,6 +336,31 @@ export default function Dashboard() {
       setMessage({ type: 'error', text: 'Error stopping bot.' });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const updateBotSpeed = async (speed: number) => {
+    setBotSpeed(speed);
+    try {
+        const res = await fetch("http://127.0.0.1:8000/api/config/settings");
+        const data = await res.json();
+        let newContent = data.content;
+        
+        if (newContent.includes("bot_speed =")) {
+            newContent = newContent.replace(/bot_speed = \d+/, `bot_speed = ${speed}`);
+        } else {
+            newContent += `\nbot_speed = ${speed}`;
+        }
+
+        await fetch("http://127.0.0.1:8000/api/config/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: newContent }),
+        });
+        
+        setMessage({ type: 'success', text: `Speed updated to ${speed}x` });
+    } catch (err) {
+        setMessage({ type: 'error', text: 'Failed to update speed.' });
     }
   };
 
@@ -461,6 +643,38 @@ export default function Dashboard() {
             </div>
 
             <div className="bg-[#1e293b] border border-zinc-800/80 rounded-2xl p-5 shadow-lg">
+              <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4">Speed & Randomization</h2>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-[11px] font-medium text-zinc-400">Bot Speed</span>
+                    <span className="text-[11px] font-bold text-blue-400">{botSpeed}x</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="10" 
+                    value={botSpeed} 
+                    onChange={(e) => updateBotSpeed(parseInt(e.target.value))}
+                    className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                  <div className="flex justify-between mt-1 px-0.5">
+                     <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-tighter">Human-like</span>
+                     <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-tighter">Turbo</span>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-zinc-800/50">
+                  <p className="text-[10px] text-zinc-500 leading-relaxed italic">
+                    Higher speed reduces randomized delays but increases detection risk. 
+                    {session?.user?.email === 'himu09854@gmail.com' || userId === 'local-user' ? (
+                        <span className="text-blue-500/80 block mt-1 not-italic font-bold tracking-tight">Admin mode active: Speed is prioritized.</span>
+                    ) : null}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[#1e293b] border border-zinc-800/80 rounded-2xl p-5 shadow-lg">
               <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4">Master Resume</h2>
               <div className="relative group">
                   <input 
@@ -513,10 +727,26 @@ export default function Dashboard() {
             <div className="bg-[#1e293b] border border-zinc-800/80 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-full">
               
               <div className="flex justify-between items-center p-5 border-b border-zinc-800/80 bg-zinc-900/40">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between w-full">
                   <h2 className="text-sm font-medium text-white flex items-center uppercase tracking-widest">
                     Editing: <span className="ml-2 font-mono text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-md border border-blue-500/20 lowercase">{activeTab}</span>
                   </h2>
+                  
+                  {/* Form/Code Toggler - Unified for all files */}
+                  <div className="flex bg-zinc-800 rounded-lg p-1 mr-4">
+                    <button 
+                      onClick={() => setIsFormMode(true)}
+                      className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${isFormMode ? 'bg-blue-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    >
+                      Form View
+                    </button>
+                    <button 
+                      onClick={() => setIsFormMode(false)}
+                      className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${!isFormMode ? 'bg-blue-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    >
+                      Code View
+                    </button>
+                  </div>
                 </div>
                 <button
                   onClick={saveConfig}
@@ -544,13 +774,22 @@ export default function Dashboard() {
                   </div>
                 ) : null}
 
-                <textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  className="w-full h-full bg-transparent text-zinc-300 font-mono text-sm leading-loose resize-none focus:outline-none scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent"
-                  spellCheck="false"
-                  placeholder="# Enter valid Python dictionary configuration..."
-                />
+                {isFormMode ? (
+                  <>
+                    {activeTab === "personals.py" && <PersonalsForm data={formData} onChange={setFormData} />}
+                    {activeTab === "search.py" && <SearchForm data={formData} onChange={setFormData} />}
+                    {activeTab === "settings.py" && <SettingsForm data={formData} onChange={setFormData} />}
+                    {activeTab === "questions.py" && <QuestionsForm data={formData} onChange={setFormData} />}
+                  </>
+                ) : (
+                  <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    className="w-full h-full bg-transparent text-zinc-300 font-mono text-sm leading-loose resize-none focus:outline-none scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent"
+                    spellCheck="false"
+                    placeholder="# Enter valid Python dictionary configuration..."
+                  />
+                )}
               </div>
 
             </div>
@@ -580,16 +819,16 @@ export default function Dashboard() {
                 </div>
             </div>
             
-            <div className="bg-[#1e293b] border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl">
-                <div className="overflow-x-auto">
+            <div className="bg-[#1e293b] border border-zinc-800/80 rounded-2xl shadow-xl overflow-auto max-h-[600px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+                <div>
                     <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-zinc-900/40 border-b border-zinc-800/80">
-                                <th className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Time</th>
-                                <th className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Company</th>
-                                <th className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Job Title</th>
-                                <th className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Status</th>
-                                <th className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Action</th>
+                        <thead className="sticky top-0 z-10 bg-zinc-900 shadow-sm">
+                            <tr className="border-b border-zinc-800/80">
+                                <th className="sticky top-0 bg-zinc-900 px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest z-20">Time</th>
+                                <th className="sticky top-0 bg-zinc-900 px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest z-20">Company</th>
+                                <th className="sticky top-0 bg-zinc-900 px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest z-20">Job Title</th>
+                                <th className="sticky top-0 bg-zinc-900 px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest z-20">Status</th>
+                                <th className="sticky top-0 bg-zinc-900 px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest z-20">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-800/50">

@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 
+import PricingCard from '@/components/PricingCard';
+
 type PlanType = "free_trial" | "starter" | "pro" | "agency";
 type BillingCycle = "monthly" | "yearly";
 
@@ -88,6 +90,9 @@ const PLANS = [
   },
 ] as const;
 
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+
 export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
@@ -154,50 +159,7 @@ export default function PricingPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-white selection:bg-accent/10">
-      {/* Header */}
-      <header className="absolute top-0 z-50 flex w-full pt-6">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 md:px-8 text-zinc-900 border-b border-zinc-100 pb-4">
-          <div className="flex items-center gap-8">
-            <Link className="inline-flex items-center justify-center font-serif text-2xl font-bold tracking-tight hover:text-accent transition-colors" href="/">
-              LinkdApply
-            </Link>
-            <nav className="hidden md:flex items-center gap-6">
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#features">
-                Features
-              </Link>
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#how-it-works">
-                How it works
-              </Link>
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#faq">
-                FAQ
-              </Link>
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/pricing">
-                Pricing
-              </Link>
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/about">
-                About
-              </Link>
-              <Link className="text-sm font-medium text-accent hover:text-accent/80 transition-colors" href="#download">
-                Download
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link 
-              className="hidden sm:inline-flex text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
-              href="/login"
-            >
-              Sign in
-            </Link>
-            <Link 
-              className="purple-gradient-button inline-flex items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02]" 
-              href="/login"
-            >
-              Sign up
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       <main className="grow py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden flex flex-col items-center">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] hero-gradient opacity-10 pointer-events-none"></div>
@@ -257,79 +219,8 @@ export default function PricingPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="py-12 border-t border-zinc-100 bg-white">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-8">
-          <span className="font-serif text-2xl font-bold tracking-tight text-zinc-900">LinkdApply</span>
-          <div className="flex gap-10 text-sm font-medium text-zinc-500">
-            <Link href="/about" className="hover:text-zinc-900 transition-colors">About</Link>
-            <Link href="/terms" className="hover:text-zinc-900 transition-colors">Terms</Link>
-            <Link href="/privacy" className="hover:text-zinc-900 transition-colors">Privacy</Link>
-            <Link href="/support" className="hover:text-zinc-900 transition-colors">Support</Link>
-          </div>
-          <p className="text-xs font-bold text-zinc-400 tracking-[0.2em] uppercase">© 2026 LinkdApply v1.1.0. All Rights Reserved.</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
 
-function PricingCard({ plan, billingCycle, loading, onBuy }: any) {
-  const isFreeTrial = plan.key === "free_trial";
-  const price = billingCycle === "yearly" ? plan.yearlyMonthlyPrice : plan.monthlyPrice;
-  const accent = plan.highlighted;
-
-  const billingText = isFreeTrial
-    ? "Limited 24-hour access"
-    : billingCycle === "yearly"
-      ? `Billed yearly at $${plan.yearlyTotal}`
-      : "Billed monthly";
-
-  return (
-    <div className={`relative p-8 rounded-3xl transition-all flex flex-col ${
-      accent 
-      ? "bg-white border-2 border-accent shadow-2xl scale-105 z-10" 
-      : "bg-zinc-50/50 border border-zinc-100 shadow-lg hover:bg-white hover:border-accent/20 hover:shadow-xl"
-    }`}>
-      {plan.badge && (
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 bg-accent text-white text-[10px] font-bold uppercase tracking-widest rounded-full shadow-lg whitespace-nowrap">
-          {plan.badge}
-        </div>
-      )}
-      <div className="flex-1">
-        <h3 className="text-xl font-bold text-zinc-900">{plan.title}</h3>
-        <div className="mt-4 flex items-baseline gap-1">
-          <span className="text-5xl font-extrabold tracking-tight text-zinc-900">${price}</span>
-          <span className="text-zinc-500 font-medium">
-            {isFreeTrial ? "/trial" : "/mo"}
-          </span>
-        </div>
-        <p className="mt-2 text-xs font-medium text-zinc-400">
-          {billingText}
-        </p>
-        <p className="mt-6 text-sm text-zinc-500 leading-relaxed min-h-[40px]">{plan.description}</p>
-        <ul className="mt-8 space-y-4">
-          {plan.features.map((f: string, i: number) => (
-            <li key={i} className="flex items-start gap-3 text-sm text-zinc-600">
-              <svg className="size-5 text-accent shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              <span>{f}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <button
-        onClick={onBuy}
-        disabled={loading}
-        className={`mt-10 w-full py-4 rounded-xl font-bold transition-all hover:scale-[1.02] disabled:opacity-50 ${
-          accent 
-          ? "purple-gradient-button text-white shadow-xl" 
-          : "bg-white border border-zinc-200 text-zinc-900 shadow-sm hover:border-accent/20"
-        }`}
-      >
-        {loading ? "Processing..." : isFreeTrial ? "Start Free Trial" : `Subscribe ${plan.title}`}
-      </button>
-    </div>
-  );
-}

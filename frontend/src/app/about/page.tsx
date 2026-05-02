@@ -1,52 +1,11 @@
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import Link from "next/link";
 
 export default function AboutPage() {
   return (
     <div className="flex grow flex-col bg-white text-zinc-900 selection:bg-accent/10">
-      {/* Header */}
-      <header className="absolute top-0 z-50 flex w-full pt-6">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 md:px-8 text-zinc-900 border-b border-zinc-100 pb-4">
-          <div className="flex items-center gap-8">
-            <Link className="inline-flex items-center justify-center font-serif text-2xl font-bold tracking-tight hover:text-accent transition-colors" href="/">
-              LinkdApply
-            </Link>
-            <nav className="hidden md:flex items-center gap-6">
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#features">
-                Features
-              </Link>
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#how-it-works">
-                How it works
-              </Link>
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#faq">
-                FAQ
-              </Link>
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/pricing">
-                Pricing
-              </Link>
-              <Link className="text-sm font-medium text-accent hover:text-accent/80 transition-colors" href="/about">
-                About
-              </Link>
-              <Link className="text-sm font-medium text-accent hover:text-accent/80 transition-colors" href="#download">
-                Download
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link 
-              className="hidden sm:inline-flex text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
-              href="/login"
-            >
-              Sign in
-            </Link>
-            <Link 
-              className="purple-gradient-button inline-flex items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02]" 
-              href="/login"
-            >
-              Sign up
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       <main className="grow pt-32 pb-24">
         <div className="mx-auto max-w-4xl px-6">
@@ -115,17 +74,6 @@ export default function AboutPage() {
           {/* Technology */}
           <section className="mb-24 p-10 rounded-[32px] bg-zinc-950 text-white relative overflow-hidden group">
              <div className="absolute top-0 left-0 w-full h-full hero-gradient opacity-30 pointer-events-none"></div>
-             <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-10 overflow-hidden">
-                <video 
-                  autoPlay 
-                  loop 
-                  muted 
-                  playsInline
-                  className="w-full h-full object-cover"
-                >
-                  <source src="https://assets.mixkit.co/videos/preview/mixkit-abstract-technology-elements-loop-2423-large.mp4" type="video/mp4" />
-                </video>
-             </div>
              <div className="relative z-10 space-y-8">
                 <div className="space-y-4">
                   <h2 className="text-2xl font-bold">Our Technology</h2>
@@ -173,19 +121,7 @@ export default function AboutPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="py-12 border-t border-zinc-100 bg-white">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8 flex flex-col md:row items-center justify-between gap-8">
-          <span className="font-serif text-2xl font-bold tracking-tight text-zinc-900">LinkdApply</span>
-          <div className="flex gap-10 text-sm font-medium text-zinc-500">
-            <Link href="/about" className="hover:text-zinc-900 transition-colors">About</Link>
-            <Link href="/terms" className="hover:text-zinc-900 transition-colors">Terms</Link>
-            <Link href="/privacy" className="hover:text-zinc-900 transition-colors">Privacy</Link>
-            <Link href="/support" className="hover:text-zinc-900 transition-colors">Support</Link>
-          </div>
-          <p className="text-xs font-bold text-zinc-400 tracking-[0.2em] uppercase">© 2026 LinkdApply v1.1.0. All Rights Reserved.</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

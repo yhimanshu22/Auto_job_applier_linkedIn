@@ -154,19 +154,68 @@ def buffer(speed: int = 0) -> None:
     """
     Function to wait within a period of selected random range.
     * Will not wait if input `speed <= 0`
-    * Will wait within a random range of
-      - `0.6 to 1.0 secs` if `1 <= speed < 2`
-      - `1.0 to 1.8 secs` if `2 <= speed < 3`
-      - `1.8 to speed secs` if `3 <= speed`
+    * Multiplier applied based on 'bot_speed' setting (1-10, default 5)
     """
     if speed <= 0:
         return
-    elif speed <= 1 and speed < 2:
-        return sleep(randint(6, 10) * 0.1)
+    
+    # Load bot_speed from config or default to 5
+    # Speed 10 = fastest (0.2x delay), Speed 1 = slowest (2.0x delay)
+    from config.config_bridge import bot_speed
+    try:
+        speed_val = int(bot_speed)
+    except:
+        speed_val = 5
+        
+    user_id = os.getenv("USER_ID", "local-user")
+    is_admin = user_id == "local-user" or os.getenv("USER_EMAIL") == "himu09854@gmail.com"
+    if is_admin:
+        speed_val = max(speed_val, 9)
+
+    multiplier = max(0.05, (11 - speed_val) / 5.0) # Speed 10 -> 0.2, Speed 5 -> 1.2, Speed 1 -> 2.0
+    
+    # Apply multiplier to the base logic
+    if speed <= 1 and speed < 2:
+        wait_time = randint(6, 10) * 0.1 * multiplier
     elif speed <= 2 and speed < 3:
-        return sleep(randint(10, 18) * 0.1)
+        wait_time = randint(10, 18) * 0.1 * multiplier
     else:
-        return sleep(randint(18, round(speed) * 10) * 0.1)
+        wait_time = randint(18, round(speed) * 10) * 0.1 * multiplier
+        
+    return sleep(wait_time)
+
+
+def random_sleep(min_time=1.0, max_time=None):
+    """Sleeps for a random amount of time to simulate human processing."""
+    user_id = os.getenv("USER_ID", "local-user")
+    is_admin = user_id == "local-user" or os.getenv("USER_EMAIL") == "himu09854@gmail.com"
+    
+    if max_time is None:
+        max_time = min_time + 2.0  # Add 2 seconds jitter by default
+
+    # Load speed from config
+    from config.config_bridge import bot_speed
+    try:
+        speed_val = int(bot_speed)
+    except:
+        speed_val = 5
+
+    # Privileged users get a speed boost
+    if is_admin:
+        speed_val = max(speed_val, 9)
+
+    multiplier = max(0.05, (11 - speed_val) / 5.0)
+
+    # Ensure times are valid
+    if min_time < 0.1:
+        min_time = 0.1
+    if max_time <= min_time:
+        max_time = min_time + 0.5
+
+    duration = (randint(int(min_time * 100), int(max_time * 100)) / 100.0) * multiplier
+    
+    if duration > 0:
+        sleep(duration)
 
 
 def manual_login_retry(is_logged_in: callable, limit: int = 2) -> None:

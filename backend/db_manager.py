@@ -1,6 +1,6 @@
 import os
 import json
-from sqlalchemy import create_engine, select, update, insert, func
+from sqlalchemy import create_engine, select, update, insert, func, case
 from sqlalchemy.orm import sessionmaker, Session
 from models import Base, Config, Subscription, BotRun, Application, UserSession, Asset, ResumeMetadata
 from utils.encryption import encrypt_data, decrypt_data
@@ -126,9 +126,9 @@ class DatabaseManager:
         with self.get_session() as session:
             stats = session.query(
                 func.count(Application.id).label('total'),
-                func.sum(func.case((Application.status == 'applied', 1), else_=0)).label('applied'),
-                func.sum(func.case((Application.status == 'skipped', 1), else_=0)).label('skipped'),
-                func.sum(func.case((Application.status == 'failed', 1), else_=0)).label('failed')
+                func.sum(case((Application.status == 'applied', 1), else_=0)).label('applied'),
+                func.sum(case((Application.status == 'skipped', 1), else_=0)).label('skipped'),
+                func.sum(case((Application.status == 'failed', 1), else_=0)).label('failed')
             ).filter(Application.user_id == user_id).first()
             
             return {

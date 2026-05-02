@@ -65,6 +65,7 @@ pyautogui.FAILSAFE = False
 
 
 # < Global Variables and logics
+user_id = os.getenv("USER_ID", "local-user")
 
 if run_in_background == True:
     pause_at_failed_question = False
@@ -154,7 +155,6 @@ def load_cookies():
 def log_to_db(status, **kwargs):
     """Helper to log application events to the database."""
     try:
-        user_id = os.getenv("USER_ID", "local-user")
         from db_manager import db
         db.log_application(user_id, status=status, **kwargs)
     except Exception as e:
@@ -165,28 +165,31 @@ def log_to_db(status, **kwargs):
 from selenium.webdriver.common.action_chains import ActionChains
 
 
-# 1. Helper to sleep for a random duration
-def random_sleep(min_time=1.0, max_time=None):
-    """Sleeps for a random amount of time to simulate human processing."""
-    if max_time is None:
-        max_time = min_time + 2.0  # Add 2 seconds jitter by default
-
-    # Ensure times are valid
-    if min_time < 0.1:
-        min_time = 0.1
-    if max_time <= min_time:
-        max_time = min_time + 0.5
-
-    duration = randint(int(min_time * 100), int(max_time * 100)) / 100.0
-    sleep(duration)
+# random_sleep is now imported from modules.helpers
 
 
 # 3. OVERRIDE click to be human-like (Optional but recommended)
 def human_click(element):
     try:
+        is_admin = user_id == "local-user" or os.getenv("USER_EMAIL") == "himu09854@gmail.com"
+        
+        from config.config_bridge import bot_speed
+        try:
+            speed_val = int(bot_speed)
+        except:
+            speed_val = 5
+            
+        if is_admin:
+            speed_val = max(speed_val, 9)
+
+        if speed_val >= 9:
+            # Skip movement for high speed
+            element.click()
+            return
+
         # Move mouse to element before clicking
         ActionChains(driver).move_to_element(element).pause(
-            randint(2, 6) / 10
+            randint(2, 6) / 20 # Faster pause
         ).click().perform()
     except:
         element.click()  # Fallback
@@ -603,7 +606,6 @@ def get_job_description() -> (
 def upload_resume(modal: WebElement, resume: str) -> tuple[bool, str]:
     try:
         # 1. Attempt to get default resume metadata from database
-        user_id = os.getenv("USER_ID", "local-user")
         resumes = db.get_user_resumes(user_id)
         default_resume = next((r for r in resumes if r['is_default']), None)
         

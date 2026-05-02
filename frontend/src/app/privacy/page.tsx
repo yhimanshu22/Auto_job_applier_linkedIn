@@ -1,20 +1,12 @@
-import Link from "next/link";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
 export default function PrivacyPage() {
   return (
     <div className="flex grow flex-col bg-white text-zinc-900 selection:bg-accent/10">
-      <header className="flex w-full pt-6 border-b border-zinc-100 pb-4">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 md:px-8">
-          <Link className="inline-flex items-center justify-center font-serif text-2xl font-bold tracking-tight hover:text-accent transition-colors" href="/">
-            LinkdApply
-          </Link>
-          <Link href="/" className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors">
-            Back to Home
-          </Link>
-        </div>
-      </header>
+      <Header />
 
-      <main className="max-w-4xl mx-auto px-6 py-16 lg:py-24 space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
+      <main className="max-w-4xl mx-auto px-6 pt-32 pb-16 lg:py-24 lg:pt-40 space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
         <div className="space-y-4">
           <h1 className="font-serif text-4xl lg:text-5xl font-medium tracking-tight text-zinc-900">Privacy Policy</h1>
           <p className="text-zinc-500">Last updated: April 21, 2024</p>
@@ -41,11 +33,8 @@ export default function PrivacyPage() {
             <p>We may use third-party services (like AI providers) to process specific data related to your applications. These providers are bound by strict privacy agreements.</p>
           </div>
         </section>
-
-        <footer className="pt-12 border-t border-zinc-100">
-          <p className="text-sm text-zinc-400 italic">Questions about your privacy? Contact us on our <Link href="/support" className="text-accent hover:underline">Support</Link> page.</p>
-        </footer>
       </main>
+      <Footer />
     </div>
   );
 }

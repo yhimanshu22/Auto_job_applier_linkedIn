@@ -1,5 +1,5 @@
 from config.config_bridge import *
-from modules.helpers import buffer, print_lg, sleep
+from modules.helpers import buffer, print_lg, sleep, random_sleep
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -214,11 +214,11 @@ def text_input(
     textFieldName: str = "Text",
 ) -> None | Exception:
     if textInputEle:
-        sleep(1)
+        random_sleep(0.5, 1)
         # actions.key_down(Keys.CONTROL).send_keys("a").key_up(Keys.CONTROL).perform()
         textInputEle.clear()
         textInputEle.send_keys(value.strip())
-        sleep(2)
+        random_sleep(1, 2)
         actions.send_keys(Keys.ENTER).perform()
     else:
         print_lg(f"{textFieldName} input was not given!")
@@ -280,7 +280,7 @@ def robust_click(
             # print_lg(f"Robust click error: {e}")
             pass
 
-        sleep(0.5)
+        random_sleep(0.2, 0.5)
 
     print_lg(f"Robust click failed for {text_variants}")
     return False

@@ -1,67 +1,15 @@
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import Link from "next/link";
 
 export default function LandingPage() {
   return (
     <div className="flex grow flex-col bg-white text-zinc-900 selection:bg-accent/10">
-      {/* Header */}
-      <header className="absolute top-0 z-50 flex w-full pt-6">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 md:px-8 text-zinc-900 border-b border-zinc-100 pb-4">
-          <div className="flex items-center gap-8">
-            <Link className="inline-flex items-center justify-center font-serif text-2xl font-bold tracking-tight hover:text-accent transition-colors" href="/">
-              LinkdApply
-            </Link>
-            <nav className="hidden md:flex items-center gap-6">
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#features">
-                Features
-              </Link>
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#how-it-works">
-                How it works
-              </Link>
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/#faq">
-                FAQ
-              </Link>
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/pricing">
-                Pricing
-              </Link>
-              <Link className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" href="/about">
-                About
-              </Link>
-              <Link className="text-sm font-medium text-accent hover:text-accent/80 transition-colors" href="#download">
-                Download
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link 
-              className="hidden sm:inline-flex text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
-              href="/login"
-            >
-              Sign in
-            </Link>
-            <Link 
-              className="purple-gradient-button inline-flex items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02]" 
-              href="/login"
-            >
-              Sign up
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       <main className="relative flex flex-col pt-32 overflow-hidden">
         {/* Background Gradients & Video - Light Mode */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] hero-gradient opacity-10 pointer-events-none"></div>
-        <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-[0.03] overflow-hidden">
-          <video 
-            autoPlay 
-            loop 
-            muted 
-            playsInline
-            className="w-full h-full object-cover"
-          >
-            <source src="https://assets.mixkit.co/videos/preview/mixkit-abstract-technology-elements-loop-2423-large.mp4" type="video/mp4" />
-          </video>
-        </div>
 
         {/* Hero Section */}
         <section className="relative flex flex-col items-center gap-12 lg:gap-20 px-6 pt-12">
@@ -92,7 +40,7 @@ export default function LandingPage() {
               <Link 
                 href="/download/LinkdApply-Setup.exe"
                 download="LinkdApply-Setup.exe"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white text-zinc-900 font-semibold transition-all hover:bg-zinc-50"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-10 py-4 text-white font-semibold shadow-xl transition-all hover:bg-zinc-800 hover:scale-[1.02]"
               >
                 <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M0 3.449L9.75 2.1V11.7H0V3.449zm0 9.15h9.75V22.25L0 20.926V12.599zM11.25 1.875L24 0V11.7H11.25V1.875zm0 10.725H24v11.7L11.25 22.425V12.6z"/>
@@ -104,18 +52,19 @@ export default function LandingPage() {
 
           {/* Hero Demo Image */}
           <div className="relative w-full max-w-6xl mx-auto px-4 perspective-midrange animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-700">
-            <div className="glass-card rounded-2xl overflow-hidden shadow-2xl border border-zinc-200/50 p-2 bg-white cursor-pointer hover:scale-[1.01] transition-transform duration-500">
-              <div className="bg-zinc-950 rounded-xl aspect-[1.7] flex items-center justify-center overflow-hidden border border-zinc-100 relative">
-                <img 
-                  src="/images/hero_dashboard.png" 
-                  alt="Dashboard Preview" 
-                  className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-1000"
-                />
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-zinc-950/20 backdrop-blur-[2px]">
-                  <div className="size-16 rounded-full bg-accent/20 flex items-center justify-center text-accent border border-accent/40 shadow-2xl">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-play fill-current"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                  </div>
-                  <span className="text-white font-medium tracking-widest text-xs uppercase bg-black/40 px-3 py-1 rounded-full border border-white/10">Dashboard Live Preview</span>
+            <div className="glass-card rounded-2xl overflow-hidden shadow-2xl border border-white/5 p-0 bg-zinc-950 transition-transform duration-500">
+              <div className="bg-zinc-950 rounded-xl aspect-video flex items-center justify-center overflow-hidden relative shadow-inner">
+                <video 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline
+                  className="w-full h-full object-cover transition-transform duration-1000"
+                >
+                  <source src="/landing_page_video.mp4" type="video/mp4" />
+                </video>
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-zinc-950/5">
+                  <span className="text-white font-medium tracking-widest text-[9px] uppercase bg-black/40 px-3 py-1 rounded-full border border-white/10">Bot Activity Live</span>
                 </div>
               </div>
             </div>
@@ -124,13 +73,13 @@ export default function LandingPage() {
 
         {/* Features Split */}
         <section id="features" className="py-24 lg:py-32 bg-zinc-50 border-y border-zinc-100">
-          <div className="mx-auto max-w-7xl px-6 lg:px-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-8 items-center">
-              <div className="space-y-8">
+          <div className="mx-auto max-w-4xl px-6 lg:px-8">
+            <div className="flex flex-col items-center text-center space-y-12">
+              <div className="max-w-3xl space-y-8">
                 <h2 className="font-serif text-4xl lg:text-5xl font-medium tracking-tight text-zinc-900 leading-tight">
                   How LinkdApply helps <br /> you land your next role
                 </h2>
-                <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 text-left">
                   <div className="flex gap-4">
                     <div className="size-10 rounded-full bg-accent/10 flex items-center justify-center text-accent shrink-0 border border-accent/20">
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -149,18 +98,6 @@ export default function LandingPage() {
                       <p className="text-zinc-500">Mimics human behavior perfectly, ensuring your LinkedIn account stays safe while you sleep.</p>
                     </div>
                   </div>
-                </div>
-              </div>
-              <div className="relative aspect-square lg:aspect-video rounded-3xl bg-zinc-950 overflow-hidden glass-card p-4 border border-zinc-100 shadow-xl cursor-pointer group/engine">
-                <div className="size-full bg-zinc-900 rounded-2xl flex items-center justify-center border border-white/5 shadow-inner relative overflow-hidden">
-                   <img 
-                    src="/images/application_engine.png" 
-                    alt="Application Engine" 
-                    className="w-full h-full object-cover opacity-60 group-hover/engine:scale-110 transition-transform duration-700"
-                   />
-                   <div className="absolute inset-0 flex items-center justify-center">
-                     <span className="text-white text-sm italic font-mono uppercase tracking-[0.2em] bg-black/60 px-4 py-2 rounded-lg border border-white/10 backdrop-blur-sm group-hover/engine:bg-accent/40 transition-colors">Application Engine Active</span>
-                   </div>
                 </div>
               </div>
             </div>
@@ -202,7 +139,7 @@ export default function LandingPage() {
                   description: "Launch the bot and watch as it applies to hundreds of relevant jobs while you sleep."
                 }
               ].map((item, idx) => (
-                <div key={idx} className="relative group p-8 rounded-3xl border border-zinc-100 bg-zinc-50/50 hover:bg-white hover:border-accent/20 transition-all hover:shadow-xl cursor-pointer">
+                <div key={idx} className="relative group p-8 rounded-3xl border border-white/5 bg-zinc-50/50 hover:bg-white transition-all hover:shadow-xl cursor-pointer">
                   <div className="text-4xl font-serif text-accent/20 group-hover:text-accent/40 font-bold mb-6 transition-colors">
                     {item.step}
                   </div>
@@ -218,8 +155,8 @@ export default function LandingPage() {
         <section className="py-24 bg-white text-zinc-900 overflow-hidden relative">
           <div className="hero-gradient absolute inset-0 opacity-10"></div>
           <div className="mx-auto max-w-7xl px-6 relative z-10">
-            <div className="flex flex-col lg:flex-row items-center justify-between gap-12 lg:gap-20">
-              <div className="max-w-2xl space-y-8 text-center lg:text-left">
+            <div className="flex flex-col items-center justify-center text-center">
+              <div className="max-w-3xl space-y-8">
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-accent/10 border border-accent/20 text-xs font-bold tracking-[0.2em] uppercase text-accent">
                    Coming to Windows
                 </div>
@@ -245,18 +182,6 @@ export default function LandingPage() {
                     MacOS version coming soon
                   </span>
                 </div>
-              </div>
-              <div className="relative w-full max-w-xl aspect-square glass-card rounded-3xl p-8 border-white/10 flex items-center justify-center bg-white/5 cursor-pointer hover:bg-white/10 transition-colors">
-                 <div className="size-full bg-zinc-900 rounded-2xl flex items-center justify-center border border-white/5 shadow-inner relative overflow-hidden">
-                    <img 
-                      src="/images/desktop_app.png" 
-                      alt="Desktop App Preview" 
-                      className="w-full h-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-1000"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-white text-xs font-mono uppercase tracking-[0.3em] bg-black/60 px-4 py-2 rounded-lg border border-white/10 backdrop-blur-sm">Desktop Environment</span>
-                    </div>
-                 </div>
               </div>
             </div>
           </div>
@@ -291,7 +216,7 @@ export default function LandingPage() {
                   a: "Absolutely. You can pre-configure answers to common custom questions in the 'Questions' tab of your dashboard." 
                 }
               ].map((item, idx) => (
-                <div key={idx} className="group glass-card p-8 rounded-2xl border border-zinc-100 bg-zinc-50/50 hover:border-accent/30 transition-all hover:bg-white cursor-pointer">
+                <div key={idx} className="group glass-card p-8 rounded-2xl border border-white/5 bg-zinc-50/50 hover:border-accent/30 transition-all hover:bg-white cursor-pointer">
                   <h4 className="text-lg font-semibold text-zinc-900 mb-3 flex items-center gap-3">
                     <span className="size-6 rounded-full bg-accent/20 text-accent text-xs flex items-center justify-center shrink-0 border border-accent/20 font-bold">
                       {idx + 1}
@@ -325,19 +250,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Footer */}
-        <footer className="py-12 border-t border-zinc-100 bg-white">
-          <div className="mx-auto max-w-7xl px-6 lg:px-8 flex flex-col md:row items-center justify-between gap-8">
-            <span className="font-serif text-2xl font-bold tracking-tight text-zinc-900">LinkdApply</span>
-            <div className="flex gap-10 text-sm font-medium text-zinc-500">
-              <Link href="/about" className="hover:text-zinc-900 transition-colors">About</Link>
-              <Link href="/terms" className="hover:text-zinc-900 transition-colors">Terms</Link>
-              <Link href="/privacy" className="hover:text-zinc-900 transition-colors">Privacy</Link>
-              <Link href="/support" className="hover:text-zinc-900 transition-colors">Support</Link>
-            </div>
-            <p className="text-xs font-bold text-zinc-400 tracking-[0.2em] uppercase">© 2026 LinkdApply v1.1.0. All Rights Reserved.</p>
-          </div>
-        </footer>
+        <Footer />
       </main>
     </div>
   );
