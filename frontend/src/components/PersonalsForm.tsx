@@ -43,24 +43,24 @@ export default function PersonalsForm({ data, onChange }: PersonalsFormProps) {
   ];
 
   return (
-    <div className="space-y-8 p-1 overflow-y-auto max-h-[600px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+    <div className="space-y-6 p-1 overflow-y-auto max-h-[550px] scrollbar-thin scrollbar-thumb-zinc-900">
       {sections.map((section, idx) => (
-        <div key={idx} className="space-y-4">
-          <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-800 pb-2">
+        <div key={idx} className="space-y-3">
+          <h3 className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest border-b border-zinc-900 pb-1.5">
             {section.title}
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
             {section.fields.map((field) => (
-              <div key={field.key} className="space-y-1.5">
-                <label className="text-[11px] font-medium text-zinc-400">
+              <div key={field.key} className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">
                   {field.label}
                 </label>
                 <input
                   type="text"
                   value={data[field.key] || ""}
                   onChange={(e) => handleChange(field.key, e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors"
-                  placeholder={`Enter ${field.label.toLowerCase()}...`}
+                  className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-blue-600 transition-colors"
+                  placeholder={`—`}
                 />
               </div>
             ))}

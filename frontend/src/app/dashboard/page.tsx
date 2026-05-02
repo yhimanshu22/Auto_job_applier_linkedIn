@@ -147,9 +147,9 @@ export default function Dashboard() {
 
     lines.forEach((line) => {
       const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) return;
 
       if (!inQuotedString) {
+        if (!trimmed || trimmed.startsWith("#")) return;
         if (line.includes("=")) {
           const [key, ...valParts] = line.split("=");
           currentKey = key.trim();
@@ -183,7 +183,7 @@ export default function Dashboard() {
         if (line.endsWith(quote)) {
           inQuotedString = false;
           currentValue += "\n" + line.slice(0, -1);
-          parsed[currentKey] = currentValue.replace(/\\n/g, "\n");
+          parsed[currentKey] = currentValue.replace(/\\n/g, "\n").replace(/\\"/g, '"');
         } else {
           currentValue += "\n" + line;
         }
@@ -208,7 +208,8 @@ export default function Dashboard() {
     let newContent = `################ ${category} CONFIGURATION ################\n\n`;
     Object.entries(formData).forEach(([key, value]) => {
       if (typeof value === "string") {
-        newContent += `${key} = "${value}"\n`;
+        const escaped = value.replace(/\n/g, "\\n").replace(/"/g, '\\"');
+        newContent += `${key} = "${escaped}"\n`;
       } else if (typeof value === "boolean") {
         newContent += `${key} = ${value ? "True" : "False"}\n`;
       } else if (Array.isArray(value)) {
@@ -242,7 +243,7 @@ export default function Dashboard() {
           let val: any = valStr;
           
           if (valStr.startsWith('"') || valStr.startsWith("'")) {
-            val = valStr.replace(/^["']|["']$/g, "");
+            val = valStr.replace(/^["']|["']$/g, "").replace(/\\n/g, "\n").replace(/\\"/g, '"');
           } else if (valStr.toLowerCase() === "true") val = true;
           else if (valStr.toLowerCase() === "false") val = false;
           else if (!isNaN(Number(valStr)) && valStr !== "") val = Number(valStr);
@@ -274,7 +275,8 @@ export default function Dashboard() {
       finalContent = `################ ${category} CONFIGURATION ################\n\n`;
       Object.entries(formData).forEach(([key, value]) => {
         if (typeof value === "string") {
-          finalContent += `${key} = "${value}"\n`;
+          const escaped = value.replace(/\n/g, "\\n").replace(/"/g, '\\"');
+          finalContent += `${key} = "${escaped}"\n`;
         } else if (typeof value === "boolean") {
           finalContent += `${key} = ${value ? "True" : "False"}\n`;
         } else if (Array.isArray(value)) {
@@ -393,26 +395,27 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-zinc-200 font-sans selection:bg-blue-500/30">
+    <div className="min-h-screen bg-zinc-950 text-zinc-400 font-sans selection:bg-blue-600/20">
       {/* Top Navbar */}
-      <nav className="border-b border-zinc-800/50 bg-[#0f172a]/80 backdrop-blur-xl sticky top-0 z-50">
+      {/* Slim Navigation */}
+      <nav className="sticky top-0 z-[110] bg-zinc-950/80 backdrop-blur-md border-b border-zinc-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center group cursor-default">
-              <div className="size-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-serif font-bold text-xl shadow-lg shadow-blue-500/20">
+          <div className="flex justify-between h-12 items-center">
+            <div className="flex items-center gap-4">
+              <div className="size-6 rounded bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
                 L
               </div>
-              <span className="ml-3 font-serif text-xl font-semibold tracking-tight text-white transition-colors">
+              <span className="text-sm font-semibold tracking-tight text-white">
                 LinkdApply
               </span>
               {subscription && (
-                <div className="ml-4 px-2.5 py-0.5 rounded-full border border-zinc-700/50 bg-zinc-800/50 flex items-center">
-                  <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                <div className="px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900">
+                  <span className={`text-[9px] font-bold uppercase tracking-wider ${
                     subscription.plan === 'pro' ? 'text-indigo-400' :
                     subscription.plan === 'agency' ? 'text-amber-400' :
-                    'text-zinc-400'
+                    'text-zinc-500'
                   }`}>
-                    {subscription.plan} Plan
+                    {subscription.plan}
                   </span>
                 </div>
               )}
@@ -420,13 +423,13 @@ export default function Dashboard() {
             <div className="flex items-center space-x-6">
                <Link 
                   href="/dashboard/billing"
-                  className="text-xs font-bold text-zinc-400 uppercase tracking-widest hover:text-white transition-colors"
+                  className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest hover:text-white transition-colors"
                >
                   Billing
                </Link>
-               <div className={`flex items-center gap-3 px-4 py-1.5 rounded-full border ${isBackendHealthy ? 'bg-zinc-900 border-zinc-800' : 'bg-red-500/10 border-red-500/20'}`}>
-                  <div className={`size-2 rounded-full ${isBackendHealthy ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
-                  <span className="text-xs font-medium text-zinc-400">Backend {isBackendHealthy ? 'Online' : 'Offline'}</span>
+               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800">
+                  <div className={`size-1.5 rounded-full ${isBackendHealthy ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                  <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-tighter">System {isBackendHealthy ? 'OK' : 'Error'}</span>
                </div>
             </div>
           </div>
@@ -489,70 +492,60 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Hero Status Card */}
+      {/* Minimal Status Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-        <div className="bg-[#1e293b] border border-zinc-800/80 rounded-3xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl shadow-black/20">
+        <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
           
-          <div className="flex items-center gap-6">
-            <div className={`size-16 rounded-2xl flex items-center justify-center shadow-lg ${
-              botStatus === 'running' ? 'bg-blue-500/20 text-blue-400 shadow-blue-500/10' :
-              botStatus === 'error' ? 'bg-red-500/20 text-red-400 shadow-red-500/10' :
-              'bg-zinc-800 text-zinc-400 shadow-black/10'
+          <div className="flex items-center gap-4">
+            <div className={`size-10 rounded-lg flex items-center justify-center ${
+              botStatus === 'running' ? 'bg-blue-600/10 text-blue-500' :
+              botStatus === 'error' ? 'bg-red-600/10 text-red-500' :
+              'bg-zinc-900 text-zinc-600'
             }`}>
               {botStatus === 'running' ? (
-                <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              ) : botStatus === 'error' ? (
-                <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               ) : (
-                <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               )}
             </div>
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <div className={`size-2 rounded-full ${botStatus === 'running' ? 'bg-blue-500 animate-pulse' : botStatus === 'error' ? 'bg-red-500' : 'bg-zinc-500'}`}></div>
-                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Bot Status</h3>
-              </div>
-              <p className="text-3xl font-serif font-medium text-white">
-                {botStatus === 'running' ? 'Applying to Jobs...' : botStatus === 'error' ? 'Error Stopped' : 'Ready to Start'}
+              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Process Status</h3>
+              <p className="text-lg font-semibold text-white tracking-tight leading-none">
+                {botStatus === 'running' ? 'Applying to Jobs' : botStatus === 'error' ? 'Halted' : 'Inactive'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-8 w-full md:w-auto p-5 rounded-2xl bg-black/20 border border-white/5">
-            <div className="flex-1 md:w-56">
-                <div className="h-3 w-full bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
-                  <div 
-                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-1000 ease-out shadow-[0_0_12px_rgba(59,130,246,0.4)]" 
-                    style={{ width: `${Math.min(100, (subscription?.limit > 0) ? (stats?.monthly_count / subscription.limit) * 100 : 0)}%` }}
-                  ></div>
+          <div className="flex items-center gap-6 w-full md:w-auto px-4 py-2 rounded-lg bg-zinc-900/50 border border-zinc-900">
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <div className="text-lg font-bold text-white tracking-tight">
+                  {stats?.monthly_count || 0}
+                  <span className="text-zinc-600 text-xs font-medium ml-1">/ {subscription?.limit || '?'}</span>
                 </div>
-                <div className="flex justify-between mt-2 text-[11px] font-bold uppercase tracking-wider">
-                  <span className="text-zinc-500">Monthly Usage</span>
-                  <span className="text-blue-400">{subscription?.limit > 0 ? Math.round((stats?.monthly_count / subscription.limit) * 100) : 0}%</span>
-                </div>
-            </div>
-            <div className="shrink-0 text-right">
-                <div className="text-2xl font-bold text-white">{stats?.monthly_count || 0} <span className="text-zinc-500 text-base font-medium">/ {subscription?.limit || '?'}</span></div>
-                <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest mt-1">Applications this month</div>
+                <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest leading-none">Quota Used</div>
+              </div>
+              <div className="w-24 h-1 bg-zinc-900 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-blue-600 transition-all duration-1000" 
+                  style={{ width: `${Math.min(100, (subscription?.limit > 0) ? (stats?.monthly_count / subscription.limit) * 100 : 0)}%` }}
+                ></div>
+              </div>
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             {botStatus === "running" ? (
               <button
                 onClick={stopBot}
                 disabled={isLoading}
-                className="inline-flex items-center px-8 py-4 rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 font-semibold shadow-lg hover:bg-red-500/20 transition-all disabled:opacity-50"
+                className="px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-red-500 transition-all disabled:opacity-50"
               >
-                <svg className="size-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" /></svg>
-                Stop Process
+                Stop
               </button>
             ) : (
               <button
@@ -564,25 +557,13 @@ export default function Dashboard() {
                   }
                 }}
                 disabled={isLoading || !isBackendHealthy}
-                className={`inline-flex items-center px-8 py-4 rounded-xl font-semibold shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-50 ${
                   subscription && subscription.status !== 'active' && subscription.status !== 'trialing'
-                    ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                    : "bg-blue-600 text-white shadow-blue-600/20 hover:bg-blue-500"
+                    ? "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"
+                    : "bg-blue-600 text-white hover:bg-blue-500"
                 }`}
               >
-                {subscription && subscription.status !== 'active' && subscription.status !== 'trialing' ? (
-                  <>
-                    <svg className="size-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                    Upgrade to Launch
-                  </>
-                ) : (
-                  <>
-                    <svg className="size-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
-                    Launch Bot
-                  </>
-                )}
+                Launch
               </button>
             )}
           </div>
@@ -617,38 +598,36 @@ export default function Dashboard() {
         {/* Main Layout Grid */}
         <div className="grid lg:grid-cols-12 gap-8">
           
-          {/* Left Sidebar (Config Menu & Status) */}
-          <aside className="lg:col-span-3 space-y-6">
-            <div className="bg-[#1e293b] border border-zinc-800/80 rounded-2xl p-5 shadow-lg">
-              <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4">Configuration Files</h2>
-              <nav className="space-y-1">
+          {/* Left Sidebar - Minimal */}
+          <aside className="lg:col-span-3 space-y-4">
+            <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden shadow-sm">
+              <div className="px-4 py-2.5 bg-zinc-900/50 border-b border-zinc-900">
+                <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Configuration</h3>
+              </div>
+              <nav className="p-1 space-y-0.5">
                 {CONFIG_FILES.map((file) => (
                   <button
                     key={file}
                     onClick={() => setActiveTab(file)}
-                    className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all ${
+                    className={`w-full flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                       activeTab === file
-                        ? "bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-inner"
-                        : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
+                        ? "bg-blue-600 text-white font-bold"
+                        : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900"
                     }`}
                   >
-                    <svg className={`size-4 mr-3 ${activeTab === file ? 'text-blue-500' : 'text-zinc-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {file.replace('.py', '')}
+                    <span className="capitalize">{file.split('.')[0]}</span>
                   </button>
                 ))}
               </nav>
             </div>
 
-            <div className="bg-[#1e293b] border border-zinc-800/80 rounded-2xl p-5 shadow-lg">
-              <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4">Speed & Randomization</h2>
+            <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-4 shadow-sm">
+              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Settings</h3>
               <div className="space-y-4">
                 <div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-[11px] font-medium text-zinc-400">Bot Speed</span>
-                    <span className="text-[11px] font-bold text-blue-400">{botSpeed}x</span>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-[10px] font-medium text-zinc-500 uppercase">Bot Speed</span>
+                    <span className="text-[10px] font-bold text-blue-500">{botSpeed}x</span>
                   </div>
                   <input 
                     type="range" 
@@ -656,124 +635,50 @@ export default function Dashboard() {
                     max="10" 
                     value={botSpeed} 
                     onChange={(e) => updateBotSpeed(parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    className="w-full h-1 bg-zinc-900 rounded-lg appearance-none cursor-pointer accent-blue-600"
                   />
-                  <div className="flex justify-between mt-1 px-0.5">
-                     <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-tighter">Human-like</span>
-                     <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-tighter">Turbo</span>
-                  </div>
-                </div>
-                <div className="pt-2 border-t border-zinc-800/50">
-                  <p className="text-[10px] text-zinc-500 leading-relaxed italic">
-                    Higher speed reduces randomized delays but increases detection risk. 
-                    {session?.user?.email === 'himu09854@gmail.com' || userId === 'local-user' ? (
-                        <span className="text-blue-500/80 block mt-1 not-italic font-bold tracking-tight">Admin mode active: Speed is prioritized.</span>
-                    ) : null}
-                  </p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-[#1e293b] border border-zinc-800/80 rounded-2xl p-5 shadow-lg">
-              <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4">Master Resume</h2>
+            <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-4 shadow-sm">
+              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Resume</h3>
               <div className="relative group">
-                  <input 
-                      type="file" 
-                      accept=".pdf" 
-                      onChange={handleResumeUpload}
-                      className="absolute inset-0 size-full opacity-0 cursor-pointer z-10"
-                      disabled={isUploading}
-                  />
-                  <div className={`rounded-xl border-2 border-dashed transition-all p-5 text-center ${
-                      isUploading ? 'border-blue-500/50 bg-blue-500/5' : 'border-zinc-700 hover:border-blue-500/40 hover:bg-blue-500/5'
-                  }`}>
-                      {isUploading ? (
-                          <div className="flex flex-col items-center gap-2">
-                              <div className="size-6 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-                              <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mt-2">Uploading...</span>
-                          </div>
-                      ) : resumeName ? (
-                          <div className="flex flex-col items-center gap-2">
-                              <div className="size-10 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center mb-2">
-                                <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                              </div>
-                              <div className="w-full truncate text-[11px] font-medium text-zinc-300 px-2" title={resumeName}>{resumeName}</div>
-                              <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold group-hover:text-blue-400 transition-colors mt-1">Click to replace</span>
-                          </div>
-                      ) : (
-                          <div className="flex flex-col items-center gap-2 text-zinc-500">
-                              <svg className="size-8 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                              </svg>
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Upload PDF Resume</span>
-                          </div>
-                      )}
-                  </div>
+                <input type="file" accept=".pdf" onChange={handleResumeUpload} className="absolute inset-0 size-full opacity-0 cursor-pointer z-10" disabled={isUploading} />
+                <div className={`rounded-lg border border-dashed p-3 text-center transition-all ${isUploading ? 'bg-blue-600/5 border-blue-600/30' : 'border-zinc-800 hover:border-zinc-700'}`}>
+                  <p className="text-[10px] text-zinc-500 truncate mb-1">{resumeName || "No file"}</p>
+                  <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest">Update</span>
+                </div>
               </div>
             </div>
 
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="w-full flex items-center justify-center px-4 py-3 text-sm font-medium rounded-xl text-zinc-400 bg-zinc-900/50 hover:bg-red-500/10 hover:text-red-400 transition-all border border-zinc-800/80 hover:border-red-500/20"
+              className="w-full py-2 text-[10px] font-bold text-zinc-600 uppercase tracking-widest hover:text-red-500 transition-colors"
             >
-              Sign Out Securely
+              Sign Out
             </button>
           </aside>
 
-          {/* Main Editor Area */}
-          <section className="lg:col-span-9 flex flex-col h-[700px]">
-            <div className="bg-[#1e293b] border border-zinc-800/80 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-full">
-              
-              <div className="flex justify-between items-center p-5 border-b border-zinc-800/80 bg-zinc-900/40">
-                <div className="flex items-center justify-between w-full">
-                  <h2 className="text-sm font-medium text-white flex items-center uppercase tracking-widest">
-                    Editing: <span className="ml-2 font-mono text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-md border border-blue-500/20 lowercase">{activeTab}</span>
+          {/* Main Editor Area - Minimal */}
+          <section className="lg:col-span-9 flex flex-col h-[650px]">
+            <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden shadow-sm flex flex-col h-full">
+              <div className="flex justify-between items-center px-4 py-2 border-b border-zinc-900 bg-zinc-900/30">
+                <div className="flex items-center gap-4">
+                  <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                    Editor: <span className="text-blue-500 font-mono ml-1 lowercase">{activeTab}</span>
                   </h2>
-                  
-                  {/* Form/Code Toggler - Unified for all files */}
-                  <div className="flex bg-zinc-800 rounded-lg p-1 mr-4">
-                    <button 
-                      onClick={() => setIsFormMode(true)}
-                      className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${isFormMode ? 'bg-blue-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
-                    >
-                      Form View
-                    </button>
-                    <button 
-                      onClick={() => setIsFormMode(false)}
-                      className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${!isFormMode ? 'bg-blue-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
-                    >
-                      Code View
-                    </button>
+                  <div className="flex bg-zinc-900 rounded p-0.5">
+                    <button onClick={() => setIsFormMode(true)} className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded transition-all ${isFormMode ? 'bg-zinc-800 text-white' : 'text-zinc-600 hover:text-zinc-400'}`}>Form</button>
+                    <button onClick={() => setIsFormMode(false)} className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded transition-all ${!isFormMode ? 'bg-zinc-800 text-white' : 'text-zinc-600 hover:text-zinc-400'}`}>Code</button>
                   </div>
                 </div>
-                <button
-                  onClick={saveConfig}
-                  disabled={isSaving || isLoading}
-                  className={`inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-medium transition-all shadow-sm ${
-                    isSaving 
-                      ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
-                      : "bg-blue-600 text-white hover:bg-blue-500 shadow-blue-600/20"
-                  }`}
-                >
-                  {isSaving ? (
-                    <><svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-zinc-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Saving...</>
-                  ) : "Save Parameters"}
+                <button onClick={saveConfig} disabled={isSaving || isLoading} className="px-3 py-1 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-widest rounded hover:bg-blue-500 transition-all disabled:opacity-50">
+                  {isSaving ? "Saving..." : "Save"}
                 </button>
               </div>
 
-              <div className="flex-1 relative bg-[#09090b] p-6 overflow-hidden flex flex-col">
-                {isLoading && !content ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#09090b]/80 backdrop-blur-sm z-20">
-                    <div className="w-48 space-y-4">
-                      <div className="h-4 bg-zinc-800 rounded-md animate-pulse"></div>
-                      <div className="h-4 bg-zinc-800 rounded-md animate-pulse w-5/6"></div>
-                      <div className="h-4 bg-zinc-800 rounded-md animate-pulse w-4/6"></div>
-                    </div>
-                  </div>
-                ) : null}
-
+              <div className="flex-1 relative p-6 overflow-hidden bg-black/20">
                 {isFormMode ? (
                   <>
                     {activeTab === "personals.py" && <PersonalsForm data={formData} onChange={setFormData} />}
@@ -785,94 +690,66 @@ export default function Dashboard() {
                   <textarea
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    className="w-full h-full bg-transparent text-zinc-300 font-mono text-sm leading-loose resize-none focus:outline-none scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent"
+                    className="w-full h-full bg-transparent text-zinc-300 font-mono text-xs leading-loose resize-none focus:outline-none"
                     spellCheck="false"
-                    placeholder="# Enter valid Python dictionary configuration..."
                   />
                 )}
               </div>
-
             </div>
           </section>
         </div>
 
-        {/* Application History Section */}
-        <div className="mt-12">
-            <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-serif font-medium text-white flex items-center gap-3">
-                    Recent Applications
-                    <span className="text-xs font-bold bg-zinc-800 text-zinc-400 px-2 py-1 rounded-md border border-zinc-700/50 uppercase tracking-widest">Live Updates</span>
+        {/* Application History - Minimal */}
+        <div className="mt-12 bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden shadow-sm">
+            <div className="px-4 py-3 bg-zinc-900/50 border-b border-zinc-900 flex items-center justify-between">
+                <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                    Application History
+                    <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 </h2>
                 <div className="flex gap-4">
-                   <div className="flex items-center gap-2 text-xs font-medium text-emerald-400">
-                       <div className="size-1.5 rounded-full bg-emerald-500"></div>
-                       {stats?.applied || 0} Applied
+                   <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-tight">
+                       Applied: <span className="text-zinc-300">{stats?.applied || 0}</span>
                    </div>
-                   <div className="flex items-center gap-2 text-xs font-medium text-amber-400">
-                       <div className="size-1.5 rounded-full bg-amber-500"></div>
-                       {stats?.skipped || 0} Skipped
-                   </div>
-                   <div className="flex items-center gap-2 text-xs font-medium text-red-400">
-                       <div className="size-1.5 rounded-full bg-red-500"></div>
-                       {stats?.failed || 0} Failed
+                   <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-tight">
+                       Failed: <span className="text-zinc-300">{stats?.failed || 0}</span>
                    </div>
                 </div>
             </div>
             
-            <div className="bg-[#1e293b] border border-zinc-800/80 rounded-2xl shadow-xl overflow-auto max-h-[600px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-                <div>
-                    <table className="w-full text-left border-collapse">
-                        <thead className="sticky top-0 z-10 bg-zinc-900 shadow-sm">
-                            <tr className="border-b border-zinc-800/80">
-                                <th className="sticky top-0 bg-zinc-900 px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest z-20">Time</th>
-                                <th className="sticky top-0 bg-zinc-900 px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest z-20">Company</th>
-                                <th className="sticky top-0 bg-zinc-900 px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest z-20">Job Title</th>
-                                <th className="sticky top-0 bg-zinc-900 px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest z-20">Status</th>
-                                <th className="sticky top-0 bg-zinc-900 px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest z-20">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-800/50">
-                            {history.length > 0 ? history.map((app) => (
-                                <tr key={app.id} className="hover:bg-zinc-800/30 transition-colors group">
-                                    <td className="px-6 py-4 text-xs text-zinc-500 font-mono">
-                                        {new Date(app.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{app.company}</div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="text-xs text-zinc-400 max-w-xs truncate">{app.job_title}</div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                                            app.status === 'applied' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                            app.status === 'skipped' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                            'bg-red-500/10 text-red-400 border-red-500/20'
-                                        }`}>
-                                            {app.status}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <a 
-                                            href={app.job_url} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-xs font-bold text-zinc-600 hover:text-white transition-colors"
-                                        >
-                                            View Job
-                                        </a>
-                                    </td>
-                                </tr>
-                            )) : (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-12 text-center text-zinc-500 text-sm italic">
-                                        No recent activity. Start the bot to see applications here.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+            <div className="overflow-x-auto max-h-[400px] scrollbar-thin scrollbar-thumb-zinc-900">
+                <table className="w-full text-left">
+                  <thead className="sticky top-0 bg-zinc-950 z-10">
+                    <tr className="border-b border-zinc-900">
+                      <th className="px-4 py-3 text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Company</th>
+                      <th className="px-4 py-3 text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Role</th>
+                      <th className="px-4 py-3 text-[9px] font-bold text-zinc-500 uppercase tracking-wider text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-900">
+                    {history.length > 0 ? history.map((app, idx) => (
+                      <tr key={idx} className="hover:bg-zinc-900/20 transition-colors">
+                        <td className="px-4 py-3">
+                          <p className="text-xs font-semibold text-zinc-300">{app.company}</p>
+                          <p className="text-[9px] text-zinc-600 uppercase tracking-tighter">{new Date(app.timestamp).toLocaleTimeString()}</p>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-zinc-500">{app.job_title}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-tight ${
+                            app.status === 'applied' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+                          }`}>
+                            {app.status}
+                          </span>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan={3} className="px-4 py-10 text-center text-zinc-600 text-[10px] uppercase tracking-widest">
+                          No recent activity
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
             </div>
         </div>
       </div>

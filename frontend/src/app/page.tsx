@@ -8,8 +8,11 @@ export default function LandingPage() {
       <Header />
 
       <main className="relative flex flex-col pt-32 overflow-hidden">
-        {/* Background Gradients & Video - Light Mode */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] hero-gradient opacity-10 pointer-events-none"></div>
+        {/* Background Gradients, Grid & Noise */}
+        <div className="absolute top-0 left-0 w-full h-[1000px] grid-pattern pointer-events-none z-0"></div>
+        <div className="absolute top-0 left-0 w-full h-full noise-texture pointer-events-none z-0"></div>
+        <div className="absolute top-0 left-0 w-full h-[800px] natural-glow pointer-events-none z-0"></div>
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] hero-gradient opacity-10 pointer-events-none z-0"></div>
 
         {/* Hero Section */}
         <section className="relative flex flex-col items-center gap-12 lg:gap-20 px-6 pt-12">
@@ -51,7 +54,7 @@ export default function LandingPage() {
           </div>
 
           {/* Hero Demo Image */}
-          <div className="relative w-full max-w-6xl mx-auto px-4 perspective-midrange animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-700">
+          <div className="relative w-full max-w-6xl mx-auto px-4 perspective-midrange animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-700 animate-float">
             <div className="glass-card rounded-2xl overflow-hidden shadow-2xl border border-white/5 p-0 bg-zinc-950 transition-transform duration-500">
               <div className="bg-zinc-950 rounded-xl aspect-video flex items-center justify-center overflow-hidden relative shadow-inner">
                 <video 
