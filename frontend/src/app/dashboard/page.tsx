@@ -8,6 +8,7 @@ import PersonalsForm from "@/components/PersonalsForm";
 import SearchForm from "@/components/SearchForm";
 import SettingsForm from "@/components/SettingsForm";
 import QuestionsForm from "@/components/QuestionsForm";
+import QuickStart from "@/components/QuickStart";
 
 const CONFIG_FILES = ["personals.py", "search.py", "settings.py", "questions.py"];
 
@@ -30,6 +31,7 @@ export default function Dashboard() {
   const [history, setHistory] = useState<any[]>([]);
   const [isFormMode, setIsFormMode] = useState(true);
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const [showQuickStart, setShowQuickStart] = useState(true);
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -668,7 +670,7 @@ export default function Dashboard() {
           </aside>
 
           {/* Main Editor Area - Minimal */}
-          <section className="lg:col-span-9 flex flex-col h-[650px]">
+          <section className="lg:col-span-6 flex flex-col h-[650px]">
             <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden shadow-sm flex flex-col h-full">
               <div className="flex justify-between items-center px-4 py-2 border-b border-zinc-900 bg-zinc-900/30">
                 <div className="flex items-center gap-4">
@@ -704,6 +706,33 @@ export default function Dashboard() {
               </div>
             </div>
           </section>
+
+          {/* Right Sidebar - Quick Start Guide */}
+          <aside className="lg:col-span-3 flex flex-col h-[650px]">
+            {showQuickStart ? (
+              <QuickStart 
+                formData={formData} 
+                activeTab={activeTab} 
+                onClose={() => setShowQuickStart(false)} 
+              />
+            ) : (
+              <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-6 text-center flex flex-col items-center justify-center h-full group">
+                <div className="size-12 rounded-full bg-zinc-900 flex items-center justify-center text-zinc-600 mb-4 group-hover:text-blue-500 transition-colors">
+                  <svg className="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Setup Complete</h3>
+                <p className="text-[10px] text-zinc-600 leading-tight mb-4">You can reopen the guide from your settings if needed.</p>
+                <button 
+                  onClick={() => setShowQuickStart(true)}
+                  className="text-[9px] font-bold text-blue-500 uppercase tracking-widest hover:underline"
+                >
+                  Show Guide
+                </button>
+              </div>
+            )}
+          </aside>
         </div>
 
         {/* Application History - Minimal */}
