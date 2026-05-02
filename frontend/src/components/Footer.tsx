@@ -8,16 +8,16 @@ export default function Footer() {
           LinkdApply
         </Link>
         <div className="flex gap-10 text-sm font-medium text-zinc-500">
-          <Link href="/about" className="hover:text-zinc-900 transition-colors">
+          <Link href="/about" className="hover:text-zinc-900 transition-colors" title="Learn more about LinkdApply">
             About
           </Link>
-          <Link href="/terms" className="hover:text-zinc-900 transition-colors">
+          <Link href="/terms" className="hover:text-zinc-900 transition-colors" title="Terms of Service">
             Terms
           </Link>
-          <Link href="/privacy" className="hover:text-zinc-900 transition-colors">
+          <Link href="/privacy" className="hover:text-zinc-900 transition-colors" title="Privacy Policy">
             Privacy
           </Link>
-          <Link href="/support" className="hover:text-zinc-900 transition-colors">
+          <Link href="/support" className="hover:text-zinc-900 transition-colors" title="Contact our support team">
             Support
           </Link>
         </div>

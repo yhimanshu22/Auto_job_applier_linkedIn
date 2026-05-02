@@ -1,10 +1,12 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Link from "next/link";
+import StructuredData from "@/components/StructuredData";
 
 export default function LandingPage() {
   return (
     <div className="flex grow flex-col bg-white text-zinc-900 selection:bg-accent/10">
+      <StructuredData />
       <Header />
 
       <main className="relative flex flex-col pt-32 overflow-hidden">

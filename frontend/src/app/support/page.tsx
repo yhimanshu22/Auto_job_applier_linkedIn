@@ -1,5 +1,11 @@
+import { Metadata } from 'next';
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+
+export const metadata: Metadata = {
+  title: "Support | Help & Contact",
+  description: "Get in touch with the LinkdApply support team for help with your automated job search or technical inquiries.",
+};
 
 export default function SupportPage() {
   return (

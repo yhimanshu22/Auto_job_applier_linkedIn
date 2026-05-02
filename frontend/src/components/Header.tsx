@@ -10,6 +10,8 @@ export default function Header() {
           <Link 
             className="inline-flex items-center justify-center font-serif text-2xl font-bold tracking-tight hover:text-accent transition-colors" 
             href="/"
+            title="LinkdApply Home"
+            rel="home"
           >
             LinkdApply
           </Link>
@@ -17,30 +19,35 @@ export default function Header() {
             <Link 
               className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
               href="/#features"
+              title="LinkdApply Features"
             >
               Features
             </Link>
             <Link 
               className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
               href="/#how-it-works"
+              title="How LinkdApply Works"
             >
               How it works
             </Link>
             <Link 
               className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
               href="/#faq"
+              title="Frequently Asked Questions"
             >
               FAQ
             </Link>
             <Link 
               className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
               href="/pricing"
+              title="LinkdApply Pricing"
             >
               Pricing
             </Link>
             <Link 
               className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
               href="/about"
+              title="About LinkdApply"
             >
               About
             </Link>
@@ -50,12 +57,14 @@ export default function Header() {
           <Link 
             className="hidden sm:inline-flex text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
             href="/login"
+            title="Sign in to your account"
           >
             Sign in
           </Link>
           <Link 
             className="purple-gradient-button inline-flex items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02]" 
             href="/login"
+            title="Start your free trial"
           >
             Sign up
           </Link>

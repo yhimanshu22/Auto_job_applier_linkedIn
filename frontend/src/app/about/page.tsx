@@ -1,6 +1,12 @@
+import { Metadata } from 'next';
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "About Us | Our Mission to Fix Job Hunting",
+  description: "Learn about the story behind LinkdApply and our mission to help job seekers automate the repetitive parts of job hunting.",
+};
 
 export default function AboutPage() {
   return (

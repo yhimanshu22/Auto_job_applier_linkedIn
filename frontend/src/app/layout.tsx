@@ -13,8 +13,58 @@ const ebGaramond = EB_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "LinkdApply - AI Superpowers for Job Seekers",
-  description: "Automate your LinkedIn job applications with the most advanced AI bot.",
+  metadataBase: new URL('https://linkdapply.com'),
+  title: {
+    default: "LinkdApply | #1 AI LinkedIn Job Application Automation Bot",
+    template: "%s | LinkdApply"
+  },
+  description: "Automate your LinkedIn job search with LinkdApply. The most advanced, undetectable AI bot that applies to hundreds of jobs, tailors cover letters, and handles custom questions while you sleep.",
+  keywords: ["LinkedIn Bot", "Job Application Automation", "AI Job Search", "Automate LinkedIn Applications", "LinkedIn Easy Apply Bot", "Job Hunting AI", "LinkdApply"],
+  authors: [{ name: "LinkdApply Team" }],
+  creator: "LinkdApply",
+  publisher: "LinkdApply",
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://linkdapply.com",
+    siteName: "LinkdApply",
+    title: "LinkdApply | AI-Powered LinkedIn Job Automation",
+    description: "Land your dream job faster. Automate applications with the world's most human-like AI bot.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "LinkdApply Dashboard Preview",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "LinkdApply | AI Job Search Automation",
+    description: "Stop filling forms. Start interviewing. The #1 AI bot for LinkedIn applications.",
+    images: ["/og-image.png"],
+    creator: "@linkdapply",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  alternates: {
+    canonical: 'https://linkdapply.com',
+  },
 };
 
 import AuthContext from "@/components/AuthContext";
