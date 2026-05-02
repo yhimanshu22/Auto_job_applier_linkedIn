@@ -437,30 +437,36 @@ export default function Dashboard() {
       </nav>
 
       {/* Confirmation Modal */}
+      {/* Confirmation Modal - Minimal */}
       {showConfirm && (
-        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1e293b] border border-zinc-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-2">Start Automation</h3>
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-6">
-              <p className="text-sm text-amber-200/90 font-medium leading-relaxed">
-                <strong className="text-amber-400">Compliance Warning:</strong> Ensure your usage complies with LinkedIn's Terms of Service. Automated applications should be reviewed carefully. LinkdApply mimics human patterns, but you are responsible for your account health.
+        <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4">Start Automation</h3>
+            
+            <div className="space-y-4 mb-6">
+              <div className="bg-amber-500/5 border border-amber-500/10 rounded-lg p-3">
+                <p className="text-[10px] text-amber-500/80 font-bold uppercase tracking-tight mb-1">Compliance Warning</p>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Ensure your usage complies with LinkedIn's Terms of Service. Automated applications should be reviewed carefully. LinkdApply mimics human patterns, but you are responsible for your account health.
+                </p>
+              </div>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">
+                The bot will launch Chrome and begin applying based on your configured limits and settings.
               </p>
             </div>
-            <p className="text-zinc-400 text-sm mb-6">
-              The bot will launch Chrome and begin applying based on your configured limits and settings.
-            </p>
-            <div className="flex justify-end gap-3">
+
+            <div className="flex gap-2">
               <button 
                 onClick={() => setShowConfirm(false)}
-                className="px-5 py-2.5 rounded-xl bg-zinc-800 text-zinc-300 font-medium hover:bg-zinc-700 transition-colors"
+                className="flex-1 py-2 rounded-lg bg-zinc-900 text-zinc-400 text-[10px] font-bold uppercase tracking-widest hover:text-white transition-colors border border-zinc-800"
               >
                 Cancel
               </button>
               <button 
                 onClick={startBot}
-                className="px-5 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-500 transition-colors shadow-lg shadow-blue-600/20"
+                className="flex-2 px-6 py-2 rounded-lg bg-blue-600 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/10"
               >
-                I Agree, Start Bot
+                Start Automation
               </button>
             </div>
           </div>
@@ -563,7 +569,7 @@ export default function Dashboard() {
                     : "bg-blue-600 text-white hover:bg-blue-500"
                 }`}
               >
-                Launch
+                Start Automation
               </button>
             )}
           </div>
@@ -572,25 +578,26 @@ export default function Dashboard() {
 
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         
-        {/* Toast Notification */}
+        {/* Toast Notification - Minimal */}
         {message && (
-          <div className="fixed bottom-8 right-8 z-[100] animate-in fade-in slide-in-from-right-8 duration-500">
-            <div className={`p-4 rounded-2xl flex items-center gap-4 shadow-2xl border backdrop-blur-xl ${
-              message.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 
-              message.type === 'warning' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
-              'bg-red-500/10 border-red-500/20 text-red-400'
+          <div className="fixed bottom-6 right-6 z-[100] animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className={`pl-4 pr-2 py-2 rounded-lg flex items-center gap-4 shadow-2xl border backdrop-blur-xl ${
+              message.type === 'success' ? 'bg-zinc-950/90 border-emerald-500/20 text-emerald-400' : 
+              message.type === 'warning' ? 'bg-zinc-950/90 border-amber-500/20 text-amber-400' :
+              'bg-zinc-950/90 border-red-500/20 text-red-400'
             }`}>
-              <div>
-                <p className="text-sm font-bold uppercase tracking-widest opacity-50 mb-0.5">
-                  {message.type === 'success' ? 'Success' : message.type === 'warning' ? 'Warning' : 'Error'}
-                </p>
-                <p className="text-sm font-medium text-white">{message.text}</p>
+              <div className="flex items-center gap-3">
+                <div className={`size-1.5 rounded-full animate-pulse ${
+                   message.type === 'success' ? 'bg-emerald-500' : 
+                   message.type === 'warning' ? 'bg-amber-500' : 'bg-red-500'
+                }`}></div>
+                <p className="text-[11px] font-medium text-zinc-300 pr-2 border-r border-zinc-800">{message.text}</p>
+                <button onClick={() => setMessage(null)} className="size-6 rounded flex items-center justify-center hover:bg-zinc-900 transition-colors">
+                  <svg className="size-3 opacity-40 hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
-              <button onClick={() => setMessage(null)} className="ml-4 size-8 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors">
-                <svg className="size-4 opacity-40 hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
             </div>
           </div>
         )}
