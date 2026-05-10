@@ -45,6 +45,18 @@ const getFrontendDir = () => app.isPackaged
   ? path.join(process.resourcesPath, 'frontend_standalone')
   : path.resolve(__dirname, '..', 'frontend');
 
+/** Writable DB/logs/uploads/chrome profiles (Program Files install is not writable). */
+function getPackagedBackendUserData() {
+  if (!app.isPackaged) return '';
+  const dir = path.join(app.getPath('userData'), 'backend-runtime');
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (err) {
+    logger.electronError(`Could not create backend userData dir: ${err.message}`);
+  }
+  return dir;
+}
+
 /**
  * Dev-only: resolve Python for the backend. Production uses bundled server.exe (never calls this).
  *
@@ -141,6 +153,26 @@ function startBackend() {
     const backendDir = getBackendDir();
     const serverPath = path.join(backendDir, 'server.py');
     const packagedExe = path.join(backendDir, 'server.exe');
+    const backendUserData = getPackagedBackendUserData();
+
+    if (app.isPackaged) {
+      if (!fs.existsSync(packagedExe)) {
+        logger.electronError(`Bundled backend missing: ${packagedExe}`);
+        if (splashWindow && !splashWindow.isDestroyed()) {
+          splashWindow.webContents.send('backend-error', 'Backend executable not found. Reinstall LinkdApply.');
+        }
+      }
+      const internalDir = path.join(backendDir, '_internal');
+      if (!fs.existsSync(internalDir)) {
+        logger.electronError(`Bundled backend incomplete (expected _internal): ${internalDir}`);
+        if (splashWindow && !splashWindow.isDestroyed()) {
+          splashWindow.webContents.send('backend-error', 'Backend bundle is incomplete. Reinstall LinkdApply.');
+        }
+      }
+      if (backendUserData) {
+        logger.electron(`Backend writable data: ${backendUserData}`);
+      }
+    }
 
     let spawnCommand;
     let spawnArgs;
@@ -171,7 +203,11 @@ function startBackend() {
     const backendOpts = {
       cwd: backendDir,
       shell: false,
-      env: { ...process.env, PYTHONUNBUFFERED: "1" },
+      env: {
+        ...process.env,
+        PYTHONUNBUFFERED: "1",
+        ...(backendUserData ? { LINKDAPPLY_USER_DATA: backendUserData } : {}),
+      },
     };
     if (process.platform === 'win32') backendOpts.windowsHide = true;
     backendProcess = spawn(spawnCommand, spawnArgs, backendOpts);
@@ -484,9 +520,9 @@ app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
 app.whenReady().then(() => {
+  createSplashWindow();
   startBackend();
   startFrontend();
-  createSplashWindow();
   createMainWindow();
 
   globalShortcut.register('CommandOrControl+Q', () => app.quit());

@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, select, update, insert, func, case
 from sqlalchemy.orm import sessionmaker, Session
+from app_paths import get_runtime_writable_root
 from models import Base, Config, Subscription, BotRun, Application, UserSession, Asset, ResumeMetadata
 from utils.encryption import encrypt_data, decrypt_data
 
@@ -37,8 +38,7 @@ class DatabaseManager:
         self.db_url = os.getenv("DATABASE_URL")
         
         if not self.db_url:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            db_path = os.path.join(base_dir, "data.db")
+            db_path = os.path.join(get_runtime_writable_root(), "data.db")
             self.db_url = f"sqlite:///{db_path}"
             
         # Create engine

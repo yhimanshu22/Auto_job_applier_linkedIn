@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 
-from app_paths import get_base_path, get_logs_dir
+from app_paths import get_base_path, get_logs_dir, get_runtime_writable_root
 from db_manager import db
 from services.linkedin_env import apply_dashboard_linkedin_credentials
 from services.plan_limits import PLAN_LIMITS, assert_can_start_bot
@@ -32,7 +32,7 @@ async def start_bot(payload: dict = None):
             server_script = os.path.join(get_base_path(), "server.py")
             cmd = [sys.executable, server_script, "--supervisor"]
 
-        cwd = get_base_path()
+        cwd = get_runtime_writable_root()
         logging.info(f"Starting supervisor with {cmd} in {cwd}")
 
         env = os.environ.copy()

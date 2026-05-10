@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from dotenv import load_dotenv
 
-from app_paths import get_logs_dir
+from app_paths import get_logs_dir, get_runtime_writable_root
 
 # Load environment variables
 load_dotenv()
@@ -157,7 +157,7 @@ class BotSupervisor:
 
             self.bot_processes[bot_id] = subprocess.Popen(
                 cmd,
-                cwd=os.getcwd(),
+                cwd=get_runtime_writable_root(),
                 env=env,
                 stdout=log_f,
                 stderr=subprocess.STDOUT,

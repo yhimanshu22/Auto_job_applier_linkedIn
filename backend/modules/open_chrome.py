@@ -1,4 +1,4 @@
-from app_paths import get_logs_dir
+from app_paths import get_logs_dir, get_runtime_writable_root
 from modules.helpers import make_directories
 from config.config_bridge import *
 
@@ -90,10 +90,11 @@ try:
         print_lg("Using default/temporary browser profile (session persistence via cookies/pickle)")
 
     # One Chrome user-data-dir per supervisor bot so parallel runs do not share disk locks / state.
-    _backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     _bot_tag = os.getenv("BOT_ID") or os.getenv("LINKEDIN_USERNAME", "default") or "default"
     _safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in str(_bot_tag))[:120]
-    profile_dir = os.path.normpath(os.path.join(_backend_root, "chrome_profiles", _safe))
+    profile_dir = os.path.normpath(
+        os.path.join(get_runtime_writable_root(), "chrome_profiles", _safe)
+    )
     os.makedirs(profile_dir, exist_ok=True)
     options.add_argument(f"--user-data-dir={profile_dir}")
     _port = 9222 + (int(hashlib.md5(_safe.encode("utf-8")).hexdigest(), 16) % 800)

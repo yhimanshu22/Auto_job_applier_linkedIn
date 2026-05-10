@@ -1,14 +1,13 @@
 import os
 
+from app_paths import get_runtime_writable_root
+
 
 class StorageService:
     """Local filesystem storage only (no Google Cloud Storage)."""
 
     def __init__(self):
-        self.local_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "all resumes",
-        )
+        self.local_dir = os.path.join(get_runtime_writable_root(), "all resumes")
         if not os.path.exists(self.local_dir):
             os.makedirs(self.local_dir, exist_ok=True)
 
