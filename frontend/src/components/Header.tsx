@@ -1,20 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function Header() {
   return (
     <header className="absolute top-0 z-50 flex w-full pt-6">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 md:px-8 text-zinc-900 border-b border-zinc-100/50 pb-4">
         <div className="flex items-center gap-8">
-          <Link 
-            className="inline-flex items-center justify-center font-serif text-2xl font-bold tracking-tight hover:text-accent transition-colors" 
-            href="/"
-            title="LinkdApply Home"
-            rel="home"
-          >
-            LinkdApply
-          </Link>
+          <BrandLogo height={40} priority className="opacity-95 hover:opacity-100 transition-opacity" />
           <nav className="hidden md:flex items-center gap-6">
             <Link 
               className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 

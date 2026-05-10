@@ -1,12 +1,11 @@
 import Link from "next/link";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function Footer() {
   return (
     <footer className="py-12 border-t border-zinc-100 bg-white">
       <div className="mx-auto max-w-7xl px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-8">
-        <Link href="/" className="font-serif text-2xl font-bold tracking-tight text-zinc-900">
-          LinkdApply
-        </Link>
+        <BrandLogo height={32} withHomeLink linkClassName="text-zinc-900" />
         <div className="flex gap-10 text-sm font-medium text-zinc-500">
           <Link href="/about" className="hover:text-zinc-900 transition-colors" title="Learn more about LinkdApply">
             About

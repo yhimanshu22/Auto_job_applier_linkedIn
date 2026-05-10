@@ -37,10 +37,10 @@ export const metadata: Metadata = {
     description: "Land your dream job faster. Automate applications with the world's most human-like AI bot.",
     images: [
       {
-        url: "/og-image.png",
+        url: "/logo.png",
         width: 1200,
         height: 630,
-        alt: "LinkdApply Dashboard Preview",
+        alt: "LinkdApply",
       },
     ],
   },
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "LinkdApply | AI Job Search Automation",
     description: "Stop filling forms. Start interviewing. The #1 AI bot for LinkedIn applications.",
-    images: ["/og-image.png"],
+    images: ["/logo.png"],
     creator: "@linkdapply",
   },
   robots: {
@@ -64,6 +64,10 @@ export const metadata: Metadata = {
   },
   alternates: {
     canonical: 'https://linkdapply.com',
+  },
+  icons: {
+    icon: "/icon.png",
+    apple: "/icon.png",
   },
 };
 

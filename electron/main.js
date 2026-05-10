@@ -6,6 +6,19 @@ const { spawn, spawnSync } = require('child_process');
 const http = require('http');
 const logger = require('./logger');
 
+function resolveAppIcon() {
+  const candidates = [
+    path.join(__dirname, 'logo.png'),
+    path.join(__dirname, 'icon.ico'),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return path.join(__dirname, 'logo.png');
+}
+
+const APP_ICON = resolveAppIcon();
+
 // ==========================================
 // 1. CONSTANTS & CONFIG
 // ==========================================
@@ -319,7 +332,7 @@ function createSplashWindow() {
       enableRemoteModule: false,
       webSecurity: true,
     },
-    icon: path.join(__dirname, 'icon.ico'),
+    icon: APP_ICON,
   });
 
   splashWindow.loadFile(path.join(__dirname, 'splash.html'));
@@ -381,7 +394,7 @@ async function createMainWindow() {
       preload: path.join(__dirname, 'preload.js'),
       additionalArguments: [isDev ? '--is-dev' : ''],
     },
-    icon: path.join(__dirname, 'icon.ico'),
+    icon: APP_ICON,
     title: 'LinkdApply',
   });
 

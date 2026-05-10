@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import PersonalsForm from "@/components/PersonalsForm";
@@ -523,13 +524,14 @@ export default function Dashboard() {
       <nav className="sticky top-0 z-[110] bg-zinc-950/80 backdrop-blur-md border-b border-zinc-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-12 items-center">
-            <div className="flex items-center gap-4">
-              <div className="size-6 rounded bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
-                L
-              </div>
-              <span className="text-sm font-semibold tracking-tight text-white">
-                LinkdApply
-              </span>
+            <div className="flex items-center gap-4 min-w-0">
+              <Image
+                src="/logo.png"
+                alt="LinkdApply"
+                width={160}
+                height={32}
+                className="h-7 w-auto max-w-[160px] object-contain object-left brightness-0 invert opacity-95"
+              />
               {subscription && (
                 <div className="px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900">
                   <span className={`text-[9px] font-bold uppercase tracking-wider ${

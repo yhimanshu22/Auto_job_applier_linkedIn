@@ -48,4 +48,11 @@ if (fs.existsSync(srcStatic)) {
   fs.cpSync(srcStatic, destStatic, { recursive: true, force: true });
 }
 
-console.log("prepare-standalone: synced .next/server, BUILD_ID, manifests, and static → .next/standalone/.next");
+// Ensure `public/` (favicon, logo, etc.) is present in standalone — layout varies by Next version.
+const pubSrc = path.join(root, "public");
+const pubDest = path.join(stand, "public");
+if (fs.existsSync(pubSrc)) {
+  fs.cpSync(pubSrc, pubDest, { recursive: true, force: true });
+}
+
+console.log("prepare-standalone: synced .next/server, BUILD_ID, manifests, static, and public → .next/standalone");
