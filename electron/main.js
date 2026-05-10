@@ -228,8 +228,13 @@ function startFrontend() {
 
     logger.electron(`Starting frontend process (${spawnCommand} ${spawnArgs.join(' ')})...`);
     
-    // Set PORT explicitly for Next.js standalone server
-    const env = { ...process.env, NEXT_TELEMETRY_DISABLED: "1", PORT: FRONTEND_PORT.toString() };
+    // Standalone Next binds using HOSTNAME; 127.0.0.1 matches APP_URL / health checks on Windows.
+    const env = {
+      ...process.env,
+      NEXT_TELEMETRY_DISABLED: "1",
+      PORT: FRONTEND_PORT.toString(),
+      ...(app.isPackaged ? { HOSTNAME: "127.0.0.1" } : {}),
+    };
     
     const frontendOpts = { cwd: cwd, shell: false, env: env };
     if (process.platform === 'win32') frontendOpts.windowsHide = true;
@@ -513,5 +518,10 @@ app.on('open-url', (event, url) => {
 if (!isDev) {
   autoUpdater.on('update-available', () => logger.electron('Update available.'));
   autoUpdater.on('update-downloaded', () => autoUpdater.quitAndInstall());
-  autoUpdater.checkForUpdatesAndNotify();
+  autoUpdater.on('error', (err) => {
+    logger.electronWarn(`Auto-updater: ${err?.message || err}`);
+  });
+  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    logger.electronWarn(`Auto-updater check failed: ${err?.message || err}`);
+  });
 }
