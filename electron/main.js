@@ -21,7 +21,9 @@ const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 const BACKEND_HEALTH_URL = `${BACKEND_URL}/api/health`; // Using /api/health instead of /api/bot/status for faster check
 
 const MAX_RESTARTS = 5;
-const STARTUP_TIMEOUT_RETRIES = 120; // Increase to 2 minutes
+/** Max attempts × STARTUP_POLL_MS ≈ worst-case wait per service (here ~60s). */
+const STARTUP_TIMEOUT_RETRIES = 120;
+const STARTUP_POLL_MS = 500;
 
 // Global State
 let mainWindow = null;
@@ -110,7 +112,7 @@ function stopProcess(proc, name) {
 }
 
 // Polling health check
-async function waitForUrl(url, retries = 60, delay = 1000) {
+async function waitForUrl(url, retries = 60, delay = STARTUP_POLL_MS) {
   for (let i = 1; i <= retries; i++) {
     if (isShuttingDown) return;
     try {

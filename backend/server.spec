@@ -1,4 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
+#
+# One-folder (COLLECT) build — starts much faster than one-file, which unpacks to
+# %TEMP% on every launch (often 30–90s+ on first run + AV scanning).
 
 block_cipher = None
 
@@ -35,7 +38,6 @@ a = Analysis(
         'uvicorn.lifespan',
         'uvicorn.lifespan.on',
         'uvicorn.lifespan.off',
-        # pip package: python-multipart, import name: multipart
         'multipart',
         'stripe',
         'undetected_chromedriver',
@@ -57,16 +59,13 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='server',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
+    upx=False,
     runtime_tmpdir=None,
     console=True,
     disable_windowed_traceback=False,
@@ -74,4 +73,15 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='server',
 )
