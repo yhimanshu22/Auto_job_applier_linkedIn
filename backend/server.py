@@ -1,9 +1,10 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import subprocess
 import os
 import sys
+import glob
 from datetime import datetime, timezone
 import uvicorn
 import logging
@@ -89,6 +90,142 @@ def _close_supervisor_log():
         except Exception:
             pass
         supervisor_log_handle = None
+
+
+def _apply_dashboard_linkedin_credentials(env: dict) -> None:
+    """
+    Inject LinkedIn credentials from DB (dashboard) into env for the supervisor / bot:
+    - Primary: username + password -> LINKEDIN_USERNAME, LINKEDIN_PASSWORD
+    - Additional: linkedin_extra_accounts JSON -> LINKEDIN_USERNAME_1..N, LINKEDIN_PASSWORD_1..N
+    """
+    try:
+        secrets_cfg = db.get_all_by_category("secrets")
+    except Exception:
+        logging.warning("Could not read secrets from DB for LinkedIn credentials.")
+        return
+    user = secrets_cfg.get("username")
+    password = secrets_cfg.get("password")
+    if user and str(user).strip():
+        env["LINKEDIN_USERNAME"] = str(user).strip()
+    if password is not None and str(password).strip() != "":
+        env["LINKEDIN_PASSWORD"] = str(password)
+
+    extras = secrets_cfg.get("linkedin_extra_accounts")
+    if isinstance(extras, list):
+        for i, acc in enumerate(extras, start=1):
+            if not isinstance(acc, dict):
+                continue
+            u = (acc.get("username") or "").strip()
+            p = acc.get("password")
+            if not u or p is None or str(p).strip() == "":
+                continue
+            env[f"LINKEDIN_USERNAME_{i}"] = u
+            env[f"LINKEDIN_PASSWORD_{i}"] = str(p)
+
+
+def _preview_env_with_dashboard_credentials() -> dict:
+    env = os.environ.copy()
+    _apply_dashboard_linkedin_credentials(env)
+    return env
+
+
+def _count_linkedin_accounts(env: dict) -> int:
+    """Match supervisor.BotSupervisor._get_accounts — count distinct runnable accounts."""
+    n = 0
+    du = env.get("LINKEDIN_USERNAME")
+    dp = env.get("LINKEDIN_PASSWORD")
+    if du and dp:
+        n += 1
+    for key, value in env.items():
+        if key.startswith("LINKEDIN_USERNAME_") and key[18:] and value:
+            suffix = key[18:]
+            if env.get(f"LINKEDIN_PASSWORD_{suffix}"):
+                n += 1
+    return n
+
+
+class LinkedInExtraRow(BaseModel):
+    username: str = ""
+    password: str = ""
+
+
+class LinkedInAccountsSave(BaseModel):
+    primary_username: str = ""
+    primary_password: str = ""
+    extras: list[LinkedInExtraRow] = Field(default_factory=list)
+
+
+@app.get("/api/linkedin-accounts")
+async def get_linkedin_accounts():
+    """LinkedIn accounts stored for the bot (passwords not echoed)."""
+    try:
+        s = db.get_all_by_category("secrets")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    extras_raw = s.get("linkedin_extra_accounts")
+    if not isinstance(extras_raw, list):
+        extras_raw = []
+
+    extras_out = []
+    for row in extras_raw:
+        if isinstance(row, dict) and row.get("username"):
+            extras_out.append(
+                {
+                    "username": str(row.get("username", "")),
+                    "password_set": bool(row.get("password")),
+                }
+            )
+
+    return {
+        "primary_username": (s.get("username") or ""),
+        "primary_password_set": bool(s.get("password")),
+        "extras": extras_out,
+    }
+
+
+@app.post("/api/linkedin-accounts")
+async def save_linkedin_accounts(body: LinkedInAccountsSave):
+    """Save primary + additional LinkedIn accounts (password optional = keep previous)."""
+    try:
+        existing = db.get_all_by_category("secrets")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    db.set_config("username", body.primary_username.strip(), "secrets")
+
+    if body.primary_password.strip():
+        db.set_config("password", body.primary_password, "secrets")
+
+    old_extras = existing.get("linkedin_extra_accounts")
+    if not isinstance(old_extras, list):
+        old_extras = []
+
+    old_by_username = {}
+    for row in old_extras:
+        if isinstance(row, dict) and row.get("username"):
+            old_by_username[str(row["username"]).strip().lower()] = row
+
+    merged: list[dict] = []
+    for row in body.extras:
+        u = row.username.strip()
+        if not u:
+            continue
+        pw = row.password
+        if not pw:
+            prev = old_by_username.get(u.lower())
+            if prev and prev.get("password"):
+                pw = prev.get("password")
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Password required for LinkedIn account {u} (new account).",
+                )
+        merged.append({"username": u, "password": pw})
+
+    db.set_config("linkedin_extra_accounts", merged, "secrets")
+    return {"status": "saved", "account_count": _count_linkedin_accounts(_preview_env_with_dashboard_credentials())}
+
 
 @app.get("/api/config/{category}")
 async def read_config(category: str):
@@ -230,21 +367,20 @@ def assert_can_start_bot(user_id: str):
     plan = subscription.get("plan", "free_trial")
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
     
-    # 1. Enforce Account Limits
-    active_accounts = []
-    # Identify all configured accounts
-    for i in range(1, 11):
-        if os.getenv(f"LINKEDIN_USERNAME_{i}"):
-            active_accounts.append(i)
-    
-    # Also check the default LINKEDIN_USERNAME
-    if os.getenv("LINKEDIN_USERNAME") and not active_accounts:
-        active_accounts = ["main"]
+    # 1. Enforce Account Limits (same sources as supervisor: env + dashboard DB secrets)
+    probe_env = _preview_env_with_dashboard_credentials()
+    account_total = _count_linkedin_accounts(probe_env)
 
-    if len(active_accounts) > limits["max_accounts"]:
+    if account_total > limits["max_accounts"]:
         raise HTTPException(
             status_code=403,
-            detail=f"Your '{plan}' plan allows only {limits['max_accounts']} LinkedIn account(s). You have {len(active_accounts)} configured."
+            detail=f"Your '{plan}' plan allows only {limits['max_accounts']} LinkedIn account(s). You have {account_total} configured."
+        )
+
+    if account_total == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No LinkedIn accounts configured. Save credentials under Dashboard → secrets (LinkedIn) or set LINKEDIN_* in your environment.",
         )
 
     # 2. Enforce Monthly Application Limits
@@ -255,12 +391,8 @@ def assert_can_start_bot(user_id: str):
             detail=f"Monthly application limit reached ({applied_this_month}/{limits['monthly_applications']}). Please upgrade your plan."
         )
 
-    # 3. Enforce Active Bot Limits
-    # Currently we count the accounts as "bots" if they were to run
-    # In a real SaaS, we would check how many are ACTUALLY running via supervisor
-    # For now, we block if they try to start more than their plan allows
-    active_bots = len(active_accounts)
-    if active_bots > limits["max_active_bots"]:
+    # 3. Enforce Active Bot Limits (configured accounts vs plan)
+    if account_total > limits["max_active_bots"]:
         raise HTTPException(
             status_code=403,
             detail=f"Your '{plan}' plan allows only {limits['max_active_bots']} active bot(s). Please reduce your active accounts."
@@ -291,6 +423,7 @@ async def start_bot(payload: dict = None):
         logging.info(f"Starting supervisor with {cmd} in {cwd}")
         
         env = os.environ.copy()
+        _apply_dashboard_linkedin_credentials(env)
         env["USER_ID"] = user_id
 
         # Capture supervisor stdout/stderr to logs/supervisor-console.log so the dashboard
@@ -405,35 +538,61 @@ async def get_bot_status(user_id: str = "local-user"):
 
 @app.get("/api/bot/logs")
 async def get_bot_logs(lines: int = 120):
-    """Tail key bot log files under backend/logs (stable path via get_base_path)."""
+    """Tail key bot log files under backend/logs (stable path via get_base_path).
+
+    Returns legacy ``logs`` (concatenated text) plus structured ``infra`` and ``profiles``
+    so the dashboard can show supervisor/gateway output separately from each LinkedIn worker (BOT_ID).
+    """
     lines = max(20, min(int(lines), 500))
     log_dir = os.path.join(get_base_path(), "logs")
-    sections = []
+    os.makedirs(log_dir, exist_ok=True)
+
+    def tail_file(path: str) -> str:
+        if not os.path.isfile(path):
+            return ""
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                buf = f.readlines()
+            return "".join(buf[-lines:])
+        except Exception as ex:
+            return f"(read error: {ex})"
+
+    infra = []
+    infra_text_parts = []
     for title, filename in (
         ("Supervisor console (stdout/stderr)", "supervisor-console.log"),
         ("Supervisor", "supervisor.log"),
         ("OpenClaw gateway", "openclaw.log"),
     ):
         path = os.path.join(log_dir, filename)
-        if not os.path.isfile(path):
-            continue
-        try:
-            with open(path, "r", encoding="utf-8", errors="replace") as f:
-                buf = f.readlines()
-            chunk = "".join(buf[-lines:])
-            if chunk.strip():
-                sections.append(f"--- {title} ({filename}) ---\n{chunk}")
-        except Exception as ex:
-            sections.append(f"--- {title} ({filename}) — read error: {ex} ---")
+        chunk = tail_file(path).strip()
+        if chunk:
+            infra.append({"title": title, "filename": filename, "content": chunk})
+            infra_text_parts.append(f"--- {title} ({filename}) ---\n{chunk}")
 
-    if not sections:
-        return {
-            "logs": (
-                "No log files yet. Start the bot from the dashboard to capture supervisor output "
-                f"under {log_dir}/."
-            )
-        }
-    return {"logs": "\n".join(sections)}
+    profiles = []
+    profile_text_parts = []
+    for path in sorted(glob.glob(os.path.join(log_dir, "bot-*.txt"))):
+        basename = os.path.basename(path)
+        inner = basename[len("bot-") : -len(".txt")]
+        chunk = tail_file(path).strip()
+        profiles.append({"id": inner, "filename": basename, "content": chunk})
+        if chunk:
+            profile_text_parts.append(f"--- Bot profile {inner} ({basename}) ---\n{chunk}")
+
+    legacy_parts = infra_text_parts + profile_text_parts
+    if not legacy_parts:
+        msg = (
+            "No log files yet. Start the bot from the dashboard to capture supervisor output "
+            f"under {log_dir}/."
+        )
+        return {"logs": msg, "infra": [], "profiles": []}
+
+    return {
+        "logs": "\n".join(legacy_parts),
+        "infra": infra,
+        "profiles": profiles,
+    }
 
 @app.get("/api/bot/runs")
 async def get_bot_runs(limit: int = 10):

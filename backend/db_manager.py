@@ -1,11 +1,34 @@
 import os
 import json
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, select, update, insert, func, case
 from sqlalchemy.orm import sessionmaker, Session
 from models import Base, Config, Subscription, BotRun, Application, UserSession, Asset, ResumeMetadata
 from utils.encryption import encrypt_data, decrypt_data
 
-SENSITIVE_KEYS = ["llm_api_key", "openai_api_key", "password", "username"]
+SENSITIVE_KEYS = [
+    "llm_api_key",
+    "openai_api_key",
+    "password",
+    "username",
+    "linkedin_extra_accounts",  # JSON list of {username, password}
+]
+
+
+def _ts_to_utc_iso(dt: datetime | None) -> str | None:
+    """Serialize DB timestamps as RFC3339 UTC so browsers parse local time correctly."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        # SQLite / drivers often return naive UTC
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    s = dt.isoformat()
+    if s.endswith("+00:00"):
+        return s[:-6] + "Z"
+    return s
+
 
 class DatabaseManager:
     def __init__(self):
@@ -106,14 +129,15 @@ class DatabaseManager:
                 session.commit()
 
     def log_application(self, user_id, **kwargs):
+        if "timestamp" not in kwargs:
+            kwargs["timestamp"] = datetime.now(timezone.utc)
         with self.get_session() as session:
             app = Application(user_id=user_id, **kwargs)
             session.add(app)
             session.commit()
 
     def get_monthly_application_count(self, user_id):
-        from datetime import datetime, timedelta
-        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
         with self.get_session() as session:
             count = session.query(func.count(Application.id)).filter(
                 Application.user_id == user_id,
@@ -143,8 +167,13 @@ class DatabaseManager:
             apps = session.query(Application).filter(
                 Application.user_id == user_id
             ).order_by(Application.timestamp.desc()).limit(limit).all()
-            
-            return [{c.name: getattr(app, c.name) for c in app.__table__.columns} for app in apps]
+
+            rows = []
+            for app in apps:
+                d = {c.name: getattr(app, c.name) for c in app.__table__.columns}
+                d["timestamp"] = _ts_to_utc_iso(d.get("timestamp"))
+                rows.append(d)
+            return rows
 
     def set_user_session(self, user_id, cookies_dict):
         cookies_json = json.dumps(cookies_dict)

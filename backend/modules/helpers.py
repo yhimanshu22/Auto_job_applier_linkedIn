@@ -103,10 +103,17 @@ def critical_error_log(possible_reason: str, stack_trace: Exception) -> None:
 
 def get_log_path():
     """
-    Function to replace '//' with '/' for logs path
+    Function to replace '//' with '/' for logs path.
+    When BOT_ID is set (supervisor-spawned worker), logs go to logs/bot-<id>.txt so each profile is separate.
     """
     try:
-        path = logs_folder_path + "/log.txt"
+        base = logs_folder_path.rstrip("/\\").replace("//", "/")
+        bid = os.getenv("BOT_ID", "").strip()
+        if bid:
+            safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in bid)
+            path = f"{base}/bot-{safe}.txt"
+        else:
+            path = f"{base}/log.txt"
         return path.replace("//", "/")
     except Exception as e:
         critical_error_log(

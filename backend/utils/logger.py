@@ -2,6 +2,14 @@ import os
 import logging
 
 
+def _bot_file_log_path() -> str | None:
+    bid = os.getenv("BOT_ID", "").strip()
+    if not bid:
+        return None
+    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in bid)
+    return os.path.join("logs", f"bot-{safe}.txt")
+
+
 def setup_logging():
     """Standard local logging only (no cloud backends)."""
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -16,6 +24,14 @@ def setup_logging():
     )
     ch.setFormatter(formatter)
     logger.addHandler(ch)
+
+    file_path = _bot_file_log_path()
+    if file_path:
+        os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
+        fh = logging.FileHandler(file_path, encoding="utf-8")
+        fh.setLevel(log_level)
+        fh.setFormatter(formatter)
+        logger.addHandler(fh)
 
     return logger
 

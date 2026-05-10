@@ -1,0 +1,306 @@
+"use client";
+
+import React, { useEffect, useState } from "react";
+
+interface SecretsFormProps {
+  data: Record<string, any>;
+  onChange: (newData: Record<string, any>) => void;
+  onAccountsSaved?: () => void;
+  /** When true (secrets tab visible), reload LinkedIn snapshot from API */
+  isActive?: boolean;
+}
+
+/**
+ * LinkedIn accounts (API) + AI/API keys from same secrets category as validator validate_secrets.
+ */
+export default function SecretsForm({ data, onChange, onAccountsSaved, isActive = true }: SecretsFormProps) {
+  const patch = (key: string, value: any) => onChange({ ...data, [key]: value });
+
+  const [primaryUser, setPrimaryUser] = useState("");
+  const [primaryPass, setPrimaryPass] = useState("");
+  const [primaryPassWasSet, setPrimaryPassWasSet] = useState(false);
+  const [extras, setExtras] = useState<Array<{ username: string; password: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const loadLinkedIn = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("http://127.0.0.1:8000/api/linkedin-accounts");
+      if (!r.ok) throw new Error("Failed to load accounts");
+      const d = await r.json();
+      setPrimaryUser(d.primary_username || data.username || "");
+      setPrimaryPassWasSet(!!d.primary_password_set);
+      setPrimaryPass("");
+      setExtras(
+        (d.extras || []).map((e: { username: string }) => ({
+          username: e.username || "",
+          password: "",
+        }))
+      );
+    } catch {
+      setPrimaryUser(data.username ?? "");
+      setExtras([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isActive) return;
+    loadLinkedIn();
+  }, [isActive]);
+
+  useEffect(() => {
+    if (data.username != null && data.username !== "") {
+      setPrimaryUser((u) => (u === "" ? String(data.username) : u));
+    }
+  }, [data.username]);
+
+  const addExtra = () => setExtras([...extras, { username: "", password: "" }]);
+  const removeExtra = (i: number) => setExtras(extras.filter((_, j) => j !== i));
+  const patchExtra = (i: number, field: "username" | "password", v: string) => {
+    const next = [...extras];
+    next[i] = { ...next[i], [field]: v };
+    setExtras(next);
+  };
+
+  const saveLinkedIn = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const r = await fetch("http://127.0.0.1:8000/api/linkedin-accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          primary_username: primaryUser,
+          primary_password: primaryPass,
+          extras,
+        }),
+      });
+      const raw = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const det = raw.detail;
+        const text =
+          typeof det === "string"
+            ? det
+            : Array.isArray(det)
+              ? det.map((x: { msg?: string }) => x.msg || JSON.stringify(x)).join("; ")
+              : r.statusText;
+        throw new Error(text);
+      }
+      setMsg({ type: "ok", text: `LinkedIn saved (${raw.account_count ?? "?"} account(s)).` });
+      setPrimaryPass("");
+      setPrimaryPassWasSet(true);
+      onAccountsSaved?.();
+    } catch (e: unknown) {
+      setMsg({ type: "err", text: e instanceof Error ? e.message : "Save failed" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const aiProviders = ["openai", "deepseek", "gemini", "openclaw"];
+
+  return (
+    <div className="space-y-10 p-1 overflow-y-auto max-h-[550px] scrollbar-thin scrollbar-thumb-zinc-900">
+      <div>
+        <h3 className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest border-b border-zinc-900 pb-1.5 mb-3">
+          LinkedIn accounts
+        </h3>
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 mb-3">
+          <p className="text-[10px] text-amber-200/90 leading-relaxed">
+            Primary → <span className="font-mono">LINKEDIN_USERNAME</span>. Additional rows →{" "}
+            <span className="font-mono">LINKEDIN_USERNAME_1</span>, <span className="font-mono">_2</span>, … Save here
+            before starting the bot. Password blank keeps the previous value for that email.
+          </p>
+        </div>
+
+        {msg && (
+          <div
+            className={`text-[11px] px-3 py-2 rounded-lg border mb-3 ${
+              msg.type === "ok"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                : "border-red-500/30 bg-red-500/10 text-red-300"
+            }`}
+          >
+            {msg.text}
+          </div>
+        )}
+
+        {loading ? (
+          <p className="text-xs text-zinc-500">Loading LinkedIn accounts…</p>
+        ) : (
+          <>
+            <div className="space-y-4 max-w-lg mb-6">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Email or phone</label>
+                <input
+                  type="text"
+                  autoComplete="username"
+                  value={primaryUser}
+                  onChange={(e) => setPrimaryUser(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-600"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Password</label>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={primaryPass}
+                  onChange={(e) => setPrimaryPass(e.target.value)}
+                  placeholder={primaryPassWasSet ? "(unchanged if left blank)" : ""}
+                  className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-600"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-4">
+              <div className="flex justify-between items-center border-b border-zinc-900 pb-1.5">
+                <h4 className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Additional accounts</h4>
+                <button
+                  type="button"
+                  onClick={addExtra}
+                  className="text-[9px] font-bold text-blue-500 uppercase tracking-widest hover:text-blue-400"
+                >
+                  + Add account
+                </button>
+              </div>
+              {extras.map((row, i) => (
+                <div
+                  key={i}
+                  className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end p-3 rounded-lg border border-zinc-900 bg-zinc-950/50"
+                >
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">
+                      Account {i + 1} email
+                    </label>
+                    <input
+                      type="text"
+                      value={row.username}
+                      onChange={(e) => patchExtra(i, "username", e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-600"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Password</label>
+                    <input
+                      type="password"
+                      value={row.password}
+                      onChange={(e) => patchExtra(i, "password", e.target.value)}
+                      placeholder="blank = keep saved"
+                      className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-600"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeExtra(i)}
+                    className="text-[10px] font-bold text-red-500/80 hover:text-red-400 uppercase py-2"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={saveLinkedIn}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-blue-500 disabled:opacity-50"
+              >
+                {saving ? "Saving…" : "Save LinkedIn accounts"}
+              </button>
+              <button
+                type="button"
+                onClick={loadLinkedIn}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg border border-zinc-800 text-zinc-400 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-900"
+              >
+                Reload
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div>
+        <h3 className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest border-b border-zinc-900 pb-1.5 mb-3">
+          AI & API (secrets.py)
+        </h3>
+        <p className="text-[9px] text-zinc-600 mb-4">
+          Same keys as <span className="font-mono text-zinc-500">config/secrets</span> in the backend. Use the main{" "}
+          <span className="font-semibold text-zinc-400">Save</span> button above the editor to persist with other
+          tabs; or edit raw keys in Code mode.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 max-w-4xl">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!data.use_AI}
+              onChange={(e) => patch("use_AI", e.target.checked)}
+              className="rounded border-zinc-700 bg-zinc-950"
+            />
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Use AI</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!data.stream_output}
+              onChange={(e) => patch("stream_output", e.target.checked)}
+              className="rounded border-zinc-700 bg-zinc-950"
+            />
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Stream LLM output</span>
+          </label>
+          <div className="space-y-1 md:col-span-2">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">AI provider</label>
+            <select
+              value={data.ai_provider ?? "openai"}
+              onChange={(e) => patch("ai_provider", e.target.value)}
+              className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-blue-600"
+            >
+              {aiProviders.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1 md:col-span-2">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">LLM API base URL</label>
+            <input
+              type="text"
+              value={data.llm_api_url ?? ""}
+              onChange={(e) => patch("llm_api_url", e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-300 font-mono focus:outline-none focus:border-blue-600"
+              placeholder="https://api.openai.com/v1"
+            />
+          </div>
+          <div className="space-y-1 md:col-span-2">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">LLM API key</label>
+            <input
+              type="password"
+              value={data.llm_api_key ?? ""}
+              onChange={(e) => patch("llm_api_key", e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-blue-600"
+              placeholder="••••••••"
+            />
+          </div>
+          <div className="space-y-1 md:col-span-2">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Model name</label>
+            <input
+              type="text"
+              value={data.llm_model ?? ""}
+              onChange={(e) => patch("llm_model", e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-blue-600"
+              placeholder="gpt-4o-mini, deepseek-chat, …"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

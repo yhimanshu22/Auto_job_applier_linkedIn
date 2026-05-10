@@ -36,24 +36,20 @@ from modules.validator import validate_config
 if use_AI:
     from modules.ai.openaiConnections import (
         ai_create_openai_client,
-        ai_extract_skills,
         ai_answer_question,
         ai_close_openai_client,
     )
     from modules.ai.openclawConnections import (
         ai_create_openai_client as openclaw_create_client,
-        ai_extract_skills as openclaw_extract_skills,
         ai_answer_question as openclaw_answer_question,
         ai_close_openai_client as openclaw_close_client,
     )
     from modules.ai.deepseekConnections import (
         deepseek_create_client,
-        deepseek_extract_skills,
         deepseek_answer_question,
     )
     from modules.ai.geminiConnections import (
         gemini_create_client,
-        gemini_extract_skills,
         gemini_answer_question,
     )
 
@@ -1545,7 +1541,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     application_link = "Easy Applied"
                     date_applied = "Pending"
                     hr_link, hr_name, date_listed = "Unknown", "Unknown", "Unknown"
-                    skills, resume, reposted = "Needs an AI", "Pending", False
+                    skills, resume, reposted = "Not extracted", "Pending", False
                     questions_list, screenshot_name = None, "Not Available"
 
                     try:
@@ -1630,25 +1626,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                         skip_count += 1
                         continue
 
-                    if use_AI and description != "Unknown":
-                        try:
-                            if ai_provider.lower() == "openai":
-                                skills = ai_extract_skills(aiClient, description)
-                            elif ai_provider.lower() == "deepseek":
-                                skills = deepseek_extract_skills(aiClient, description)
-                            elif ai_provider.lower() == "gemini":
-                                skills = gemini_extract_skills(aiClient, description)
-                            elif ai_provider.lower() == "openclaw":
-                                skills = openclaw_extract_skills(aiClient, description)
-                            else:
-                                skills = "In Development"
-                            if skills:
-                                print_lg(f"Extracted skills using {ai_provider} AI")
-                            else:
-                                print_lg(f"Failed to extract skills using {ai_provider} AI (API error or empty response)")
-                        except Exception as e:
-                            print_lg("Failed to extract skills:", e)
-                            skills = "Error extracting skills"
+                    # AI is used only for Easy Apply question answers (see answer_questions), not job/skill parsing.
 
                     uploaded = False
                     # Case 1: Easy Apply Button

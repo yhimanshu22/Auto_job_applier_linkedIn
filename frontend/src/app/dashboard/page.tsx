@@ -8,9 +8,9 @@ import PersonalsForm from "@/components/PersonalsForm";
 import SearchForm from "@/components/SearchForm";
 import SettingsForm from "@/components/SettingsForm";
 import QuestionsForm from "@/components/QuestionsForm";
-import QuickStart from "@/components/QuickStart";
+import SecretsForm from "@/components/SecretsForm";
 
-const CONFIG_FILES = ["personals.py", "search.py", "settings.py", "questions.py"];
+const CONFIG_FILES = ["personals.py", "search.py", "settings.py", "questions.py", "secrets.py"];
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState(CONFIG_FILES[0]);
@@ -31,9 +31,6 @@ export default function Dashboard() {
   const [history, setHistory] = useState<any[]>([]);
   const [isFormMode, setIsFormMode] = useState(true);
   const [formData, setFormData] = useState<Record<string, any>>({});
-  const [showQuickStart, setShowQuickStart] = useState(true);
-  const [botLogs, setBotLogs] = useState<string>("");
-  const [botLogsOpen, setBotLogsOpen] = useState(true);
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -119,7 +116,7 @@ export default function Dashboard() {
     fetchSubscription();
     fetchStats();
     fetchHistory();
-    
+
     // Poll every 10 seconds
     const statusInterval = setInterval(() => {
       checkStatus();
@@ -127,26 +124,9 @@ export default function Dashboard() {
       fetchStats();
       fetchHistory();
     }, 10000);
+
     return () => clearInterval(statusInterval);
   }, [userId, status, router]);
-
-  useEffect(() => {
-    const fetchBotLogs = async () => {
-      try {
-        const res = await fetch("http://127.0.0.1:8000/api/bot/logs?lines=150");
-        if (res.ok) {
-          const data = await res.json();
-          setBotLogs(typeof data.logs === "string" ? data.logs : "");
-        }
-      } catch {
-        /* backend offline */
-      }
-    };
-    fetchBotLogs();
-    if (botStatus !== "running") return;
-    const logInterval = setInterval(fetchBotLogs, 4000);
-    return () => clearInterval(logInterval);
-  }, [botStatus]);
 
   // Live sync: Parse code content into formData whenever content changes
   useEffect(() => {
@@ -341,15 +321,6 @@ export default function Dashboard() {
       if (!res.ok) throw new Error("Failed to start bot");
       setMessage({ type: 'success', text: 'Bot successfully started!' });
       setBotStatus("running");
-      try {
-        const logRes = await fetch("http://127.0.0.1:8000/api/bot/logs?lines=150");
-        if (logRes.ok) {
-          const logData = await logRes.json();
-          setBotLogs(typeof logData.logs === "string" ? logData.logs : "");
-        }
-      } catch {
-        /* ignore */
-      }
     } catch (err: any) {
       setMessage({ type: 'error', text: 'Error starting bot.' });
     } finally {
@@ -607,33 +578,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Bot activity logs (supervisor + OpenClaw tails from backend/logs) */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-        <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden shadow-sm">
-          <button
-            type="button"
-            onClick={() => setBotLogsOpen((o) => !o)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-zinc-900/50 border-b border-zinc-900 text-left hover:bg-zinc-900/70 transition-colors"
-          >
-            <div>
-              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Supervisor and bot logs</h3>
-              <p className="text-[11px] text-zinc-500 mt-0.5">
-                Streamed from the API when the bot is running. Full files live under{" "}
-                <code className="text-zinc-400">backend/logs/</code>.
-              </p>
-            </div>
-            <span className="text-zinc-500 text-xs shrink-0 ml-2">{botLogsOpen ? "Hide" : "Show"}</span>
-          </button>
-          {botLogsOpen && (
-            <div className="p-3 max-h-[min(420px,50vh)] overflow-auto bg-black/40">
-              <pre className="text-[11px] leading-relaxed text-zinc-300 whitespace-pre-wrap font-mono">
-                {botLogs || "No log output yet. Start automation above, or wait for the next refresh."}
-              </pre>
-            </div>
-          )}
-        </div>
-      </div>
-
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         
         {/* Toast Notification - Minimal */}
@@ -726,7 +670,7 @@ export default function Dashboard() {
           </aside>
 
           {/* Main Editor Area - Minimal */}
-          <section className="lg:col-span-6 flex flex-col h-[650px]">
+          <section className="lg:col-span-9 flex flex-col h-[650px]">
             <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden shadow-sm flex flex-col h-full">
               <div className="flex justify-between items-center px-4 py-2 border-b border-zinc-900 bg-zinc-900/30">
                 <div className="flex items-center gap-4">
@@ -750,6 +694,14 @@ export default function Dashboard() {
                     {activeTab === "search.py" && <SearchForm data={formData} onChange={setFormData} />}
                     {activeTab === "settings.py" && <SettingsForm data={formData} onChange={setFormData} />}
                     {activeTab === "questions.py" && <QuestionsForm data={formData} onChange={setFormData} />}
+                    {activeTab === "secrets.py" && (
+                      <SecretsForm
+                        data={formData}
+                        onChange={setFormData}
+                        isActive={activeTab === "secrets.py"}
+                        onAccountsSaved={() => fetchConfig("secrets.py")}
+                      />
+                    )}
                   </>
                 ) : (
                   <textarea
@@ -762,33 +714,6 @@ export default function Dashboard() {
               </div>
             </div>
           </section>
-
-          {/* Right Sidebar - Quick Start Guide */}
-          <aside className="lg:col-span-3 flex flex-col h-[650px]">
-            {showQuickStart ? (
-              <QuickStart 
-                formData={formData} 
-                activeTab={activeTab} 
-                onClose={() => setShowQuickStart(false)} 
-              />
-            ) : (
-              <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-6 text-center flex flex-col items-center justify-center h-full group">
-                <div className="size-12 rounded-full bg-zinc-900 flex items-center justify-center text-zinc-600 mb-4 group-hover:text-blue-500 transition-colors">
-                  <svg className="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
-                <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Setup Complete</h3>
-                <p className="text-[10px] text-zinc-600 leading-tight mb-4">You can reopen the guide from your settings if needed.</p>
-                <button 
-                  onClick={() => setShowQuickStart(true)}
-                  className="text-[9px] font-bold text-blue-500 uppercase tracking-widest hover:underline"
-                >
-                  Show Guide
-                </button>
-              </div>
-            )}
-          </aside>
         </div>
 
         {/* Application History - Minimal */}
@@ -822,7 +747,14 @@ export default function Dashboard() {
                       <tr key={idx} className="hover:bg-zinc-900/20 transition-colors">
                         <td className="px-4 py-3">
                           <p className="text-xs font-semibold text-zinc-300">{app.company}</p>
-                          <p className="text-[9px] text-zinc-600 uppercase tracking-tighter">{new Date(app.timestamp).toLocaleTimeString()}</p>
+                          <p className="text-[9px] text-zinc-600 uppercase tracking-tighter">
+                            {app.timestamp
+                              ? new Date(app.timestamp).toLocaleString(undefined, {
+                                  dateStyle: "short",
+                                  timeStyle: "short",
+                                })
+                              : ""}
+                          </p>
                         </td>
                         <td className="px-4 py-3 text-xs text-zinc-500">{app.job_title}</td>
                         <td className="px-4 py-3 text-right">
