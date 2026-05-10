@@ -524,13 +524,20 @@ export default function Dashboard() {
       <nav className="sticky top-0 z-[110] bg-zinc-950/80 backdrop-blur-md border-b border-zinc-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-12 items-center">
-            <div className="flex items-center gap-4 min-w-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <Image
+                src="/icon.png"
+                alt=""
+                width={32}
+                height={32}
+                className="size-8 object-contain rounded-xl shrink-0"
+              />
               <Image
                 src="/logo.png"
                 alt="LinkdApply"
-                width={160}
-                height={32}
-                className="h-7 w-auto max-w-[160px] object-contain object-left brightness-0 invert opacity-95"
+                width={180}
+                height={40}
+                className="h-7 w-auto max-w-[min(180px,45vw)] object-contain object-left"
               />
               {subscription && (
                 <div className="px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900">

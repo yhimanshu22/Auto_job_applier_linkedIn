@@ -8,13 +8,14 @@ const logger = require('./logger');
 
 function resolveAppIcon() {
   const candidates = [
+    path.join(__dirname, 'app-icon.png'),
     path.join(__dirname, 'logo.png'),
     path.join(__dirname, 'icon.ico'),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
-  return path.join(__dirname, 'logo.png');
+  return path.join(__dirname, 'app-icon.png');
 }
 
 const APP_ICON = resolveAppIcon();
