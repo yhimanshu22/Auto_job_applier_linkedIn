@@ -26,8 +26,6 @@ export default function StructuredData() {
     "@type": "Organization",
     "name": "LinkdApply",
     "url": "https://linkdapply.com",
-    "logo": "https://linkdapply.com/logo.png",
-    "image": "https://linkdapply.com/logo.png",
     "sameAs": [
       "https://twitter.com/linkdapply",
       "https://linkedin.com/company/linkdapply"

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import TitleBar from "@/components/TitleBar";
-import BrandLogo from "@/components/BrandLogo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -58,12 +57,10 @@ export default function LoginPage() {
       <div className="grow flex items-center justify-center p-6 bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.1),transparent_50%)]">
         <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
           <div className="text-center">
-            <div className="flex justify-center mb-6">
-              <div className="rounded-2xl bg-white px-6 py-3 shadow-xl shadow-black/25">
-                <BrandLogo height={44} withHomeLink={false} />
-              </div>
-            </div>
-            <h1 className="font-serif text-4xl font-medium tracking-tight text-white">Welcome</h1>
+            <p className="font-serif text-3xl sm:text-4xl font-bold tracking-tight mb-4 bg-gradient-to-r from-indigo-300 via-blue-300 to-violet-300 bg-clip-text text-transparent">
+              LinkdApply
+            </p>
+            <h1 className="font-serif text-3xl font-medium tracking-tight text-white">Welcome</h1>
             <p className="mt-2 text-zinc-500">The most powerful AI job application tool.</p>
           </div>
 

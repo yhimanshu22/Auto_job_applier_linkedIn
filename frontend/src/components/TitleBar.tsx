@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Image from "next/image";
 
 export default function TitleBar() {
   const [isElectron, setIsElectron] = useState(false);
@@ -21,14 +20,10 @@ export default function TitleBar() {
 
   return (
     <div className="drag-region h-8 w-full bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-900 flex items-center justify-between px-4 sticky top-0 z-[100] transition-colors">
-      <div className="flex items-center gap-2 min-w-0">
-        <Image
-          src="/icon.png"
-          alt="LinkdApply"
-          width={28}
-          height={28}
-          className="size-7 object-contain rounded-lg shrink-0"
-        />
+      <div className="flex items-center min-w-0">
+        <span className="text-[11px] font-bold tracking-tight bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent dark:from-indigo-400 dark:to-violet-400">
+          LinkdApply
+        </span>
       </div>
 
       <div className="no-drag flex items-center h-full">

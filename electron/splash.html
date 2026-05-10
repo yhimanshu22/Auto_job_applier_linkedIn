@@ -50,14 +50,17 @@
       z-index: 0;
       pointer-events: none;
     }
-    .brand-logo {
-      max-width: 260px;
-      width: 100%;
-      height: auto;
-      margin-bottom: 8px;
+    .brand-name {
+      margin: 0 0 8px;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      background: linear-gradient(90deg, #a5b4fc 0%, #93c5fd 50%, #c4b5fd 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
       z-index: 1;
       position: relative;
-      display: block;
     }
     .status {
       color: var(--text-muted);
@@ -126,7 +129,7 @@
 </head>
 <body>
   <div class="splash-container">
-    <img class="brand-logo" src="logo.png" alt="LinkdApply" />
+    <h1 class="brand-name">LinkdApply</h1>
     <div class="status" id="status-text">Starting backend services...</div>
     
     <div class="loader" id="loader">

@@ -1,6 +1,6 @@
 # 🚀 LinkedIn AI Auto Job Applier
 
-[![GitHub stars](https://img.shields.io/github/stars/yhimanshu22/Auto_job_applier_linkedIn?style=for-the-badge)](https://github.com/yhimanshu22/Auto_job_applier_linkedIn/stargazers)
+[Star on GitHub](https://github.com/yhimanshu22/Auto_job_applier_linkedIn/stargazers)
 
 **Automate your job search with the power of AI.** This tool handles the tedious parts of job hunting—searching for relevant roles, answering complex application questions, and submitting applications—so you can focus on preparing for interviews.
 
@@ -17,17 +17,9 @@
 
 ---
 
-## 📸 Screenshots
-
-| Dashboard Overview | Desktop App |
-|:---:|:---:|
-| ![Dashboard](frontend/public/images/hero_dashboard.png) | ![Desktop App](frontend/public/images/desktop_app.png) |
-
----
-
 ## 🛠️ Tech Stack
 
-- **Frontend**: Next.js 15, React 19, Tailwind CSS
+- **Frontend**: Next.js 16, React 19, Tailwind CSS
 - **Backend**: FastAPI (Python), Selenium, Playwright
 - **Desktop**: Electron Wrapper
 - **AI Integration**: OpenAI, DeepSeek, Google Gemini, Anthropic Claude

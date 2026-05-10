@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import PersonalsForm from "@/components/PersonalsForm";
@@ -525,20 +524,9 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-12 items-center">
             <div className="flex items-center gap-3 min-w-0">
-              <Image
-                src="/icon.png"
-                alt=""
-                width={32}
-                height={32}
-                className="size-8 object-contain rounded-xl shrink-0"
-              />
-              <Image
-                src="/logo.png"
-                alt="LinkdApply"
-                width={180}
-                height={40}
-                className="h-7 w-auto max-w-[min(180px,45vw)] object-contain object-left"
-              />
+              <span className="font-serif text-base font-bold tracking-tight bg-gradient-to-r from-indigo-300 via-blue-300 to-violet-300 bg-clip-text text-transparent">
+                LinkdApply
+              </span>
               {subscription && (
                 <div className="px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900">
                   <span className={`text-[9px] font-bold uppercase tracking-wider ${

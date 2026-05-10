@@ -35,20 +35,11 @@ export const metadata: Metadata = {
     siteName: "LinkdApply",
     title: "LinkdApply | AI-Powered LinkedIn Job Automation",
     description: "Land your dream job faster. Automate applications with the world's most human-like AI bot.",
-    images: [
-      {
-        url: "/logo.png",
-        width: 1200,
-        height: 630,
-        alt: "LinkdApply",
-      },
-    ],
   },
   twitter: {
-    card: "summary_large_image",
+    card: "summary",
     title: "LinkdApply | AI Job Search Automation",
     description: "Stop filling forms. Start interviewing. The #1 AI bot for LinkedIn applications.",
-    images: ["/logo.png"],
     creator: "@linkdapply",
   },
   robots: {
