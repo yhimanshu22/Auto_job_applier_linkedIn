@@ -1,3 +1,4 @@
+from app_paths import get_logs_dir
 from modules.helpers import make_directories
 from config.config_bridge import *
 
@@ -44,7 +45,7 @@ try:
         [
             file_name,
             failed_file_name,
-            logs_folder_path + "/screenshots",
+            os.path.join(get_logs_dir(), "screenshots"),
             default_resume_path,
             generated_resume_path + "/temp",
         ]

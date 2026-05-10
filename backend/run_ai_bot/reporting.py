@@ -1,7 +1,10 @@
 """CSV + DB logging for failures and successful submits."""
 
+import os
+
 from selenium.webdriver.remote.webdriver import WebDriver
 
+from app_paths import get_logs_dir
 from run_ai_bot.bootstrap_env import *
 from run_ai_bot.session import log_to_db
 from run_ai_bot.state import *
@@ -71,7 +74,9 @@ def screenshot(driver: WebDriver, job_id: str, failedAt: str) -> str:
     - Returns screenshot name as String
     """
     screenshot_name = "{} - {} - {}.png".format(job_id, failedAt, str(datetime.now()))
-    path = logs_folder_path + "/screenshots/" + screenshot_name.replace(":", ".")
+    path = os.path.join(
+        get_logs_dir(), "screenshots", screenshot_name.replace(":", ".")
+    )
     # special_chars = {'*', '"', '\\', '<', '>', ':', '|', '?'}
     # for char in special_chars:  path = path.replace(char, '-')
     driver.save_screenshot(path.replace("//", "/"))

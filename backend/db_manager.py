@@ -128,6 +128,19 @@ class DatabaseManager:
                 run.applications_count = count
                 session.commit()
 
+    def get_recent_bot_runs(self, limit=10):
+        with self.get_session() as session:
+            rows = (
+                session.query(BotRun)
+                .order_by(BotRun.start_time.desc())
+                .limit(limit)
+                .all()
+            )
+            return [
+                {c.name: getattr(run, c.name) for c in run.__table__.columns}
+                for run in rows
+            ]
+
     def log_application(self, user_id, **kwargs):
         if "timestamp" not in kwargs:
             kwargs["timestamp"] = datetime.now(timezone.utc)
@@ -174,6 +187,36 @@ class DatabaseManager:
                 d["timestamp"] = _ts_to_utc_iso(d.get("timestamp"))
                 rows.append(d)
             return rows
+
+    def get_last_activity_snapshot(self, user_id: str):
+        """Latest successful apply and latest failure for the dashboard home story."""
+        with self.get_session() as session:
+            applied = (
+                session.query(Application)
+                .filter(Application.user_id == user_id, Application.status == "applied")
+                .order_by(Application.timestamp.desc())
+                .first()
+            )
+            failed = (
+                session.query(Application)
+                .filter(Application.user_id == user_id, Application.status == "failed")
+                .order_by(Application.timestamp.desc())
+                .first()
+            )
+
+        def pack(app):
+            if not app:
+                return None
+            return {
+                "company": app.company,
+                "job_title": app.job_title,
+                "job_url": app.job_url,
+                "timestamp": _ts_to_utc_iso(app.timestamp),
+                "reason": app.reason,
+                "status": app.status,
+            }
+
+        return {"last_applied": pack(applied), "last_failed": pack(failed)}
 
     def set_user_session(self, user_id, cookies_dict):
         cookies_json = json.dumps(cookies_dict)

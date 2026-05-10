@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 
-from app_paths import get_base_path
+from app_paths import get_base_path, get_logs_dir
 from db_manager import db
 from services.linkedin_env import apply_dashboard_linkedin_credentials
 from services.plan_limits import PLAN_LIMITS, assert_can_start_bot
@@ -40,7 +40,7 @@ async def start_bot(payload: dict = None):
         env["USER_ID"] = user_id
 
         sv.close_supervisor_log()
-        logs_dir = os.path.join(cwd, "logs")
+        logs_dir = get_logs_dir()
         os.makedirs(logs_dir, exist_ok=True)
         console_log = os.path.join(logs_dir, "supervisor-console.log")
         sv.supervisor_log_handle = open(console_log, "a", encoding="utf-8", buffering=1)
@@ -71,7 +71,9 @@ async def start_bot(payload: dict = None):
 @router.post("/stop")
 async def stop_bot():
     try:
-        if sv.supervisor_process and sv.supervisor_process.poll() is None:
+        was_running = sv.supervisor_process is not None and sv.supervisor_process.poll() is None
+
+        if was_running:
             if os.name == "nt":
                 subprocess.run(
                     ["taskkill", "/F", "/PID", str(sv.supervisor_process.pid), "/T"],
@@ -87,7 +89,7 @@ async def stop_bot():
             db.end_bot_run(sv.current_run_id, 0)
             sv.current_run_id = None
 
-        return {"status": "stopped"}
+        return {"status": "stopped" if was_running else "not_running"}
     except Exception as e:
         print(f"Error in stop_bot: {e}")
         sv.supervisor_process = None
@@ -113,17 +115,20 @@ async def get_bot_status(user_id: str = "local-user"):
     if sv.supervisor_process and sv.supervisor_process.poll() is None:
         status = "running"
 
+    activity = db.get_last_activity_snapshot(user_id)
+
     return {
         "status": status,
         "applied_count": applied_count,
         "limit": limits["monthly_applications"],
+        **activity,
     }
 
 
 @router.get("/logs")
 async def get_bot_logs(lines: int = 120):
     lines = max(20, min(int(lines), 500))
-    log_dir = os.path.join(get_base_path(), "logs")
+    log_dir = get_logs_dir()
     os.makedirs(log_dir, exist_ok=True)
 
     def tail_file(path: str) -> str:

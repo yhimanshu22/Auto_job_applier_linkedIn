@@ -1,20 +1,22 @@
 import pytest
-import os
+import subprocess
 from datetime import datetime, timedelta
-from server import app
+
 
 def test_free_trial_user_can_start_bot(client, test_db, monkeypatch):
+    monkeypatch.setenv("LINKEDIN_USERNAME", "trial@test.com")
+    monkeypatch.setenv("LINKEDIN_PASSWORD", "secret")
+
     # Mock a trial subscription that expires in 1 hour
     expiry = datetime.utcnow() + timedelta(hours=1)
     test_db.upsert_subscription(
-        "trial-user", 
-        plan="free_trial", 
+        "trial-user",
+        plan="free_trial",
         status="trialing",
-        current_period_end=expiry.isoformat()
+        current_period_end=expiry.isoformat(),
     )
-    
+
     # Mock subprocess.Popen
-    import subprocess
     class MockProcess:
         pid = 1234
         def poll(self): return None
@@ -48,13 +50,13 @@ def test_expired_trial_cannot_start_bot(client, test_db):
     assert "expired" in response.json()["detail"].lower()
 
 def test_plan_limits_enforcement(client, test_db, monkeypatch):
-    # Trial allows only 1 active bot
+    # Trial allows only 1 LinkedIn account — simulate two (primary + extra) with passwords.
+    monkeypatch.setenv("LINKEDIN_USERNAME", "primary@test.com")
+    monkeypatch.setenv("LINKEDIN_PASSWORD", "secret")
+    monkeypatch.setenv("LINKEDIN_USERNAME_1", "extra@test.com")
+    monkeypatch.setenv("LINKEDIN_PASSWORD_1", "secret")
+
     test_db.upsert_subscription("limit-user", plan="free_trial", status="trialing")
-    
-    # Mock os.environ to simulate 2 configured accounts
-    # LINKEDIN_USERNAME_1 and LINKEDIN_USERNAME_2
-    monkeypatch.setenv("LINKEDIN_USERNAME_1", "user1")
-    monkeypatch.setenv("LINKEDIN_USERNAME_2", "user2")
     
     response = client.post(
         "/api/bot/start",
@@ -78,8 +80,11 @@ def test_subscription_status_includes_cycle(client, test_db):
     assert data["plan"] == "pro"
     assert data["billing_cycle"] == "yearly"
 
-def test_monthly_limit_enforcement(client, test_db):
-    # Starter allows 100 applications (based on server.py PLAN_LIMITS)
+def test_monthly_limit_enforcement(client, test_db, monkeypatch):
+    monkeypatch.setenv("LINKEDIN_USERNAME", "starter@test.com")
+    monkeypatch.setenv("LINKEDIN_PASSWORD", "secret")
+
+    # Starter allows 100 applications (based on PLAN_LIMITS)
     test_db.upsert_subscription("starter-user", plan="starter", status="active")
     
     # Log 100 applications for this user

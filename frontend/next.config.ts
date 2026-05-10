@@ -11,7 +11,7 @@ const cspHeader = isDev
     style-src 'self' 'unsafe-inline';
     img-src 'self' blob: data:;
     font-src 'self' data:;
-    connect-src 'self' http://localhost:3000 ws://localhost:3000 http://127.0.0.1:8000;
+    connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 ws://localhost:3000 ws://127.0.0.1:3000 http://127.0.0.1:8000;
     object-src 'none';
     base-uri 'self';
     form-action 'self';

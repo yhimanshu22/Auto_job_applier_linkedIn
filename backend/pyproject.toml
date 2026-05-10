@@ -10,8 +10,6 @@ dependencies = [
     "pyautogui",
     "setuptools",
     "openai",
-    "flask-cors",
-    "flask",
     "python-dotenv",
     "google-generativeai",
     "fastapi",

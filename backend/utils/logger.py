@@ -1,13 +1,15 @@
 import os
 import logging
 
+from app_paths import get_logs_dir
+
 
 def _bot_file_log_path() -> str | None:
     bid = os.getenv("BOT_ID", "").strip()
     if not bid:
         return None
     safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in bid)
-    return os.path.join("logs", f"bot-{safe}.txt")
+    return os.path.join(get_logs_dir(), f"bot-{safe}.txt")
 
 
 def setup_logging():

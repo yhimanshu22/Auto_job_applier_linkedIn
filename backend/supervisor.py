@@ -8,6 +8,8 @@ import logging
 from datetime import datetime
 from dotenv import load_dotenv
 
+from app_paths import get_logs_dir
+
 # Load environment variables
 load_dotenv()
 
@@ -20,13 +22,14 @@ def _nt_background_creationflags():
     return getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
-# Configure logging
-os.makedirs("logs", exist_ok=True)
+# Configure logging (canonical app logs dir, not cwd-relative)
+_LOG_DIR = get_logs_dir()
+os.makedirs(_LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler("logs/supervisor.log"),
+        logging.FileHandler(os.path.join(_LOG_DIR, "supervisor.log")),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -88,7 +91,7 @@ class BotSupervisor:
         try:
             logging.info("Starting OpenClaw gateway...")
             # Redirect OpenClaw output to a log file for debugging
-            log_file = open("logs/openclaw.log", "a")
+            log_file = open(os.path.join(_LOG_DIR, "openclaw.log"), "a")
             # Avoid shell=True to prevent cmd.exe dependency
             exe = os.getenv("OPENCLAW_EXE", "").strip()
             if exe:
@@ -148,7 +151,7 @@ class BotSupervisor:
 
             safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in bot_id)
             self._close_bot_stdio(bot_id)
-            bot_stdio_log = os.path.join("logs", f"bot-{safe_id}-stdout.log")
+            bot_stdio_log = os.path.join(_LOG_DIR, f"bot-{safe_id}-stdout.log")
             log_f = open(bot_stdio_log, "a", encoding="utf-8", buffering=1)
             self._bot_log_handles[bot_id] = log_f
 

@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from pyautogui import alert
 from pprint import pprint
 
+from app_paths import get_logs_dir
 from config.config_bridge import *
 from utils.logger import logger as cloud_logger
 
@@ -103,24 +104,22 @@ def critical_error_log(possible_reason: str, stack_trace: Exception) -> None:
 
 def get_log_path():
     """
-    Function to replace '//' with '/' for logs path.
-    When BOT_ID is set (supervisor-spawned worker), logs go to logs/bot-<id>.txt so each profile is separate.
+    Log files live under get_logs_dir() (backend/logs in dev), not cwd.
+    When BOT_ID is set (supervisor-spawned worker), logs go to bot-<id>.txt per profile.
     """
     try:
-        base = logs_folder_path.rstrip("/\\").replace("//", "/")
+        base = get_logs_dir()
         bid = os.getenv("BOT_ID", "").strip()
         if bid:
             safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in bid)
-            path = f"{base}/bot-{safe}.txt"
-        else:
-            path = f"{base}/log.txt"
-        return path.replace("//", "/")
+            return os.path.join(base, f"bot-{safe}.txt")
+        return os.path.join(base, "log.txt")
     except Exception as e:
         critical_error_log(
-            "Failed getting log path! So assigning default logs path: './logs/log.txt'",
+            "Failed getting log path! So assigning fallback under app logs dir.",
             e,
         )
-        return "logs/log.txt"
+        return os.path.join(get_logs_dir(), "log.txt")
 
 
 __logs_file_path = get_log_path()

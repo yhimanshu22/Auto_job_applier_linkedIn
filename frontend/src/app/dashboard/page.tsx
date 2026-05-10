@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -11,6 +11,34 @@ import QuestionsForm from "@/components/QuestionsForm";
 import SecretsForm from "@/components/SecretsForm";
 
 const CONFIG_FILES = ["personals.py", "search.py", "settings.py", "questions.py", "secrets.py"];
+
+type ActivitySnapshot = {
+  company?: string | null;
+  job_title?: string | null;
+  timestamp?: string | null;
+  reason?: string | null;
+};
+
+async function parseApiError(res: Response): Promise<string> {
+  try {
+    const data = await res.json();
+    const d = data?.detail;
+    if (typeof d === "string") return d;
+    if (Array.isArray(d)) return d.map((x: { msg?: string }) => x?.msg || "").filter(Boolean).join("; ") || res.statusText;
+    return res.statusText || "Request failed";
+  } catch {
+    return res.statusText || "Request failed";
+  }
+}
+
+function formatShortTime(iso: string | null | undefined) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+  } catch {
+    return iso;
+  }
+}
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState(CONFIG_FILES[0]);
@@ -31,6 +59,14 @@ export default function Dashboard() {
   const [history, setHistory] = useState<any[]>([]);
   const [isFormMode, setIsFormMode] = useState(true);
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const [lastApplied, setLastApplied] = useState<ActivitySnapshot | null>(null);
+  const [lastFailed, setLastFailed] = useState<ActivitySnapshot | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [showLogsModal, setShowLogsModal] = useState(false);
+  const [logsPayload, setLogsPayload] = useState<{ logs: string; infra?: { title: string; filename: string; content: string }[]; profiles?: { id: string; filename: string; content: string }[] } | null>(null);
+  const [logsLoading, setLogsLoading] = useState(false);
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -39,6 +75,24 @@ export default function Dashboard() {
   useEffect(() => {
     fetchConfig(activeTab);
   }, [activeTab]);
+
+  const openLogsModal = useCallback(async () => {
+    setShowLogsModal(true);
+    setLogsLoading(true);
+    setLogsPayload(null);
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/bot/logs?lines=200");
+      if (res.ok) {
+        setLogsPayload(await res.json());
+      } else {
+        setLogsPayload({ logs: await parseApiError(res) });
+      }
+    } catch {
+      setLogsPayload({ logs: "Could not load logs. Is the backend running?" });
+    } finally {
+      setLogsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -49,11 +103,13 @@ export default function Dashboard() {
           setBotStatus(data.status);
           if (data.applied_count !== undefined) setAppliedCount(data.applied_count);
           if (data.limit !== undefined) setApplyLimit(data.limit);
+          setLastApplied(data.last_applied ?? null);
+          setLastFailed(data.last_failed ?? null);
           setIsBackendHealthy(true);
         } else {
           setIsBackendHealthy(false);
         }
-      } catch (err) {
+      } catch {
         setBotStatus("error");
         setIsBackendHealthy(false);
       }
@@ -65,7 +121,7 @@ export default function Dashboard() {
             const data = await res.json();
             const match = data.content.match(/default_resume_path = "(.*)"/);
             if (match) setResumeName(match[1]);
-        } catch (err) {}
+        } catch {}
     };
 
     const fetchSubscription = async () => {
@@ -75,7 +131,7 @@ export default function Dashboard() {
           const data = await res.json();
           setSubscription(data);
         }
-      } catch (err) {
+      } catch {
         console.error("Failed to fetch subscription");
       }
     };
@@ -86,17 +142,14 @@ export default function Dashboard() {
         const data = await res.json();
         const match = data.content.match(/bot_speed = (\d+)/);
         if (match) setBotSpeed(parseInt(match[1]));
-      } catch (err) {}
+      } catch {}
     };
 
-    checkStatus();
-    fetchResumeInfo();
-    fetchBotSpeed();
     const fetchStats = async () => {
       try {
         const res = await fetch(`http://127.0.0.1:8000/api/applications/stats?user_id=${userId}`);
         if (res.ok) setStats(await res.json());
-      } catch (err) {}
+      } catch {}
     };
 
     const fetchHistory = async () => {
@@ -106,18 +159,18 @@ export default function Dashboard() {
             const data = await res.json();
             setHistory(data.history);
         }
-      } catch (err) {}
+      } catch {}
     };
 
     if (status === "loading") return;
 
     checkStatus();
     fetchResumeInfo();
+    fetchBotSpeed();
     fetchSubscription();
     fetchStats();
     fetchHistory();
 
-    // Poll every 10 seconds
     const statusInterval = setInterval(() => {
       checkStatus();
       fetchSubscription();
@@ -127,6 +180,10 @@ export default function Dashboard() {
 
     return () => clearInterval(statusInterval);
   }, [userId, status, router]);
+
+  useEffect(() => {
+    if (botStatus === "running" && isStarting) setIsStarting(false);
+  }, [botStatus, isStarting]);
 
   // Live sync: Parse code content into formData whenever content changes
   useEffect(() => {
@@ -307,41 +364,104 @@ export default function Dashboard() {
     }
   };
 
+  const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
   const startBot = async () => {
     setShowConfirm(false);
-    if (isLoading) return;
+    if (isLoading || isStarting) return;
     setIsLoading(true);
+    setIsStarting(true);
+    setConnectionError(null);
     setMessage(null);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/bot/start`, { 
+      const res = await fetch(`http://127.0.0.1:8000/api/bot/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId })
+        body: JSON.stringify({ user_id: userId }),
       });
-      if (!res.ok) throw new Error("Failed to start bot");
-      setMessage({ type: 'success', text: 'Bot successfully started!' });
-      setBotStatus("running");
-    } catch (err: any) {
-      setMessage({ type: 'error', text: 'Error starting bot.' });
+      if (!res.ok) {
+        setConnectionError(await parseApiError(res));
+        setIsStarting(false);
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (data.status === "already_running") {
+        setBotStatus("running");
+        setIsStarting(false);
+        setMessage({ type: "success", text: "Bot is already running." });
+        return;
+      }
+      for (let i = 0; i < 24; i++) {
+        await wait(650);
+        try {
+          const st = await fetch(`http://127.0.0.1:8000/api/bot/status?user_id=${userId}`);
+          if (st.ok) {
+            const j = await st.json();
+            setLastApplied(j.last_applied ?? null);
+            setLastFailed(j.last_failed ?? null);
+            if (j.applied_count !== undefined) setAppliedCount(j.applied_count);
+            if (j.limit !== undefined) setApplyLimit(j.limit);
+            if (j.status === "running") {
+              setBotStatus("running");
+              setIsStarting(false);
+              setMessage({ type: "success", text: "Bot is running." });
+              return;
+            }
+          }
+        } catch {
+          /* ignore single poll failure */
+        }
+      }
+      setConnectionError("Could not confirm the bot started. Open logs to see supervisor output.");
+      setIsStarting(false);
+    } catch {
+      setConnectionError("Network error while starting the bot.");
+      setIsStarting(false);
     } finally {
       setIsLoading(false);
     }
   };
 
   const stopBot = async () => {
-    setIsLoading(true);
+    if (isStopping) return;
+    setIsStopping(true);
+    setConnectionError(null);
     setMessage(null);
     try {
       const res = await fetch(`http://127.0.0.1:8000/api/bot/stop`, { method: "POST" });
-      if (!res.ok) throw new Error("Failed to stop bot");
-      setMessage({ type: 'success', text: 'Bot stopped successfully.' });
+      if (!res.ok) {
+        setConnectionError(await parseApiError(res));
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
       setBotStatus("stopped");
-    } catch (err: any) {
-      setMessage({ type: 'error', text: 'Error stopping bot.' });
+      setMessage({
+        type: "success",
+        text: data.status === "not_running" ? "Bot was not running." : "Bot stopped.",
+      });
+    } catch {
+      setConnectionError("Network error while stopping the bot.");
     } finally {
-      setIsLoading(false);
+      setIsStopping(false);
     }
   };
+
+  const goToSettings = () => {
+    setActiveTab("settings.py");
+    document.getElementById("dashboard-configuration")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const subActive =
+    subscription &&
+    (subscription.status === "active" || subscription.status === "trialing");
+  const startDisabled =
+    isLoading ||
+    isStarting ||
+    !isBackendHealthy ||
+    !subActive ||
+    botStatus === "running";
+  const stopDisabled = isStopping || botStatus !== "running";
+  const logsDisabled = !isBackendHealthy;
 
   const updateBotSpeed = async (speed: number) => {
     setBotSpeed(speed);
@@ -500,83 +620,234 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Minimal Status Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-        <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
-          
-          <div className="flex items-center gap-4">
-            <div className={`size-10 rounded-lg flex items-center justify-center ${
-              botStatus === 'running' ? 'bg-blue-600/10 text-blue-500' :
-              botStatus === 'error' ? 'bg-red-600/10 text-red-500' :
-              'bg-zinc-900 text-zinc-600'
-            }`}>
-              {botStatus === 'running' ? (
-                <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                </svg>
-              ) : (
-                <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              )}
-            </div>
-            <div>
-              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Process Status</h3>
-              <p className="text-lg font-semibold text-white tracking-tight leading-none">
-                {botStatus === 'running' ? 'Applying to Jobs' : botStatus === 'error' ? 'Halted' : 'Inactive'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-6 w-full md:w-auto px-4 py-2 rounded-lg bg-zinc-900/50 border border-zinc-900">
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <div className="text-lg font-bold text-white tracking-tight">
-                  {stats?.monthly_count || 0}
-                  <span className="text-zinc-600 text-xs font-medium ml-1">/ {subscription?.limit || '?'}</span>
-                </div>
-                <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest leading-none">Quota Used</div>
-              </div>
-              <div className="w-24 h-1 bg-zinc-900 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-blue-600 transition-all duration-1000" 
-                  style={{ width: `${Math.min(100, (subscription?.limit > 0) ? (stats?.monthly_count / subscription.limit) * 100 : 0)}%` }}
-                ></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            {botStatus === "running" ? (
-              <button
-                onClick={stopBot}
-                disabled={isLoading}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-red-500 transition-all disabled:opacity-50"
-              >
-                Stop
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  if (subscription && subscription.status !== 'active' && subscription.status !== 'trialing') {
-                    window.location.href = '/pricing';
-                  } else {
-                    setShowConfirm(true);
-                  }
-                }}
-                disabled={isLoading || !isBackendHealthy}
-                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-50 ${
-                  subscription && subscription.status !== 'active' && subscription.status !== 'trialing'
-                    ? "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"
-                    : "bg-blue-600 text-white hover:bg-blue-500"
+      {/* Home: status, activity, primary actions */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 space-y-4">
+        <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-5 shadow-sm">
+          <div className="flex flex-col lg:flex-row lg:items-start gap-6">
+            <div className="flex items-start gap-4 flex-1 min-w-0">
+              <div
+                className={`size-12 shrink-0 rounded-xl flex items-center justify-center ${
+                  isStarting
+                    ? "bg-amber-500/15 text-amber-400"
+                    : botStatus === "running"
+                      ? "bg-blue-600/15 text-blue-400"
+                      : botStatus === "error"
+                        ? "bg-red-600/15 text-red-400"
+                        : "bg-zinc-900 text-zinc-500"
                 }`}
               >
-                Start Automation
-              </button>
-            )}
+                {isStarting ? (
+                  <svg className="size-6 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path
+                      className="opacity-90"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                ) : botStatus === "running" ? (
+                  <svg className="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  </svg>
+                ) : (
+                  <svg className="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+              </div>
+              <div className="min-w-0 flex-1 space-y-3">
+                <div>
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Bot</p>
+                  <p className="text-xl font-semibold text-white tracking-tight">
+                    {isStarting
+                      ? "Connecting…"
+                      : botStatus === "running"
+                        ? "Running"
+                        : botStatus === "error"
+                          ? "Backend unreachable"
+                          : "Stopped"}
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    {isStarting
+                      ? "Starting supervisor and workers…"
+                      : botStatus === "running"
+                        ? "Automation is active."
+                        : "Start when you are ready to apply."}
+                  </p>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3 text-xs">
+                  <div className="rounded-lg bg-zinc-900/60 border border-zinc-800/80 px-3 py-2">
+                    <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Last apply</p>
+                    {lastApplied?.company || lastApplied?.job_title ? (
+                      <>
+                        <p className="text-zinc-200 font-medium truncate">{lastApplied.job_title || "—"}</p>
+                        <p className="text-zinc-500 truncate">{lastApplied.company}</p>
+                        <p className="text-[10px] text-zinc-600 mt-0.5">{formatShortTime(lastApplied.timestamp)}</p>
+                      </>
+                    ) : (
+                      <p className="text-zinc-600">No applications yet</p>
+                    )}
+                  </div>
+                  <div className="rounded-lg bg-zinc-900/60 border border-zinc-800/80 px-3 py-2">
+                    <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Last error</p>
+                    {lastFailed?.company || lastFailed?.job_title || lastFailed?.reason ? (
+                      <>
+                        <p className="text-zinc-200 font-medium truncate">{lastFailed.job_title || "—"}</p>
+                        <p className="text-zinc-500 truncate">{lastFailed.company}</p>
+                        {lastFailed.reason ? (
+                          <p className="text-[10px] text-red-400/90 mt-1 line-clamp-2">{lastFailed.reason}</p>
+                        ) : null}
+                        <p className="text-[10px] text-zinc-600 mt-0.5">{formatShortTime(lastFailed.timestamp)}</p>
+                      </>
+                    ) : (
+                      <p className="text-zinc-600">No failures recorded</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row lg:flex-col gap-4 lg:items-end lg:min-w-[200px] shrink-0">
+              <div className="rounded-lg bg-zinc-900/50 border border-zinc-900 px-4 py-3 w-full sm:w-auto">
+                <div className="text-lg font-bold text-white tracking-tight">
+                  {stats?.monthly_count ?? 0}
+                  <span className="text-zinc-600 text-xs font-medium ml-1">
+                    / {applyLimit || subscription?.limit || "?"}
+                  </span>
+                </div>
+                <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Monthly quota</div>
+                <div className="mt-2 w-full sm:w-36 h-1 bg-zinc-900 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-600 transition-all duration-1000"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        applyLimit > 0 ? ((stats?.monthly_count ?? 0) / applyLimit) * 100 : 0
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!subActive) {
+                      window.location.href = "/pricing";
+                      return;
+                    }
+                    setShowConfirm(true);
+                  }}
+                  disabled={startDisabled}
+                  title={!isBackendHealthy ? "Backend offline" : !subActive ? "Subscription required" : undefined}
+                  className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                    subActive ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"
+                  }`}
+                >
+                  Start
+                </button>
+                <button
+                  type="button"
+                  onClick={stopBot}
+                  disabled={stopDisabled}
+                  title={botStatus !== "running" ? "Bot is not running" : undefined}
+                  className="px-4 py-2.5 rounded-lg bg-red-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-red-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {isStopping ? "Stopping…" : "Stop"}
+                </button>
+                <button
+                  type="button"
+                  onClick={openLogsModal}
+                  disabled={logsDisabled}
+                  className="px-4 py-2.5 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-200 text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Logs
+                </button>
+                <button
+                  type="button"
+                  onClick={goToSettings}
+                  className="px-4 py-2.5 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-200 text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all"
+                >
+                  Settings
+                </button>
+              </div>
+            </div>
           </div>
+
+          {connectionError && (
+            <div className="mt-5 rounded-lg border border-red-500/25 bg-red-950/40 px-4 py-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-red-400 uppercase tracking-wider mb-1">Could not complete action</p>
+                <p className="text-sm text-red-200/95 break-words">{connectionError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setConnectionError(null);
+                  openLogsModal();
+                }}
+                className="shrink-0 px-3 py-1.5 rounded-md bg-red-600/30 text-red-100 text-[10px] font-bold uppercase tracking-wider hover:bg-red-600/50 border border-red-500/30"
+              >
+                View logs
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Logs modal */}
+      {showLogsModal && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-xl max-w-4xl w-full max-h-[85vh] flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Bot logs</h3>
+              <button
+                type="button"
+                onClick={() => setShowLogsModal(false)}
+                className="text-zinc-500 hover:text-white p-1 rounded"
+                aria-label="Close"
+              >
+                <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4 text-xs font-mono text-zinc-300 space-y-4">
+              {logsLoading && <p className="text-zinc-500">Loading…</p>}
+              {!logsLoading && logsPayload?.infra && logsPayload.infra.length > 0 && (
+                <div className="space-y-3">
+                  {logsPayload.infra.map((block) => (
+                    <div key={block.filename}>
+                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">{block.title}</p>
+                      <pre className="whitespace-pre-wrap break-words bg-black/40 rounded-lg p-3 border border-zinc-800/80 text-[11px] leading-relaxed">
+                        {block.content || "(empty)"}
+                      </pre>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!logsLoading && logsPayload?.profiles && logsPayload.profiles.length > 0 && (
+                <div className="space-y-3">
+                  {logsPayload.profiles.map((block) => (
+                    <div key={block.filename}>
+                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
+                        Profile {block.id}
+                      </p>
+                      <pre className="whitespace-pre-wrap break-words bg-black/40 rounded-lg p-3 border border-zinc-800/80 text-[11px] leading-relaxed">
+                        {block.content || "(empty)"}
+                      </pre>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!logsLoading && logsPayload && !logsPayload.infra?.length && !logsPayload.profiles?.length && (
+                <pre className="whitespace-pre-wrap break-words text-zinc-400">{logsPayload.logs}</pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         
@@ -608,7 +879,7 @@ export default function Dashboard() {
         <div className="grid lg:grid-cols-12 gap-8">
           
           {/* Left Sidebar - Minimal */}
-          <aside className="lg:col-span-3 space-y-4">
+          <aside id="dashboard-configuration" className="lg:col-span-3 space-y-4 scroll-mt-24">
             <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden shadow-sm">
               <div className="px-4 py-2.5 bg-zinc-900/50 border-b border-zinc-900">
                 <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Configuration</h3>
