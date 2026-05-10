@@ -139,6 +139,7 @@ def gemini_answer_question(
         print_lg(f"Answering question using Gemini AI: {question}")
         user_info = user_information_all or ""
         prompt = ai_answer_prompt.format(user_info, question)
+        prompt += canonical_experience_instruction()
 
         if options and (question_type in ['single_select', 'multiple_select']):
             options_str = "OPTIONS:\n" + "\n".join([f"- {option}" for option in options])

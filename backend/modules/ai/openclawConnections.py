@@ -247,6 +247,7 @@ def ai_answer_question(
     print_lg("-- ANSWERING QUESTION using OpenClaw AI")
     try:
         prompt = ai_answer_prompt.format(user_information_all or "N/A", question)
+        prompt += canonical_experience_instruction()
          # Append optional details if provided
         if job_description and job_description != "Unknown":
             prompt += f"\nJob Description:\n{job_description}"

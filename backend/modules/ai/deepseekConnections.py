@@ -200,7 +200,8 @@ def deepseek_answer_question(
         
         # Prepare prompt based on question type
         prompt = ai_answer_prompt.format(user_info, question)
-        
+        prompt += canonical_experience_instruction()
+
         # Add options to the prompt if available
         if options and (question_type in ['single_select', 'multiple_select']):
             options_str = "OPTIONS:\n" + "\n".join([f"- {option}" for option in options])

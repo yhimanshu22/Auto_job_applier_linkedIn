@@ -1,6 +1,11 @@
 """Easy Apply form: resume upload and question answering."""
 
 from run_ai_bot.bootstrap_env import *
+from run_ai_bot.form_answer_helpers import (
+    is_experience_level_select,
+    select_bucket_for_total_years,
+    should_fill_total_years_from_config,
+)
 from run_ai_bot.session import log_to_db
 from run_ai_bot.state import *
 
@@ -101,6 +106,16 @@ def answer_questions(
                 custom_key = f"{label_org} [ {options} ]"
                 if custom_key in custom_qa:
                     answer = custom_qa[custom_key]
+                elif is_experience_level_select(label_org):
+                    picked = select_bucket_for_total_years(
+                        years_of_experience, optionsText
+                    )
+                    if picked:
+                        answer = picked
+                    elif should_fill_total_years_from_config(label_org):
+                        answer = years_of_experience
+                    else:
+                        answer = answer_common_questions(label, answer)
                 elif "email" in label or "phone" in label:
                     answer = prev_answer
                 elif "gender" in label or "sex" in label:
@@ -290,7 +305,7 @@ def answer_questions(
             if not prev_answer or overwrite_previous_answers:
                 if label_org in custom_qa:
                     answer = custom_qa[label_org]
-                elif "experience" in label or "years" in label:
+                elif should_fill_total_years_from_config(label_org):
                     answer = years_of_experience
                 elif "phone" in label or "mobile" in label:
                     answer = phone_number
@@ -450,6 +465,8 @@ def answer_questions(
                     answer = linkedin_summary
                 elif "cover" in label:
                     answer = cover_letter
+                elif should_fill_total_years_from_config(label_org):
+                    answer = years_of_experience
                 if answer == "":
                     ##> ------ Yang Li : MARKYangL - Feature ------
                     if use_AI and aiClient:

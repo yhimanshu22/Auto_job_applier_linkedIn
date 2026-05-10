@@ -111,4 +111,24 @@ Respond concisely based on the type of question:
 **QUESTION Strat from here:**  
 {}
 """
+
+
+def canonical_experience_instruction() -> str:
+    """Appended to AI form prompts so total-YOE answers match personals config."""
+    try:
+        from config.config_bridge import years_of_experience as _yoe
+    except ImportError:
+        _yoe = ""
+    y = (str(_yoe) if _yoe is not None else "").strip()
+    if not y:
+        return ""
+    return (
+        "\n\n**Canonical total professional years of experience** "
+        "(when the question asks for overall/total/general professional or work experience — "
+        "not years in one specific technology unless the question clearly names that skill — "
+        "respond with exactly this value and nothing else for that numeric answer): "
+        f"`{y}`"
+    )
+
+
 #<
