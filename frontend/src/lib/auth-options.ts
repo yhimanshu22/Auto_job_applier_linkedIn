@@ -26,11 +26,13 @@ export const authOptions: NextAuthOptions = {
       }
       return token;
     },
-    async session({ session, token }: { session: any; token: any }) {
-      session.accessToken = token.accessToken;
+    async session({ session, token }) {
+      if (typeof token.accessToken === "string") {
+        session.accessToken = token.accessToken;
+      }
       return session;
     },
-    async redirect({ url, baseUrl }) {
+    async redirect({ baseUrl }) {
       return `${baseUrl}/api/auth/success-redirect`;
     },
   },
