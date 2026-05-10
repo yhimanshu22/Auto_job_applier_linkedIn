@@ -440,13 +440,14 @@ async def start_bot(payload: dict = None):
         )
         supervisor_log_handle.flush()
 
+        _sup_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
         supervisor_process = subprocess.Popen(
             cmd,
             cwd=cwd,
             env=env,
             stdout=supervisor_log_handle,
             stderr=subprocess.STDOUT,
-            creationflags=0,
+            creationflags=_sup_flags,
         )
         
         current_run_id = db.start_bot_run(user_id)

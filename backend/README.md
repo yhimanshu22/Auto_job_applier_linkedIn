@@ -37,7 +37,7 @@ You can set up the project using either `uv` (recommended) or standard `pip`.
     ```
 
 ### 3. Setup Drivers
-*   **Windows**: Double-click `setup/windows-setup.bat` to automatically download the correct ChromeDriver.
+*   **Windows**: Install a ChromeDriver version that matches your installed Chrome, or rely on `undetected-chromedriver` when `stealth_mode = True`.
 
 ---
 
@@ -46,7 +46,7 @@ You can set up the project using either `uv` (recommended) or standard `pip`.
 The easiest way to configure the bot is using the built-in Next.js Dashboard.
 
 ### Method 1: Dashboard Configuration (Recommended)
-1. Start the servers using `./start_servers.bat` at the project root.
+1. Start the backend (`uv run uvicorn server:app --host 127.0.0.1 --port 8000` in `backend/`) and frontend (`npm run dev` in `frontend/`).
 2. Open your browser to `http://localhost:3000`.
 3. Navigate to the Configuration or Settings page to edit your personal details, answers, and search preferences.
 
@@ -86,7 +86,7 @@ You can also manually edit the files in the `config/` folder:
 *   **Fix**:
     1.  **Close ALL Chrome windows** and try again.
     2.  If that fails, set `safe_mode = True` in `config/settings.py` (or via the UI).
-    3.  Check if your Chrome browser updated recently. You may need to re-run `setup/windows-setup.bat`.
+    3.  Check if your Chrome browser updated recently; update ChromeDriver or reinstall `undetected-chromedriver` if versions drift.
 
 ### Bot gets stuck or errors out
 *   Check the terminal output for error messages.

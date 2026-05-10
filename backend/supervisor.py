@@ -11,6 +11,15 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+
+def _nt_background_creationflags():
+    """Hide console windows for child processes on Windows (no CMD popup)."""
+    if os.name != "nt":
+        return 0
+    # Python 3.7+ on Windows
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
 # Configure logging
 os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
@@ -25,9 +34,18 @@ logging.basicConfig(
 class BotSupervisor:
     def __init__(self):
         self.bot_processes = {}  # Map bot_id -> subprocess.Popen
+        self._bot_log_handles = {}  # Keep stdout log files open while children run
         self.accounts = self._get_accounts()
         self.openclaw_process = None
         self.is_running = True
+
+    def _close_bot_stdio(self, bot_id):
+        h = self._bot_log_handles.pop(bot_id, None)
+        if h:
+            try:
+                h.close()
+            except Exception:
+                pass
 
     def _get_accounts(self):
         """Identifies all LinkedIn accounts from environment variables."""
@@ -92,7 +110,8 @@ class BotSupervisor:
                 cmd,
                 stdout=log_file,
                 stderr=log_file,
-                shell=False
+                shell=False,
+                creationflags=_nt_background_creationflags(),
             )
             logging.info(f"OpenClaw started (PID: {self.openclaw_process.pid})")
         except FileNotFoundError:
@@ -127,11 +146,19 @@ class BotSupervisor:
 
             logging.info(f"[Supervisor] Starting bot with command: {cmd}")
 
+            safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in bot_id)
+            self._close_bot_stdio(bot_id)
+            bot_stdio_log = os.path.join("logs", f"bot-{safe_id}-stdout.log")
+            log_f = open(bot_stdio_log, "a", encoding="utf-8", buffering=1)
+            self._bot_log_handles[bot_id] = log_f
+
             self.bot_processes[bot_id] = subprocess.Popen(
                 cmd,
                 cwd=os.getcwd(),
                 env=env,
-                creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
+                stdout=log_f,
+                stderr=subprocess.STDOUT,
+                creationflags=_nt_background_creationflags(),
             )
             logging.info(f"Bot {bot_id} started (PID: {self.bot_processes[bot_id].pid})")
         except Exception as e:
@@ -151,6 +178,7 @@ class BotSupervisor:
                 logging.info(f"Bot process {bot_id} stopped.")
             except Exception as e:
                 logging.error(f"Error stopping bot {bot_id}: {e}")
+            self._close_bot_stdio(bot_id)
 
         if self.openclaw_process:
             try:
@@ -180,6 +208,7 @@ class BotSupervisor:
                             logging.info(f"Bot {bot_id} was terminated by user (code {exit_code}). Not restarting.")
                             # Remove from active processes so we don't keep checking it
                             del self.bot_processes[bot_id]
+                            self._close_bot_stdio(bot_id)
                             # Remove from accounts so it doesn't get picked up again in next iteration
                             self.accounts = [a for a in self.accounts if a["id"] != bot_id]
                             continue

@@ -30,7 +30,7 @@ ENV/
 *.swp
 *.swo
 
-# Root runtime logs (start_servers.bat)
+# Root runtime logs
 /logs/
 
 # Project specific

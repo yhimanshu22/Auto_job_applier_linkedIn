@@ -60,8 +60,13 @@ npm install
 
 ### 3. Run the App
 ```bash
-# Start all services (Dashboard + Backend + Electron)
-./start_servers.bat
+# Backend (from backend/)
+uv run uvicorn server:app --host 127.0.0.1 --port 8000
+
+# Frontend (from frontend/, separate terminal)
+npm run dev
+
+# Or launch the Electron app from the repo root if configured
 ```
 
 ---

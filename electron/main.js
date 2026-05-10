@@ -166,11 +166,13 @@ function startBackend() {
 
     logger.electron(`Starting backend process...`);
     
-    backendProcess = spawn(spawnCommand, spawnArgs, {
+    const backendOpts = {
       cwd: backendDir,
-      shell: false, 
-      env: { ...process.env, PYTHONUNBUFFERED: "1" }
-    });
+      shell: false,
+      env: { ...process.env, PYTHONUNBUFFERED: "1" },
+    };
+    if (process.platform === 'win32') backendOpts.windowsHide = true;
+    backendProcess = spawn(spawnCommand, spawnArgs, backendOpts);
 
     backendProcess.stdout.on('data', (d) => logger.backend(d.toString()));
     
@@ -229,11 +231,9 @@ function startFrontend() {
     // Set PORT explicitly for Next.js standalone server
     const env = { ...process.env, NEXT_TELEMETRY_DISABLED: "1", PORT: FRONTEND_PORT.toString() };
     
-    frontendProcess = spawn(spawnCommand, spawnArgs, {
-      cwd: cwd,
-      shell: false, 
-      env: env
-    });
+    const frontendOpts = { cwd: cwd, shell: false, env: env };
+    if (process.platform === 'win32') frontendOpts.windowsHide = true;
+    frontendProcess = spawn(spawnCommand, spawnArgs, frontendOpts);
 
     frontendProcess.stdout.on('data', (d) => logger.frontend(d.toString()));
     frontendProcess.stderr.on('data', (d) => {
