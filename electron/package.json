@@ -5,10 +5,15 @@
   "main": "main.js",
   "author": "LinkdApply",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yhimanshu22/Auto_job_applier_linkedIn.git"
+  },
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder build --win --publish never"
+    "build": "electron-builder build --win --publish never",
+    "release:github": "electron-builder build --win --publish always"
   },
   "dependencies": {
     "electron-log": "^5.4.3",
@@ -23,6 +28,7 @@
     "appId": "com.linkdapply.app",
     "productName": "LinkdApply",
     "copyright": "Copyright © 2024 LinkdApply",
+    "artifactName": "LinkdApply-Setup.${ext}",
     "protocols": [
       {
         "name": "LinkdApply",

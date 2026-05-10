@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Link from "next/link";
 import StructuredData from "@/components/StructuredData";
+import { RELEASES_PAGE_URL, WINDOWS_INSTALLER_URL } from "@/lib/downloads";
 
 export default function LandingPage() {
   return (
@@ -51,16 +52,16 @@ export default function LandingPage() {
               >
                 Start Applying Free
               </Link>
-              <Link 
-                href="/download/LinkdApply-Setup.exe"
-                download="LinkdApply-Setup.exe"
+              <a
+                href={WINDOWS_INSTALLER_URL}
+                rel="noopener noreferrer"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-10 py-4 text-white font-semibold shadow-xl transition-all hover:bg-zinc-800 hover:scale-[1.02]"
               >
                 <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M0 3.449L9.75 2.1V11.7H0V3.449zm0 9.15h9.75V22.25L0 20.926V12.599zM11.25 1.875L24 0V11.7H11.25V1.875zm0 10.725H24v11.7L11.25 22.425V12.6z"/>
                 </svg>
                 Get for Windows
-              </Link>
+              </a>
             </div>
           </div>
 
@@ -180,21 +181,31 @@ export default function LandingPage() {
                 <p className="text-xl text-zinc-500">
                   Try LinkdApply on your Windows desktop today. Automate the boring parts of the job search while you stay focused on what matters—interviewing.
                 </p>
-                <div id="download" className="flex flex-col sm:flex-row items-center gap-4 pt-4 justify-center lg:justify-start">
-                  <Link 
-                    href="/download/LinkdApply-Setup.exe"
-                    download="LinkdApply-Setup.exe"
+                <div id="download" className="flex flex-col items-center gap-4 pt-4 justify-center lg:items-start">
+                  <a
+                    href={WINDOWS_INSTALLER_URL}
+                    rel="noopener noreferrer"
                     className="w-full sm:w-auto purple-gradient-button inline-flex items-center justify-center gap-2 rounded-xl px-10 py-4 text-white font-semibold shadow-2xl hover:scale-[1.02] transition-all"
                   >
                     <svg className="size-5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M0 3.449L9.75 2.1V11.7H0V3.449zm0 9.15h9.75V22.25L0 20.926V12.599zM11.25 1.875L24 0V11.7H11.25V1.875zm0 10.725H24v11.7L11.25 22.425V12.6z"/>
                     </svg>
                     Get LinkdApply for Windows
-                  </Link>
-                  <span className="text-xs text-zinc-500 font-bold tracking-widest uppercase items-center flex gap-2">
-                    <div className="size-1 rounded-full bg-zinc-600"></div>
-                    MacOS version coming soon
-                  </span>
+                  </a>
+                  <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6 text-xs text-zinc-500 font-bold tracking-widest uppercase">
+                    <a
+                      href={RELEASES_PAGE_URL}
+                      rel="noopener noreferrer"
+                      className="underline-offset-4 hover:text-zinc-700 hover:underline"
+                    >
+                      Release notes
+                    </a>
+                    <span className="hidden sm:inline text-zinc-300">·</span>
+                    <span className="flex items-center gap-2">
+                      <span className="size-1 rounded-full bg-zinc-600" aria-hidden />
+                      MacOS version coming soon
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

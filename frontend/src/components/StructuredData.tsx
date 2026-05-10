@@ -1,4 +1,5 @@
 import React from 'react';
+import { WINDOWS_INSTALLER_URL } from '@/lib/downloads';
 
 export default function StructuredData() {
   const softwareSchema = {
@@ -6,6 +7,7 @@ export default function StructuredData() {
     "@type": "SoftwareApplication",
     "name": "LinkdApply",
     "operatingSystem": "Windows, MacOS",
+    "downloadUrl": WINDOWS_INSTALLER_URL,
     "applicationCategory": "BusinessApplication",
     "aggregateRating": {
       "@type": "AggregateRating",
