@@ -32,6 +32,8 @@ export default function Dashboard() {
   const [isFormMode, setIsFormMode] = useState(true);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [showQuickStart, setShowQuickStart] = useState(true);
+  const [botLogs, setBotLogs] = useState<string>("");
+  const [botLogsOpen, setBotLogsOpen] = useState(true);
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -127,6 +129,24 @@ export default function Dashboard() {
     }, 10000);
     return () => clearInterval(statusInterval);
   }, [userId, status, router]);
+
+  useEffect(() => {
+    const fetchBotLogs = async () => {
+      try {
+        const res = await fetch("http://127.0.0.1:8000/api/bot/logs?lines=150");
+        if (res.ok) {
+          const data = await res.json();
+          setBotLogs(typeof data.logs === "string" ? data.logs : "");
+        }
+      } catch {
+        /* backend offline */
+      }
+    };
+    fetchBotLogs();
+    if (botStatus !== "running") return;
+    const logInterval = setInterval(fetchBotLogs, 4000);
+    return () => clearInterval(logInterval);
+  }, [botStatus]);
 
   // Live sync: Parse code content into formData whenever content changes
   useEffect(() => {
@@ -321,6 +341,15 @@ export default function Dashboard() {
       if (!res.ok) throw new Error("Failed to start bot");
       setMessage({ type: 'success', text: 'Bot successfully started!' });
       setBotStatus("running");
+      try {
+        const logRes = await fetch("http://127.0.0.1:8000/api/bot/logs?lines=150");
+        if (logRes.ok) {
+          const logData = await logRes.json();
+          setBotLogs(typeof logData.logs === "string" ? logData.logs : "");
+        }
+      } catch {
+        /* ignore */
+      }
     } catch (err: any) {
       setMessage({ type: 'error', text: 'Error starting bot.' });
     } finally {
@@ -575,6 +604,33 @@ export default function Dashboard() {
               </button>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Bot activity logs (supervisor + OpenClaw tails from backend/logs) */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+        <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden shadow-sm">
+          <button
+            type="button"
+            onClick={() => setBotLogsOpen((o) => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-zinc-900/50 border-b border-zinc-900 text-left hover:bg-zinc-900/70 transition-colors"
+          >
+            <div>
+              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Supervisor and bot logs</h3>
+              <p className="text-[11px] text-zinc-500 mt-0.5">
+                Streamed from the API when the bot is running. Full files live under{" "}
+                <code className="text-zinc-400">backend/logs/</code>.
+              </p>
+            </div>
+            <span className="text-zinc-500 text-xs shrink-0 ml-2">{botLogsOpen ? "Hide" : "Show"}</span>
+          </button>
+          {botLogsOpen && (
+            <div className="p-3 max-h-[min(420px,50vh)] overflow-auto bg-black/40">
+              <pre className="text-[11px] leading-relaxed text-zinc-300 whitespace-pre-wrap font-mono">
+                {botLogs || "No log output yet. Start automation above, or wait for the next refresh."}
+              </pre>
+            </div>
+          )}
         </div>
       </div>
 

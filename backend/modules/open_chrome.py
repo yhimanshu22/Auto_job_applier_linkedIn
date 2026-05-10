@@ -17,7 +17,8 @@ from modules.helpers import (
     get_chrome_version,
 )
 import subprocess
-import pkg_resources
+import importlib.metadata
+import hashlib
 import os
 
 
@@ -32,7 +33,7 @@ def is_chrome_running():
 
 def log_versions():
     try:
-        uc_version = pkg_resources.get_distribution("undetected-chromedriver").version
+        uc_version = importlib.metadata.version("undetected-chromedriver")
         print_lg(f"Undetected Chromedriver Version: {uc_version}")
     except Exception:
         print_lg("Could not determine undetected-chromedriver version.")
@@ -86,6 +87,18 @@ try:
         # User requested to remove persistent chrome_profile and use pickle for sessions instead
         # UC/Selenium will use a default temporary profile if no user-data-dir is provided
         print_lg("Using default/temporary browser profile (session persistence via cookies/pickle)")
+
+    # One Chrome user-data-dir per supervisor bot so parallel runs do not share disk locks / state.
+    _backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _bot_tag = os.getenv("BOT_ID") or os.getenv("LINKEDIN_USERNAME", "default") or "default"
+    _safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in str(_bot_tag))[:120]
+    profile_dir = os.path.normpath(os.path.join(_backend_root, "chrome_profiles", _safe))
+    os.makedirs(profile_dir, exist_ok=True)
+    options.add_argument(f"--user-data-dir={profile_dir}")
+    _port = 9222 + (int(hashlib.md5(_safe.encode("utf-8")).hexdigest(), 16) % 800)
+    options.add_argument(f"--remote-debugging-port={_port}")
+    print_lg(f"Chrome profile dir (BOT_ID/account): {profile_dir}")
+    print_lg(f"Chrome remote-debugging-port: {_port}")
 
     if stealth_mode:
         # try:

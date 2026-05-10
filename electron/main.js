@@ -18,9 +18,10 @@ const APP_URL = `${FRONTEND_URL}/login`;
 const BACKEND_HOST = '127.0.0.1';
 const BACKEND_PORT = 8000;
 const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
-const BACKEND_HEALTH_URL = `${BACKEND_URL}/api/bot/status`;
+const BACKEND_HEALTH_URL = `${BACKEND_URL}/api/health`; // Using /api/health instead of /api/bot/status for faster check
 
-const MAX_RESTARTS = 3;
+const MAX_RESTARTS = 5;
+const STARTUP_TIMEOUT_RETRIES = 120; // Increase to 2 minutes
 
 // Global State
 let mainWindow = null;
@@ -41,6 +42,34 @@ const getBackendDir = () => app.isPackaged
 const getFrontendDir = () => app.isPackaged
   ? path.join(process.resourcesPath, 'frontend_standalone')
   : path.resolve(__dirname, '..', 'frontend');
+
+/**
+ * Dev-only: resolve Python for the backend. Production uses bundled server.exe (never calls this).
+ *
+ * Order: LINKDAPPLY_PYTHON if set and exists → repo .venv → backend/.venv → null (caller uses PATH python).
+ */
+function getDevPythonExe() {
+  const fromEnv = process.env.LINKDAPPLY_PYTHON?.trim();
+  if (fromEnv) {
+    const abs = path.isAbsolute(fromEnv) ? fromEnv : path.resolve(fromEnv);
+    if (fs.existsSync(abs)) return abs;
+  }
+  const repoRoot = path.resolve(__dirname, '..');
+  const win = process.platform === 'win32';
+  const candidates = win
+    ? [
+        path.join(repoRoot, '.venv', 'Scripts', 'python.exe'),
+        path.join(repoRoot, 'backend', '.venv', 'Scripts', 'python.exe'),
+      ]
+    : [
+        path.join(repoRoot, '.venv', 'bin', 'python'),
+        path.join(repoRoot, 'backend', '.venv', 'bin', 'python'),
+      ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
 
 // ==========================================
 // 3. UTILITY FUNCTIONS
@@ -109,12 +138,31 @@ function startBackend() {
   try {
     const backendDir = getBackendDir();
     const serverPath = path.join(backendDir, 'server.py');
-    const pythonExe = app.isPackaged 
-      ? path.join(backendDir, 'server.exe')
-      : path.resolve(__dirname, '..', 'backend', 'dist', 'server.exe');
+    const packagedExe = path.join(backendDir, 'server.exe');
 
-    let spawnCommand = (app.isPackaged && fs.existsSync(pythonExe)) ? pythonExe : 'python';
-    let spawnArgs = spawnCommand === 'python' ? [serverPath] : [];
+    let spawnCommand;
+    let spawnArgs;
+
+    if (app.isPackaged && fs.existsSync(packagedExe)) {
+      spawnCommand = packagedExe;
+      spawnArgs = [];
+    } else if (!app.isPackaged) {
+      const venvPython = getDevPythonExe();
+      if (venvPython) {
+        spawnCommand = venvPython;
+        spawnArgs = [serverPath];
+        logger.electron(`Backend using project venv: ${venvPython}`);
+      } else {
+        spawnCommand = 'python';
+        spawnArgs = [serverPath];
+        logger.electronWarn(
+          'No .venv found (repo root or backend). Install deps: cd backend && uv sync — using python on PATH.'
+        );
+      }
+    } else {
+      spawnCommand = 'python';
+      spawnArgs = [serverPath];
+    }
 
     logger.electron(`Starting backend process...`);
     
@@ -145,7 +193,10 @@ function startBackend() {
       }
     });
 
-    backendProcess.on('error', (err) => logger.electronError(`Backend spawn error: ${err.message}`));
+    backendProcess.on('error', (err) => {
+      logger.electronError(`Backend spawn error: ${err.message}`);
+      if (splashWindow) splashWindow.webContents.send('backend-error', `Backend failed: ${err.message}`);
+    });
   } catch (err) {
     logger.electronError(`Critical startBackend failure: ${err.message}`);
   }
@@ -185,7 +236,15 @@ function startFrontend() {
     });
 
     frontendProcess.stdout.on('data', (d) => logger.frontend(d.toString()));
-    frontendProcess.stderr.on('data', (d) => logger.frontendError(d.toString()));
+    frontendProcess.stderr.on('data', (d) => {
+      const text = d.toString();
+      // Next.js logs some warnings to stderr, only treat actual errors as errors
+      if (text.includes("Error") || text.includes("FAIL")) {
+        logger.frontendError(text);
+      } else {
+        logger.frontend(text);
+      }
+    });
 
     frontendProcess.on('exit', (code) => {
       logger.electron(`Frontend exited with code ${code}`);
@@ -288,8 +347,8 @@ async function createMainWindow() {
   // Fix 1: Wait for BOTH backend and frontend
   try {
     logger.electron('Waiting for services to be ready...');
-    await waitForUrl(BACKEND_HEALTH_URL);
-    await waitForUrl(APP_URL);
+    await waitForUrl(BACKEND_HEALTH_URL, STARTUP_TIMEOUT_RETRIES);
+    await waitForUrl(APP_URL, STARTUP_TIMEOUT_RETRIES);
 
     if (!isShuttingDown && mainWindow) {
       logger.electron('Services ready. Loading app...');
@@ -298,7 +357,8 @@ async function createMainWindow() {
   } catch (err) {
     logger.electronError(`Startup failed: ${err.message}`);
     if (splashWindow) {
-      splashWindow.webContents.send('backend-error', 'Failed to connect to services.');
+      const logPath = path.join(app.getPath('userData'), 'logs', 'main.log');
+      splashWindow.webContents.send('backend-error', `Failed to connect to services. Check logs at: ${logPath}`);
     }
   }
 

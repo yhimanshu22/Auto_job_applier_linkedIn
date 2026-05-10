@@ -66,6 +66,12 @@ pyautogui.FAILSAFE = False
 
 # < Global Variables and logics
 user_id = os.getenv("USER_ID", "local-user")
+# Same USER_ID is shared across supervisor-spawned bots; keys cookies per LinkedIn login.
+_ln_user = os.getenv("LINKEDIN_USERNAME", "").strip()
+linkedin_cookie_store_id = (
+    f"{user_id}::linkedin::{_ln_user.lower()}" if _ln_user else user_id
+)
+is_admin = user_id == "local-user" or os.getenv("USER_EMAIL") == "himu09854@gmail.com"
 
 if run_in_background == True:
     pause_at_failed_question = False
@@ -124,7 +130,7 @@ def save_cookies():
     """Saves current cookies to a file."""
     try:
         # Encrypted DB storage instead of local pickle
-        db.set_user_session(user_id, driver.get_cookies())
+        db.set_user_session(linkedin_cookie_store_id, driver.get_cookies())
         print_lg("Session cookies saved successfully!")
     except Exception as e:
         print_lg("Failed to save cookies!", e)
@@ -133,7 +139,7 @@ def save_cookies():
 def load_cookies():
     """Loads cookies from file and refreshes the page."""
     # Load from encrypted DB
-    cookies = db.get_user_session(user_id)
+    cookies = db.get_user_session(linkedin_cookie_store_id)
     if cookies:
         try:
             # You must be on the domain before adding cookies
@@ -1165,17 +1171,19 @@ def external_apply(
     """
     global tabs_count, dailyEasyApplyLimitReached
     if easy_apply_only:
+        limit_reached_msg = False
         try:
-            if (
-                "exceeded the daily application limit"
-                in driver.find_element(
-                    By.CLASS_NAME, "artdeco-inline-feedback__message"
-                ).text
-            ):
+            feedback = driver.find_element(By.CLASS_NAME, "artdeco-inline-feedback__message").text
+            if "exceeded the daily application limit" in feedback.lower():
                 dailyEasyApplyLimitReached = True
+                limit_reached_msg = True
+                print_lg("LinkedIn daily Easy Apply limit reached.")
         except:
             pass
-        print_lg("Easy apply failed I guess!")
+        
+        if not limit_reached_msg:
+            print_lg("Job is not an Easy Apply job. Skipping as per easy_apply_only=True.")
+            
         if pagination_element != None:
             return True, application_link, tabs_count
     try:
@@ -1410,7 +1418,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
     applied_jobs = get_applied_job_ids()
     rejected_jobs = set()
     blacklisted_companies = set()
-    global current_city, failed_count, skip_count, easy_applied_count, external_jobs_count, tabs_count, pause_before_submit, pause_at_failed_question, useNewResume
+    global current_city, failed_count, skip_count, easy_applied_count, external_jobs_count, tabs_count, pause_before_submit, pause_at_failed_question, useNewResume, dailyEasyApplyLimitReached
     current_city = current_city.strip()
 
     if randomize_search_order:
@@ -1634,17 +1642,30 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                 skills = openclaw_extract_skills(aiClient, description)
                             else:
                                 skills = "In Development"
-                            print_lg(f"Extracted skills using {ai_provider} AI")
+                            if skills:
+                                print_lg(f"Extracted skills using {ai_provider} AI")
+                            else:
+                                print_lg(f"Failed to extract skills using {ai_provider} AI (API error or empty response)")
                         except Exception as e:
                             print_lg("Failed to extract skills:", e)
                             skills = "Error extracting skills"
 
                     uploaded = False
                     # Case 1: Easy Apply Button
-                    if try_xp(
-                        driver,
-                        ".//button[contains(@class,'jobs-apply-button') and contains(@class, 'artdeco-button--3') and contains(@aria-label, 'Easy')]",
-                    ):
+                    xpath_easy_apply = ".//button[contains(@class,'jobs-apply-button') and contains(@class, 'artdeco-button--3') and contains(@aria-label, 'Easy')]"
+                    is_easy_apply = False
+                    try:
+                        # Wait for the button to be present and clickable
+                        easy_apply_button = WebDriverWait(driver, 5).until(
+                            EC.element_to_be_clickable((By.XPATH, xpath_easy_apply))
+                        )
+                        scroll_to_view(driver, easy_apply_button)
+                        easy_apply_button.click()
+                        is_easy_apply = True
+                    except:
+                        is_easy_apply = False
+
+                    if is_easy_apply:
                         try:
                             errored = ""
                             modal = find_by_class(driver, "jobs-easy-apply-modal")
@@ -1796,7 +1817,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     current_count += 1
                     if application_link == "Easy Applied":
                         easy_applied_count += 1
-                        if easy_applied_count >= daily_apply_limit:
+                        if not is_admin and easy_applied_count >= daily_apply_limit:
                             print_lg(f"Daily Easy Apply limit reached: {daily_apply_limit}")
                             dailyEasyApplyLimitReached = True
                             return
@@ -1838,10 +1859,16 @@ def run(total_runs: int) -> int:
         "########################################################################################################################\n"
     )
     if not dailyEasyApplyLimitReached:
-        print_lg("Sleeping for 10 min...")
-        sleep(300)
-        print_lg("Few more min... Gonna start with in next 5 min...")
-        sleep(300)
+        # Administrative Bypass: Skip sleep for admin/local user
+        is_admin = user_id == "local-user" or os.getenv("USER_EMAIL") == "himu09854@gmail.com"
+        
+        if is_admin:
+            print_lg("Admin/Local user detected. Skipping 10 min sleep.")
+        else:
+            print_lg("Sleeping for 10 min...")
+            sleep(300)
+            print_lg("Few more min... Gonna start with in next 5 min...")
+            sleep(300)
     random_sleep(2, 4)
     return total_runs + 1
 

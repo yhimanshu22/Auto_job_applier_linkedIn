@@ -12,7 +12,7 @@
 - ⚡ **Lightning Fast Search**: Automatically filters and identifies jobs that match your skills and preferences.
 - 🖥️ **Premium Desktop Dashboard**: A sleek, modern UI built with Next.js and Electron to manage your settings, view real-time logs, and track performance.
 - 🛡️ **Anti-Detection System**: Features "Safe Mode" and human-like interaction patterns to keep your LinkedIn account secure.
-- 💳 **Seamless Subscriptions**: Integrated with Stripe and Razorpay for premium features.
+- 💳 **Seamless Subscriptions**: Integrated with Stripe for premium features.
 - 📂 **Resume Management**: Automatically handles multiple resumes and dynamically selects the best one for each role.
 
 ---
@@ -32,7 +32,7 @@
 - **Desktop**: Electron Wrapper
 - **AI Integration**: OpenAI, DeepSeek, Google Gemini, Anthropic Claude
 - **Database**: SQLite
-- **Payments**: Stripe & Razorpay
+- **Payments**: Stripe
 
 ---
 
@@ -79,7 +79,6 @@ Building and maintaining an AI-powered automation tool requires significant reso
 - [**GitHub Sponsors**](https://github.com/sponsors/yhimanshu22) - *Preferred*
 - [**Buy Me a Coffee**](https://www.buymeacoffee.com/yhimanshu22)
 - [**PayPal**](https://paypal.me/yhimanshu22)
-- [**Razorpay (UPI/INR)**](https://rzp.io/l/your-link)
 
 ---
 

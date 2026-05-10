@@ -1,4 +1,5 @@
 undetected-chromedriver
+selenium
 pyautogui
 setuptools
 openai
@@ -10,7 +11,9 @@ fastapi
 uvicorn
 python-multipart
 stripe
-razorpay
+sqlalchemy
+cryptography
+pydantic
 pytest
 httpx
 pytest-asyncio

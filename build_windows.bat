@@ -1,7 +1,16 @@
 @echo off
+setlocal enabledelayedexpansion
+
 echo ========================================================
 echo Building LinkdApply Full Production Release (Standalone)
 echo ========================================================
+
+:: Cleanup previous build junctions to prevent recursive bloat
+echo [0/5] Cleaning up old build artifacts...
+if exist "frontend\public\dist" (
+    echo Removing old dist junction...
+    rmdir "frontend\public\dist"
+)
 
 echo.
 echo [1/5] Downloading Portable Node.js...
@@ -15,6 +24,7 @@ echo.
 echo [2/5] Building Next.js Frontend...
 cd frontend
 call npm install
+:: Ensure standalone output is enabled
 call npm run build
 
 :: Copy static assets to standalone
@@ -22,13 +32,13 @@ echo Copying Next.js static assets...
 if not exist ".next\standalone\.next\static" mkdir ".next\standalone\.next\static"
 if not exist ".next\standalone\public" mkdir ".next\standalone\public"
 xcopy /E /I /Y ".next\static" ".next\standalone\.next\static"
-xcopy /E /I /Y "public" ".next\standalone\public"
+:: Important: Do NOT copy the dist folder if it somehow still exists
+xcopy /E /I /Y "public" ".next\standalone\public" /EXCLUDE:..\build_exclude.txt
 cd ..
 
 echo.
 echo [3/5] Building Python Backend (PyInstaller)...
 cd backend
-:: Assuming environment has pyinstaller installed. If not, use uv pip install pyinstaller
 call uv pip install pyinstaller
 call uv run pyinstaller --noconfirm server.spec
 cd ..
@@ -55,6 +65,6 @@ echo.
 echo ========================================================
 echo BUILD SUCCESSFUL!
 echo The installer is located in the electron/dist/ folder.
-echo It is also linked to the frontend public/dist folder.
 echo ========================================================
 pause
+

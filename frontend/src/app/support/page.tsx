@@ -50,7 +50,8 @@ export default function SupportPage() {
             For technical issues or urgent account help, please include your registered email address and detailed screenshots if possible.
           </p>
         </section>
-      </main>
+      </div>
+    </main>
       <Footer />
     </div>
   );

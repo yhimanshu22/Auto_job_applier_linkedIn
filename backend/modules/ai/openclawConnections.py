@@ -1,6 +1,9 @@
 
 from config.config_bridge import *
 
+import re
+import time
+
 from modules.helpers import print_lg, critical_error_log, convert_to_json
 from modules.ai.prompts import *
 
@@ -9,6 +12,50 @@ from openai import OpenAI
 from openai.types.model import Model
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from typing import Iterator, Literal
+
+
+def _is_rate_limit_error(e: BaseException) -> bool:
+    """Groq/OpenAI-compatible providers often return 429 or embed details in the message body."""
+    code = getattr(e, "status_code", None)
+    if code == 429:
+        return True
+    if type(e).__name__ == "RateLimitError":
+        return True
+    s = str(e).lower()
+    return (
+        "429" in s
+        or "rate limit" in s
+        or "rate_limit" in s
+        or "too many requests" in s
+    )
+
+
+def _parse_retry_after_seconds(exc: BaseException) -> float | None:
+    """Parse delays like Groq: 'Please try again in 16m47.424s'."""
+    text = str(exc)
+    m = re.search(r"try again in (\d+)m([\d.]+)s", text, re.I)
+    if m:
+        return int(m.group(1)) * 60 + float(m.group(2))
+    m = re.search(r"try again in ([\d.]+)s", text, re.I)
+    if m:
+        return float(m.group(1))
+    return None
+
+
+def _normalize_llm_json_text(raw: str) -> str:
+    """Strip ```json ... ``` fences so json.loads / convert_to_json can succeed."""
+    if not raw:
+        return raw
+    s = raw.strip()
+    if not s.startswith("```"):
+        return s
+    lines = s.splitlines()
+    if len(lines) < 2:
+        return s
+    lines = lines[1:]
+    while lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
 
 
 apiCheckInstructions = """
@@ -100,19 +147,39 @@ def ai_completion(client: OpenAI, messages: list[dict], response_format: dict = 
     * Takes in `messages` of type `list[dict]`
     * Returns a `dict` object representing JSON response
     """
-    if not client: raise ValueError("Client is not available!")
+    if not client:
+        raise ValueError("Client is not available!")
 
-    params = {"model": llm_model, "messages": messages, "stream": stream}
-
-    if response_format:
-        params["response_format"] = response_format
-
-    completion = client.chat.completions.create(**params)
+    # One retry on 429: short wait (cap so we don't block the bot for Groq's multi-minute TPD windows).
+    max_rounds = 2
+    completion = None
+    current_stream = stream
+    for round_i in range(max_rounds):
+        params = {"model": llm_model, "messages": messages, "stream": current_stream}
+        if response_format:
+            params["response_format"] = response_format
+        try:
+            completion = client.chat.completions.create(**params)
+            break
+        except Exception as e:
+            if _is_rate_limit_error(e) and round_i + 1 < max_rounds:
+                delay = _parse_retry_after_seconds(e)
+                if delay is None:
+                    delay = 45.0
+                delay = min(delay, 90.0)
+                print_lg(
+                    f"OpenClaw/Groq rate limited (429). Waiting {delay:.0f}s, then one retry (non-stream). "
+                    f"[{round_i + 1}/{max_rounds}]"
+                )
+                time.sleep(delay)
+                current_stream = False
+                continue
+            raise
 
     result = ""
-    
+
     # Log response
-    if stream:
+    if current_stream:
         print_lg("--STREAMING STARTED")
         for chunk in completion:
             ai_check_error(chunk)
@@ -125,10 +192,10 @@ def ai_completion(client: OpenAI, messages: list[dict], response_format: dict = 
         ai_check_error(completion)
         if len(completion.choices) > 0 and completion.choices[0].message and completion.choices[0].message.content:
             result = completion.choices[0].message.content
-    
+
     if response_format:
         result = convert_to_json(result)
-    
+
     print_lg("\nAI Answer to Question:\n")
     print_lg(result, pretty=response_format is not None)
     return result
@@ -140,13 +207,31 @@ def ai_extract_skills(client: OpenAI, job_description: str, stream: bool = strea
     * Returns a `dict` object representing JSON response
     """
     print_lg("-- EXTRACTING SKILLS FROM JOB DESCRIPTION (via OpenClaw)")
-    try:        
+    try:
+        # Groq and many OpenAI-compatible hosts do not support response_format json_schema.
+        # Use prompt-only JSON + parse (same idea as DeepSeek path).
         prompt = extract_skills_prompt.format(job_description)
-
+        prompt += (
+            "\n\nRespond with ONLY a single valid JSON object matching the schema above. "
+            "No markdown fences, no commentary."
+        )
         messages = [{"role": "user", "content": prompt}]
-        return ai_completion(client, messages, response_format=extract_skills_response_format, stream=stream)
+        raw = ai_completion(client, messages, response_format=None, stream=stream)
+        if not isinstance(raw, str):
+            return raw
+        raw = _normalize_llm_json_text(raw)
+        return convert_to_json(raw)
     except Exception as e:
-        ai_error_alert(f"Error occurred while extracting skills from job description. {apiCheckInstructions}", e)
+        if _is_rate_limit_error(e):
+            print_lg(
+                "Groq/OpenClaw rate limit — skipping AI skill extraction for this job (same as when AI is unavailable). "
+                "Upgrade quota or switch model in secrets when daily tokens are exhausted."
+            )
+            critical_error_log("OpenClaw rate limit during skill extraction", e)
+            return None
+        ai_error_alert(
+            f"Error occurred while extracting skills from job description. {apiCheckInstructions}", e
+        )
 
 
 def ai_answer_question(
@@ -170,7 +255,13 @@ def ai_answer_question(
 
         messages = [{"role": "user", "content": prompt}]
         print_lg("Prompt we are passing to AI: ", prompt)
-        response =  ai_completion(client, messages, stream=stream)
+        response = ai_completion(client, messages, stream=stream)
         return response
     except Exception as e:
+        if _is_rate_limit_error(e):
+            print_lg(
+                "Groq/OpenClaw rate limit — skipping AI for this question; runAiBot will use rule/default answers."
+            )
+            critical_error_log("OpenClaw rate limit during question answer", e)
+            return ""
         ai_error_alert(f"Error occurred while answering question. {apiCheckInstructions}", e)

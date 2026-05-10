@@ -2,6 +2,7 @@ import subprocess
 import time
 import sys
 import os
+import shutil
 import signal
 import logging
 from datetime import datetime
@@ -59,15 +60,34 @@ class BotSupervisor:
 
     def start_openclaw(self):
         """Starts the OpenClaw gateway."""
+        skip = os.getenv("SKIP_OPENCLAW", "").strip().lower() in ("1", "true", "yes")
+        if skip:
+            logging.info(
+                "Skipping OpenClaw gateway (SKIP_OPENCLAW is set). "
+                "Use this when ai_provider is not openclaw or the LLM is a remote API only."
+            )
+            return
         try:
             logging.info("Starting OpenClaw gateway...")
             # Redirect OpenClaw output to a log file for debugging
             log_file = open("logs/openclaw.log", "a")
             # Avoid shell=True to prevent cmd.exe dependency
-            cmd = ["openclaw", "gateway", "--allow-unconfigured", "--port", "3000"]
-            if os.name == 'nt':
-                cmd[0] = "openclaw.exe" # Explicitly use .exe on Windows
-            
+            exe = os.getenv("OPENCLAW_EXE", "").strip()
+            if exe:
+                cmd = [exe, "gateway", "--allow-unconfigured", "--port", "3000"]
+            else:
+                # npm installs `openclaw.cmd` on Windows, not `openclaw.exe`; resolve via PATH/PATHEXT.
+                openclaw_bin = shutil.which("openclaw")
+                if openclaw_bin is None and os.name == "nt":
+                    openclaw_bin = shutil.which("openclaw.exe")
+                cmd = [
+                    openclaw_bin or "openclaw",
+                    "gateway",
+                    "--allow-unconfigured",
+                    "--port",
+                    "3000",
+                ]
+
             self.openclaw_process = subprocess.Popen(
                 cmd,
                 stdout=log_file,
@@ -76,7 +96,11 @@ class BotSupervisor:
             )
             logging.info(f"OpenClaw started (PID: {self.openclaw_process.pid})")
         except FileNotFoundError:
-            logging.warning("OpenClaw executable not found. AI gateway features will be disabled.")
+            logging.warning(
+                "OpenClaw executable not found. AI gateway features will be disabled. "
+                "Install the OpenClaw CLI and ensure it is on PATH, or set OPENCLAW_EXE to the full path "
+                "to the CLI (e.g. npm's openclaw.cmd). If you do not use the openclaw provider, set SKIP_OPENCLAW=1."
+            )
         except Exception as e:
             logging.error(f"Failed to start OpenClaw: {e}")
 

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 import subprocess
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 import uvicorn
 import logging
 from db_manager import db
@@ -77,6 +77,18 @@ def get_config_path(filename: str):
 # Global state to track the supervisor process
 supervisor_process = None
 current_run_id = None
+supervisor_log_handle = None
+
+
+def _close_supervisor_log():
+    global supervisor_log_handle
+    if supervisor_log_handle:
+        try:
+            supervisor_log_handle.flush()
+            supervisor_log_handle.close()
+        except Exception:
+            pass
+        supervisor_log_handle = None
 
 @app.get("/api/config/{category}")
 async def read_config(category: str):
@@ -262,7 +274,7 @@ async def start_bot(payload: dict = None):
     
     assert_can_start_bot(user_id)
 
-    global supervisor_process, current_run_id
+    global supervisor_process, current_run_id, supervisor_log_handle
     if supervisor_process and supervisor_process.poll() is None:
         return {"status": "already_running"}
         
@@ -280,18 +292,35 @@ async def start_bot(payload: dict = None):
         
         env = os.environ.copy()
         env["USER_ID"] = user_id
-        
+
+        # Capture supervisor stdout/stderr to logs/supervisor-console.log so the dashboard
+        # (and Electron) can read them via /api/bot/logs. Avoid CREATE_NEW_CONSOLE so output
+        # is not trapped in a separate window only.
+        _close_supervisor_log()
+        logs_dir = os.path.join(cwd, "logs")
+        os.makedirs(logs_dir, exist_ok=True)
+        console_log = os.path.join(logs_dir, "supervisor-console.log")
+        supervisor_log_handle = open(console_log, "a", encoding="utf-8", buffering=1)
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        supervisor_log_handle.write(
+            f"\n{'=' * 60}\n[{ts}] Supervisor session started (API / dashboard)\n{'=' * 60}\n"
+        )
+        supervisor_log_handle.flush()
+
         supervisor_process = subprocess.Popen(
-            cmd, 
+            cmd,
             cwd=cwd,
             env=env,
-            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
+            stdout=supervisor_log_handle,
+            stderr=subprocess.STDOUT,
+            creationflags=0,
         )
         
         current_run_id = db.start_bot_run(user_id)
         
         return {"status": "started"}
     except Exception as e:
+        _close_supervisor_log()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/upload/resume")
@@ -331,6 +360,7 @@ async def stop_bot():
         
         # Always reset state even if process was already dead
         supervisor_process = None
+        _close_supervisor_log()
         
         if current_run_id:
             db.end_bot_run(current_run_id, 0)
@@ -342,6 +372,7 @@ async def stop_bot():
         # Even if killing fails, try to reset state
         supervisor_process = None
         current_run_id = None
+        _close_supervisor_log()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/bot/status")
@@ -373,18 +404,36 @@ async def get_bot_status(user_id: str = "local-user"):
     }
 
 @app.get("/api/bot/logs")
-async def get_bot_logs():
-    log_path = os.path.join(os.getcwd(), "logs", "supervisor.log")
-    if not os.path.exists(log_path):
-        return {"logs": "No logs available. Start the bot to see activity."}
-    
-    try:
-        with open(log_path, "r", encoding="utf-8") as f:
-            # Return last 100 lines
-            lines = f.readlines()
-            return {"logs": "".join(lines[-100:])}
-    except Exception as e:
-        return {"logs": f"Error reading logs: {str(e)}"}
+async def get_bot_logs(lines: int = 120):
+    """Tail key bot log files under backend/logs (stable path via get_base_path)."""
+    lines = max(20, min(int(lines), 500))
+    log_dir = os.path.join(get_base_path(), "logs")
+    sections = []
+    for title, filename in (
+        ("Supervisor console (stdout/stderr)", "supervisor-console.log"),
+        ("Supervisor", "supervisor.log"),
+        ("OpenClaw gateway", "openclaw.log"),
+    ):
+        path = os.path.join(log_dir, filename)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                buf = f.readlines()
+            chunk = "".join(buf[-lines:])
+            if chunk.strip():
+                sections.append(f"--- {title} ({filename}) ---\n{chunk}")
+        except Exception as ex:
+            sections.append(f"--- {title} ({filename}) — read error: {ex} ---")
+
+    if not sections:
+        return {
+            "logs": (
+                "No log files yet. Start the bot from the dashboard to capture supervisor output "
+                f"under {log_dir}/."
+            )
+        }
+    return {"logs": "\n".join(sections)}
 
 @app.get("/api/bot/runs")
 async def get_bot_runs(limit: int = 10):
