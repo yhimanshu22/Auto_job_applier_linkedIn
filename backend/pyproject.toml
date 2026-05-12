@@ -23,6 +23,11 @@ dependencies = [
     "httpx",
     "pytest-asyncio",
     "pytest-cov",
+    # Linkedln-Automation-Framework integration (posting / engagement / calendar)
+    "webdriver-manager",
+    "requests",
+    "sumy>=0.11.0",
+    "nltk>=3.8.1",
 ]
 
 # Application project: lock deps with uv, but do not install this tree as an importable package.

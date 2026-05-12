@@ -541,6 +541,12 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center space-x-6">
                <Link 
+                  href="/dashboard/automation"
+                  className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest hover:text-white transition-colors"
+               >
+                  Automation
+               </Link>
+               <Link 
                   href="/dashboard/billing"
                   className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest hover:text-white transition-colors"
                >
