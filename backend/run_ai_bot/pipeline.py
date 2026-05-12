@@ -15,6 +15,8 @@ from run_ai_bot.reporting import discard_job, failed_job, screenshot, submitted_
 from run_ai_bot.search_filters import get_applied_job_ids, get_page_info
 from run_ai_bot.state import *
 
+from modules.human_actions import human_move_and_click
+
 
 def run(total_runs: int) -> int:
     if dailyEasyApplyLimitReached:
@@ -275,7 +277,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                             EC.element_to_be_clickable((By.XPATH, xpath_easy_apply))
                         )
                         scroll_to_view(driver, easy_apply_button)
-                        easy_apply_button.click()
+                        human_move_and_click(driver, easy_apply_button)
                         is_easy_apply = True
                     except:
                         is_easy_apply = False
@@ -339,7 +341,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                     except NoSuchElementException:
                                         break  # Final screen
 
-                                next_button.click()
+                                human_move_and_click(driver, next_button)
                                 buffer(click_gap)
 
                             wait_span_click(

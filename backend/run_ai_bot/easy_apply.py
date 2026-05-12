@@ -9,6 +9,9 @@ from run_ai_bot.form_answer_helpers import (
 from run_ai_bot.session import log_to_db
 from run_ai_bot.state import *
 
+from modules.human_actions import human_move_and_click, human_type_text
+
+
 def upload_resume(modal: WebElement, resume: str) -> tuple[bool, str]:
     try:
         # 1. Attempt to get default resume metadata from database
@@ -250,7 +253,7 @@ def answer_questions(
                     radio, f".//label[normalize-space()='{answer}']", False
                 )
                 if foundOption:
-                    actions.move_to_element(foundOption).click().perform()
+                    human_move_and_click(driver, foundOption)
                 else:
                     possible_answer_phrases = (
                         ["Decline", "not wish", "don't wish", "Prefer not", "not want"]
@@ -280,7 +283,7 @@ def answer_questions(
                     #             answer = f'Decline ({phrase})'
                     #             ele = foundOption
                     #             break
-                    actions.move_to_element(ele).click().perform()
+                    human_move_and_click(driver, ele)
                     if not foundOption:
                         randomly_answered_questions.add((f"{label_org} ]", "radio"))
             else:
@@ -442,7 +445,7 @@ def answer_questions(
                         answer = years_of_experience
                 ##<
                 text.clear()
-                text.send_keys(answer)
+                human_type_text(text, answer)
                 if do_actions:
                     sleep(2)
                     actions.send_keys(Keys.ARROW_DOWN)
@@ -524,7 +527,7 @@ def answer_questions(
                     else:
                         randomly_answered_questions.add((label_org, "textarea"))
             text_area.clear()
-            text_area.send_keys(answer)
+            human_type_text(text_area, answer)
             if do_actions:
                 sleep(2)
                 actions.send_keys(Keys.ARROW_DOWN)
@@ -549,7 +552,7 @@ def answer_questions(
             checked = prev_answer
             if not prev_answer:
                 try:
-                    actions.move_to_element(checkbox).click().perform()
+                    human_move_and_click(driver, checkbox)
                     checked = True
                 except Exception as e:
                     print_lg("Checkbox click failed!", e)

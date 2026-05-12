@@ -1,5 +1,6 @@
 from config.config_bridge import *
 from modules.helpers import buffer, print_lg, sleep, random_sleep
+from modules.human_actions import human_move_and_click, human_type_text
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -8,6 +9,15 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.common.action_chains import ActionChains
 from datetime import datetime
+
+
+def _driver_for(root: WebDriver | WebElement) -> WebDriver:
+    if isinstance(root, WebDriver):
+        return root
+    parent = getattr(root, "_parent", None)
+    if parent is not None:
+        return parent  # type: ignore[return-value]
+    raise TypeError("Cannot resolve WebDriver from root")
 
 
 # Click Functions
@@ -37,7 +47,7 @@ def wait_span_click(
             if scroll:
                 scroll_to_view(driver, button, scrollTop)
             if click:
-                button.click()
+                human_move_and_click(driver, button)
                 buffer(click_gap)
             return button
         except Exception as e:
@@ -62,7 +72,7 @@ def multi_sel(driver: WebDriver, texts: list, time: float = 5.0) -> None:
                 )
             )
             scroll_to_view(driver, button)
-            button.click()
+            human_move_and_click(driver, button)
             buffer(click_gap)
         except Exception as e:
             print_lg("Click Failed! Didn't find '" + text + "'")
@@ -83,7 +93,7 @@ def multi_sel_noWait(
                 By.XPATH, './/span[normalize-space(.)="' + text + '"]'
             )
             scroll_to_view(driver, button)
-            button.click()
+            human_move_and_click(driver, button)
             buffer(click_gap)
         except Exception as e:
             if actions:
@@ -103,7 +113,7 @@ def boolean_button_click(driver: WebDriver, actions: ActionChains, text: str) ->
         )
         button = list_container.find_element(By.XPATH, './/input[@role="switch"]')
         scroll_to_view(driver, button)
-        actions.move_to_element(button).click().perform()
+        human_move_and_click(driver, button)
         buffer(click_gap)
     except Exception as e:
         print_lg("Click Failed! Didn't find '" + text + "'")
@@ -156,17 +166,17 @@ def text_input_by_ID(
     username_field = WebDriverWait(driver, time).until(
         EC.presence_of_element_located((By.ID, id))
     )
-    username_field.send_keys(Keys.CONTROL + "a")
-    username_field.send_keys(value)
+    username_field.clear()
+    human_type_text(username_field, value)
 
 
-def try_xp(driver: WebDriver, xpath: str, click: bool = True) -> WebElement | bool:
+def try_xp(root: WebDriver | WebElement, xpath: str, click: bool = True) -> WebElement | bool:
     try:
+        el = root.find_element(By.XPATH, xpath)
         if click:
-            driver.find_element(By.XPATH, xpath).click()
+            human_move_and_click(_driver_for(root), el)
             return True
-        else:
-            return driver.find_element(By.XPATH, xpath)
+        return el
     except:
         return False
 
@@ -200,7 +210,7 @@ def company_search_click(
         By.XPATH, "(.//input[@placeholder='Add a company'])[1]"
     )
     search.send_keys(Keys.CONTROL + "a")
-    search.send_keys(companyName)
+    human_type_text(search, companyName)
     random_sleep(2, 4)
     actions.send_keys(Keys.DOWN).perform()
     actions.send_keys(Keys.ENTER).perform()
@@ -208,6 +218,7 @@ def company_search_click(
 
 
 def text_input(
+    driver: WebDriver,
     actions: ActionChains,
     textInputEle: WebElement | bool,
     value: str,
@@ -215,9 +226,8 @@ def text_input(
 ) -> None | Exception:
     if textInputEle:
         random_sleep(0.5, 1)
-        # actions.key_down(Keys.CONTROL).send_keys("a").key_up(Keys.CONTROL).perform()
         textInputEle.clear()
-        textInputEle.send_keys(value.strip())
+        human_type_text(textInputEle, value.strip())
         random_sleep(1, 2)
         actions.send_keys(Keys.ENTER).perform()
     else:
@@ -244,7 +254,7 @@ def robust_click(
                     elem = driver.find_element(By.XPATH, xpath)
                     if elem.is_displayed() and elem.is_enabled():
                         scroll_to_view(driver, elem)
-                        elem.click()
+                        human_move_and_click(driver, elem)
                         buffer(click_gap)
                         return True
                 except:
@@ -257,7 +267,7 @@ def robust_click(
                     elem = driver.find_element(By.XPATH, xpath)
                     if elem.is_displayed() and elem.is_enabled():
                         scroll_to_view(driver, elem)
-                        elem.click()
+                        human_move_and_click(driver, elem)
                         buffer(click_gap)
                         return True
                 except:
@@ -270,7 +280,7 @@ def robust_click(
                     elem = driver.find_element(By.XPATH, xpath)
                     if elem.is_displayed() and elem.is_enabled():
                         scroll_to_view(driver, elem)
-                        elem.click()
+                        human_move_and_click(driver, elem)
                         buffer(click_gap)
                         return True
                 except:

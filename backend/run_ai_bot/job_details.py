@@ -72,7 +72,7 @@ def get_job_main_details(
         )
         # print_lg(e)
         discard_job()
-        job_details_button.click()  # To pass the error outside
+        human_click(job_details_button)  # To pass the error outside
     buffer(click_gap)
     return (job_id, title, company, work_location, work_style, skip)
 

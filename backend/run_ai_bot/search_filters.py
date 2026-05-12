@@ -3,6 +3,9 @@
 from run_ai_bot.bootstrap_env import *
 from run_ai_bot.state import *
 
+from modules.human_actions import human_move_and_click
+
+
 def get_applied_job_ids() -> set[str]:
     """
     Function to get a `set` of applied job's Job IDs
@@ -31,7 +34,7 @@ def set_search_location() -> None:
                 ".//input[@aria-label='City, state, or zip code'and not(@disabled)]",
                 False,
             )  #  and not(@aria-hidden='true')]")
-            text_input(actions, search_location_ele, search_location, "Search Location")
+            text_input(driver, actions, search_location_ele, search_location, "Search Location")
         except ElementNotInteractableException:
             try_xp(
                 driver,
@@ -59,11 +62,12 @@ def apply_filters() -> None:
     try:
         recommended_wait = 1 if click_gap < 1 else 0
 
-        wait.until(
+        all_filters = wait.until(
             EC.presence_of_element_located(
                 (By.XPATH, '//button[normalize-space()="All filters"]')
             )
-        ).click()
+        )
+        human_move_and_click(driver, all_filters)
         buffer(recommended_wait)
 
         wait_span_click(driver, sort_by)
@@ -111,7 +115,7 @@ def apply_filters() -> None:
         show_results_button: WebElement = driver.find_element(
             By.XPATH, '//button[contains(@aria-label, "Apply current filters to show")]'
         )
-        show_results_button.click()
+        human_move_and_click(driver, show_results_button)
 
         global pause_after_filters
         if pause_after_filters and "Turn off Pause after search" == pyautogui.confirm(

@@ -41,7 +41,7 @@ export default function StructuredData() {
         "name": "Is LinkdApply safe to use?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. LinkdApply mimics human behavior with randomized delays and natural movement, making it undetectable by LinkedIn's anti-bot systems."
+          "text": "LinkdApply uses variable pacing and natural UI patterns to avoid mechanical, instant bot timing. No automation is risk-free: follow LinkedIn's rules, keep daily limits conservative, and monitor your account."
         }
       },
       {

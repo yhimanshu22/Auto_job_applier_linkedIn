@@ -1,9 +1,10 @@
 """LinkedIn login / session checks."""
 
 from run_ai_bot.bootstrap_env import *
-from run_ai_bot.humanize import human_click
 from run_ai_bot.session import load_cookies, save_cookies
 from run_ai_bot.state import *
+
+from modules.human_actions import human_move_and_click
 
 
 def is_logged_in_LN() -> bool:
@@ -31,13 +32,14 @@ def login_LN() -> None:
             text_input_by_ID(driver, "password", password, 1)
         except Exception:
             print_lg("Couldn't find password field.")
-        driver.find_element(
+        sign_in_btn = driver.find_element(
             By.XPATH, '//button[@type="submit" and contains(text(), "Sign in")]'
-        ).click()
+        )
+        human_move_and_click(driver, sign_in_btn)
     except Exception:
         try:
             profile_button = find_by_class(driver, "profile__details")
-            profile_button.click()
+            human_move_and_click(driver, profile_button)
         except Exception:
             print_lg("Couldn't Login!")
 
