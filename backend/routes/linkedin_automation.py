@@ -261,6 +261,118 @@ async def get_task(task_id: str, log_lines: int = 200):
     return row
 
 
+def _read_framework_file(rel_or_abs_path: str, max_bytes: int) -> dict[str, Any]:
+    """Resolve a path against the framework dir, read it safely, return a dict.
+
+    Centralizes the path-traversal guard, size cap, and metadata shape used
+    by both ``/tasks/{id}/artifact`` and ``/calendar``. Raises ``HTTPException``
+    on guard / read failures so the callers can stay terse.
+    """
+    framework_dir = os.path.abspath(la.get_framework_dir())
+    raw = (
+        rel_or_abs_path
+        if os.path.isabs(rel_or_abs_path)
+        else os.path.join(framework_dir, rel_or_abs_path)
+    )
+    resolved = os.path.abspath(raw)
+
+    # Only serve files that resolve inside the framework dir even when the
+    # caller passed an absolute or ``..``-laced path.
+    if (
+        not resolved.startswith(framework_dir + os.sep)
+        and resolved != framework_dir
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Artifact path is outside the framework directory.",
+        )
+
+    if not os.path.isfile(resolved):
+        raise HTTPException(
+            status_code=404,
+            detail=f"File not found at {os.path.relpath(resolved, framework_dir)!r}",
+        )
+
+    try:
+        size = os.path.getsize(resolved)
+        mtime = os.path.getmtime(resolved)
+        cap = max(1024, min(int(max_bytes), 2_000_000))
+        truncated = size > cap
+        with open(resolved, "r", encoding="utf-8", errors="replace") as fh:
+            content = fh.read(cap)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read artifact: {exc}")
+
+    return {
+        "filename": os.path.basename(resolved),
+        "path": os.path.relpath(resolved, framework_dir),
+        "absolute_path": resolved,
+        "size_bytes": size,
+        "mtime": mtime,
+        "truncated": truncated,
+        "content": content,
+    }
+
+
+@router.get("/tasks/{task_id}/artifact")
+async def get_task_artifact(task_id: str, max_bytes: int = 200_000):
+    """Return the file produced by a task (currently ``generate-calendar``).
+
+    Generation tasks write a topics file to the framework cwd. The dashboard
+    calls this endpoint to surface that file inline so users don't have to
+    open the filesystem. Restricted to ``generate-calendar`` tasks and to
+    paths that resolve inside the framework directory.
+    """
+    task = la.get_task(task_id)
+    if task is not None:
+        action = task.action
+        args: list[str] = list(task.args)
+    else:
+        row = db.get_automation_task(task_id)
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+        action = row.get("action") or ""
+        args = list(row.get("args") or [])
+
+    if action != "generate-calendar":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Task action {action!r} has no readable artifact.",
+        )
+
+    # Locate the output file: honor a ``--output`` flag if the user passed
+    # one, otherwise fall back to the framework default ``content_calendar.txt``.
+    output = "content_calendar.txt"
+    for i, token in enumerate(args):
+        if token == "--output" and i + 1 < len(args):
+            output = args[i + 1]
+            break
+        if token.startswith("--output="):
+            output = token.split("=", 1)[1]
+            break
+
+    payload = _read_framework_file(output, max_bytes)
+    payload["task_id"] = task_id
+    payload["action"] = action
+    return payload
+
+
+@router.get("/calendar")
+async def get_calendar_file(
+    file: str = "content_calendar.txt", max_bytes: int = 200_000
+):
+    """Read a content-calendar file directly, independent of any task.
+
+    The Calendar tab uses this to render the current ``content_calendar.txt``
+    (or a custom output file) without forcing the user to dig into a task
+    modal. Same path-traversal guard as ``/tasks/{id}/artifact``.
+    """
+    safe = (file or "").strip() or "content_calendar.txt"
+    payload = _read_framework_file(safe, max_bytes)
+    payload["action"] = "generate-calendar"
+    return payload
+
+
 @router.post("/tasks/{task_id}/stop")
 async def stop_task(task_id: str):
     task = la.get_task(task_id)

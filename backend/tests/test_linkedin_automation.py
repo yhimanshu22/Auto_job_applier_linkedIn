@@ -1238,6 +1238,223 @@ def test_form_defaults_strips_unknown_keys_already_in_db(
     assert got["engage_action"] == "comment"
 
 
+# ---------------------------------------------------------------------------
+# /tasks/{id}/artifact — surface generate-calendar output to the dashboard
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def planted_calendar(test_db, tmp_path, monkeypatch):
+    """Plant a fake content_calendar.txt inside a mocked framework directory."""
+    from services import linkedin_automation as la_service
+
+    monkeypatch.setattr(la_service, "get_framework_dir", lambda: str(tmp_path))
+
+    calendar_path = tmp_path / "content_calendar.txt"
+    calendar_path.write_text(
+        "Day 1: Kick-off post\nDay 2: Behind the scenes\nDay 3: Customer story\n",
+        encoding="utf-8",
+    )
+
+    test_db.create_automation_task(
+        "la-generate-calendar-fixture",
+        "generate-calendar",
+        ["generate-calendar", "--niche", "Fitness", "--total-posts", "3"],
+        "/tmp/calendar.log",
+        user_id="local-user",
+    )
+    test_db.finalize_automation_task("la-generate-calendar-fixture", exit_code=0)
+    yield {"task_id": "la-generate-calendar-fixture", "path": calendar_path}
+
+
+def test_artifact_returns_generated_calendar(client, planted_calendar):
+    res = client.get(
+        f"/api/linkedin-automation/tasks/{planted_calendar['task_id']}/artifact"
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["filename"] == "content_calendar.txt"
+    assert body["action"] == "generate-calendar"
+    assert "Day 1: Kick-off post" in body["content"]
+    assert body["truncated"] is False
+    assert body["size_bytes"] > 0
+
+
+def test_artifact_honors_custom_output_flag(
+    client, test_db, tmp_path, monkeypatch
+):
+    """`--output Topics.txt` should resolve relative to the framework cwd."""
+    from services import linkedin_automation as la_service
+
+    monkeypatch.setattr(la_service, "get_framework_dir", lambda: str(tmp_path))
+
+    (tmp_path / "Topics.txt").write_text("Hello world", encoding="utf-8")
+    test_db.create_automation_task(
+        "la-generate-calendar-custom",
+        "generate-calendar",
+        [
+            "generate-calendar",
+            "--niche",
+            "DevOps",
+            "--total-posts",
+            "1",
+            "--output",
+            "Topics.txt",
+        ],
+        "/tmp/calendar.log",
+        user_id="local-user",
+    )
+    test_db.finalize_automation_task("la-generate-calendar-custom", exit_code=0)
+
+    res = client.get(
+        "/api/linkedin-automation/tasks/la-generate-calendar-custom/artifact"
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["filename"] == "Topics.txt"
+    assert body["content"] == "Hello world"
+
+
+def test_artifact_404_for_unknown_task(client):
+    res = client.get(
+        "/api/linkedin-automation/tasks/la-generate-calendar-missing/artifact"
+    )
+    assert res.status_code == 404
+
+
+def test_artifact_400_for_non_calendar_action(client, test_db):
+    test_db.create_automation_task(
+        "la-post-no-artifact",
+        "post",
+        ["post", "--post-text", "Hi"],
+        "/tmp/post.log",
+        user_id="local-user",
+    )
+    test_db.finalize_automation_task("la-post-no-artifact", exit_code=0)
+
+    res = client.get("/api/linkedin-automation/tasks/la-post-no-artifact/artifact")
+    assert res.status_code == 400
+    assert "post" in res.json()["detail"]
+
+
+def test_artifact_404_when_calendar_file_missing(
+    client, test_db, tmp_path, monkeypatch
+):
+    """Task exists, action matches, but the file was deleted or never written."""
+    from services import linkedin_automation as la_service
+
+    monkeypatch.setattr(la_service, "get_framework_dir", lambda: str(tmp_path))
+
+    test_db.create_automation_task(
+        "la-generate-calendar-empty",
+        "generate-calendar",
+        ["generate-calendar", "--niche", "AI", "--total-posts", "1"],
+        "/tmp/calendar.log",
+        user_id="local-user",
+    )
+    test_db.finalize_automation_task("la-generate-calendar-empty", exit_code=0)
+
+    res = client.get(
+        "/api/linkedin-automation/tasks/la-generate-calendar-empty/artifact"
+    )
+    assert res.status_code == 404
+
+
+def test_artifact_rejects_path_traversal(
+    client, test_db, tmp_path, monkeypatch
+):
+    """`--output ../escape.txt` must not leak files outside the framework dir."""
+    from services import linkedin_automation as la_service
+
+    framework_dir = tmp_path / "framework"
+    framework_dir.mkdir()
+    monkeypatch.setattr(la_service, "get_framework_dir", lambda: str(framework_dir))
+
+    # Sibling file the attacker would target — exists, but outside framework.
+    escape = tmp_path / "escape.txt"
+    escape.write_text("secret", encoding="utf-8")
+
+    test_db.create_automation_task(
+        "la-generate-calendar-traversal",
+        "generate-calendar",
+        [
+            "generate-calendar",
+            "--niche",
+            "Evil",
+            "--total-posts",
+            "1",
+            "--output",
+            "../escape.txt",
+        ],
+        "/tmp/calendar.log",
+        user_id="local-user",
+    )
+    test_db.finalize_automation_task("la-generate-calendar-traversal", exit_code=0)
+
+    res = client.get(
+        "/api/linkedin-automation/tasks/la-generate-calendar-traversal/artifact"
+    )
+    assert res.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# /calendar — direct read of the framework's content_calendar.txt
+# ---------------------------------------------------------------------------
+
+
+def test_calendar_endpoint_returns_default_file(client, tmp_path, monkeypatch):
+    """`GET /calendar` reads `content_calendar.txt` from the framework dir."""
+    from services import linkedin_automation as la_service
+
+    monkeypatch.setattr(la_service, "get_framework_dir", lambda: str(tmp_path))
+    (tmp_path / "content_calendar.txt").write_text(
+        "Day 1: Hello\nDay 2: World\n", encoding="utf-8"
+    )
+
+    res = client.get("/api/linkedin-automation/calendar")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["filename"] == "content_calendar.txt"
+    assert "Day 1: Hello" in body["content"]
+    assert body["truncated"] is False
+    assert isinstance(body["mtime"], (int, float))
+
+
+def test_calendar_endpoint_honors_file_query(client, tmp_path, monkeypatch):
+    from services import linkedin_automation as la_service
+
+    monkeypatch.setattr(la_service, "get_framework_dir", lambda: str(tmp_path))
+    (tmp_path / "Topics.txt").write_text("custom output", encoding="utf-8")
+
+    res = client.get("/api/linkedin-automation/calendar?file=Topics.txt")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["filename"] == "Topics.txt"
+    assert body["content"] == "custom output"
+
+
+def test_calendar_endpoint_404_when_missing(client, tmp_path, monkeypatch):
+    from services import linkedin_automation as la_service
+
+    monkeypatch.setattr(la_service, "get_framework_dir", lambda: str(tmp_path))
+    res = client.get("/api/linkedin-automation/calendar")
+    assert res.status_code == 404
+
+
+def test_calendar_endpoint_rejects_path_traversal(client, tmp_path, monkeypatch):
+    from services import linkedin_automation as la_service
+
+    framework_dir = tmp_path / "framework"
+    framework_dir.mkdir()
+    monkeypatch.setattr(la_service, "get_framework_dir", lambda: str(framework_dir))
+
+    (tmp_path / "secret.txt").write_text("leak", encoding="utf-8")
+    res = client.get(
+        "/api/linkedin-automation/calendar?file=" + "../secret.txt"
+    )
+    assert res.status_code == 403
+
+
 def test_dashboard_etag_changes_when_accounts_change(
     client, test_db, configured_accounts
 ):

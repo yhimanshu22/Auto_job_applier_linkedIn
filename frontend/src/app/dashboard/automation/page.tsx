@@ -14,6 +14,17 @@ type Subscription = {
   status?: string;
 };
 
+type Artifact = {
+  task_id: string;
+  action: string;
+  filename: string;
+  path: string;
+  absolute_path: string;
+  size_bytes: number;
+  truncated: boolean;
+  content: string;
+};
+
 function PlanPill({ plan }: { plan: string | undefined }) {
   const tone =
     plan === "pro"
@@ -598,6 +609,21 @@ function CalendarForm({
   const [totalPosts, setTotalPosts] = useState(defaults.calendar_total_posts ?? 30);
   const [output, setOutput] = useState(defaults.calendar_output ?? "");
 
+  // Inline viewer: read the generated calendar file directly from the
+  // framework dir so the user can read & copy it without opening the task
+  // detail modal.
+  type CalendarFile = {
+    filename: string;
+    content: string;
+    size_bytes: number;
+    mtime: number;
+    truncated: boolean;
+  };
+  const [calendar, setCalendar] = useState<CalendarFile | null>(null);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
   useEffect(() => {
     patchDefaults({
       calendar_niche: niche,
@@ -605,6 +631,68 @@ function CalendarForm({
       calendar_output: output,
     });
   }, [niche, totalPosts, output, patchDefaults]);
+
+  const loadCalendar = useCallback(async () => {
+    setCalendarLoading(true);
+    setCalendarError(null);
+    try {
+      const target = (output || "content_calendar.txt").trim();
+      const res = await fetch(
+        `${API}/calendar?file=${encodeURIComponent(target)}`
+      );
+      if (res.ok) {
+        setCalendar((await res.json()) as CalendarFile);
+      } else {
+        setCalendar(null);
+        setCalendarError(await parseErr(res));
+      }
+    } catch {
+      setCalendar(null);
+      setCalendarError("Network error fetching calendar.");
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, [output]);
+
+  // Auto-load on mount and whenever the configured output filename changes
+  // (debounced lightly so we don't spam the backend while the user types).
+  useEffect(() => {
+    const t = window.setTimeout(loadCalendar, 250);
+    return () => window.clearTimeout(t);
+  }, [loadCalendar]);
+
+  const copyCalendar = async () => {
+    if (!calendar?.content) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(calendar.content);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = calendar.content;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCalendarError("Failed to copy to clipboard.");
+    }
+  };
+
+  const fmtMtime = (mtime: number): string => {
+    try {
+      return new Date(mtime * 1000).toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    } catch {
+      return "—";
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -641,19 +729,78 @@ function CalendarForm({
         <button
           type="button"
           disabled={busy || !niche.trim()}
-          onClick={() =>
-            onSubmit({
+          onClick={async () => {
+            await onSubmit({
               niche: niche.trim(),
               total_posts: totalPosts,
               output: output || undefined,
               ...common,
-            })
-          }
+            });
+            // Best-effort: pick up the newly written file after launch.
+            // The framework runs in a subprocess so the file isn't ready
+            // immediately; the Refresh button is still there for later.
+            window.setTimeout(() => {
+              loadCalendar();
+            }, 1500);
+          }}
           className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
         >
           {busy ? "Launching…" : "Generate calendar"}
         </button>
         <ClearDefaultsButton onClear={onClearDefaults} />
+      </div>
+
+      {/* Inline viewer for the generated calendar file. Always shown so the
+          user knows where the result lives, even before any run. */}
+      <div className="mt-2 bg-zinc-950 border border-zinc-900 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-4 py-3 bg-zinc-900/50 border-b border-zinc-900 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+              Generated calendar
+            </h3>
+            <p className="text-[10px] text-zinc-600 font-mono mt-0.5 truncate">
+              {calendar
+                ? `${calendar.filename} • ${calendar.size_bytes} B • updated ${fmtMtime(
+                    calendar.mtime
+                  )}`
+                : (output || "content_calendar.txt").trim()}
+              {calendar?.truncated && " • truncated"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={copyCalendar}
+              disabled={!calendar?.content}
+              className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-[9px] font-bold text-zinc-400 uppercase tracking-widest hover:bg-zinc-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <button
+              type="button"
+              onClick={loadCalendar}
+              disabled={calendarLoading}
+              className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-[9px] font-bold text-zinc-400 uppercase tracking-widest hover:bg-zinc-800 hover:text-white disabled:opacity-40"
+            >
+              {calendarLoading ? "Loading…" : "Refresh"}
+            </button>
+          </div>
+        </div>
+        <div className="p-4">
+          {calendar ? (
+            <pre className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-zinc-200 font-mono max-h-[40vh] overflow-auto">
+              {calendar.content || "(empty file)"}
+            </pre>
+          ) : calendarLoading ? (
+            <p className="text-[11px] text-zinc-500 italic">Loading…</p>
+          ) : (
+            <p className="text-[11px] text-zinc-500 italic">
+              {calendarError
+                ? `Nothing to show yet — ${calendarError}`
+                : "No calendar file yet. Generate one with the form above."}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -915,6 +1062,13 @@ export default function AutomationPage() {
   // (mirrors /dashboard/billing). One-shot fetch on mount; plan rarely
   // changes inside a session.
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  // Artifact for the open task (currently only `generate-calendar` writes
+  // one). Lazy-loaded when the modal opens for that action.
+  const [artifact, setArtifact] = useState<Artifact | null>(null);
+  const [artifactError, setArtifactError] = useState<string | null>(null);
+  const [artifactLoading, setArtifactLoading] = useState(false);
+  // Transient "Copied!" feedback per copy target.
+  const [copiedTag, setCopiedTag] = useState<string | null>(null);
 
   const endpoint = useMemo<Record<Tab, string>>(
     () => ({
@@ -1224,6 +1378,70 @@ export default function AutomationPage() {
       flash({ type: "error", text: "Network error fetching task." });
     }
   };
+
+  // Whenever the open task changes, reset artifact state and (for
+  // generate-calendar) fetch the produced file so users can read & copy it
+  // inline. Other actions skip the fetch entirely.
+  useEffect(() => {
+    setArtifact(null);
+    setArtifactError(null);
+    if (!openTask || openTask.action !== "generate-calendar") return;
+
+    let cancelled = false;
+    setArtifactLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`${API}/tasks/${openTask.id}/artifact`);
+        if (cancelled) return;
+        if (res.ok) {
+          setArtifact((await res.json()) as Artifact);
+        } else {
+          const detail = await parseErr(res);
+          // 404 just means "no file yet" (task still running or never
+          // produced one) — render a friendly inline note instead of
+          // surfacing it as a hard error.
+          setArtifactError(detail || `HTTP ${res.status}`);
+        }
+      } catch {
+        if (!cancelled) setArtifactError("Network error fetching artifact.");
+      } finally {
+        if (!cancelled) setArtifactLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [openTask]);
+
+  const copyToClipboard = useCallback(
+    async (text: string, tag: string) => {
+      if (!text) return;
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          // Fallback for older Electron/browser surfaces without the
+          // async clipboard API.
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+        }
+        setCopiedTag(tag);
+        window.setTimeout(
+          () => setCopiedTag((curr) => (curr === tag ? null : curr)),
+          1500
+        );
+      } catch {
+        flash({ type: "error", text: "Failed to copy to clipboard." });
+      }
+    },
+    [flash]
+  );
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-400 font-sans selection:bg-blue-600/20">
@@ -1624,12 +1842,82 @@ export default function AutomationPage() {
                 </svg>
               </button>
             </div>
-            <div className="flex-1 overflow-auto p-4">
-              <pre className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-zinc-300 font-mono">
-                {openTask.log || "(empty)"}
-              </pre>
+            <div className="flex-1 overflow-auto p-4 space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+                    Log
+                  </p>
+                  <button
+                    onClick={() => copyToClipboard(openTask.log || "", "log")}
+                    disabled={!openTask.log}
+                    className="px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900 text-[9px] font-bold text-zinc-400 uppercase tracking-widest hover:bg-zinc-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {copiedTag === "log" ? "Copied" : "Copy"}
+                  </button>
+                </div>
+                <pre className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-zinc-300 font-mono">
+                  {openTask.log || "(empty)"}
+                </pre>
+              </div>
+
+              {openTask.action === "generate-calendar" && (
+                <div className="border-t border-zinc-900 pt-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+                        Generated calendar
+                      </p>
+                      {artifact && (
+                        <p className="text-[10px] text-zinc-600 font-mono mt-0.5 truncate">
+                          {artifact.filename}
+                          {artifact.truncated &&
+                            ` • truncated (${Math.round(
+                              artifact.size_bytes / 1024
+                            )} KB total)`}
+                        </p>
+                      )}
+                    </div>
+                    {artifact && (
+                      <button
+                        onClick={() =>
+                          copyToClipboard(artifact.content, "artifact")
+                        }
+                        className="px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900 text-[9px] font-bold text-zinc-400 uppercase tracking-widest hover:bg-zinc-800 hover:text-white"
+                      >
+                        {copiedTag === "artifact" ? "Copied" : "Copy"}
+                      </button>
+                    )}
+                  </div>
+                  {artifactLoading && (
+                    <p className="text-[11px] text-zinc-500 italic">
+                      Loading artifact…
+                    </p>
+                  )}
+                  {artifactError && !artifact && (
+                    <p className="text-[11px] text-zinc-500 italic">
+                      No artifact available yet
+                      {openTask.running
+                        ? " — still generating."
+                        : `: ${artifactError}`}
+                    </p>
+                  )}
+                  {artifact && (
+                    <pre className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-zinc-200 font-mono bg-zinc-900/40 border border-zinc-900 rounded-md p-3">
+                      {artifact.content || "(empty file)"}
+                    </pre>
+                  )}
+                </div>
+              )}
             </div>
             <div className="px-4 py-3 border-t border-zinc-800 flex justify-end gap-2">
+              <button
+                onClick={() => copyToClipboard(openTask.log || "", "log")}
+                disabled={!openTask.log}
+                className="px-3 py-1.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] font-bold text-zinc-300 uppercase tracking-widest hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {copiedTag === "log" ? "Copied" : "Copy log"}
+              </button>
               <button
                 onClick={() => viewTask(openTask.id)}
                 className="px-3 py-1.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] font-bold text-zinc-300 uppercase tracking-widest hover:bg-zinc-800"
