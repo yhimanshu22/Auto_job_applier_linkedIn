@@ -5,8 +5,30 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 
 const API = "http://127.0.0.1:8000/api/linkedin-automation";
+const BILLING_API = "http://127.0.0.1:8000/api/billing";
 const TABS = ["post", "engage", "pursue", "calendar", "settings"] as const;
 type Tab = (typeof TABS)[number];
+
+type Subscription = {
+  plan?: string;
+  status?: string;
+};
+
+function PlanPill({ plan }: { plan: string | undefined }) {
+  const tone =
+    plan === "pro"
+      ? "text-indigo-400"
+      : plan === "agency"
+        ? "text-amber-400"
+        : "text-zinc-500";
+  return (
+    <div className="px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900">
+      <span className={`text-[9px] font-bold uppercase tracking-wider ${tone}`}>
+        {plan || "free"}
+      </span>
+    </div>
+  );
+}
 
 type Stats = {
   total_all_time: number;
@@ -889,6 +911,10 @@ export default function AutomationPage() {
   const [formDefaults, setFormDefaults] = useState<FormDefaults>({});
   const [defaultsLoaded, setDefaultsLoaded] = useState(false);
   const lastSavedDefaultsRef = useRef<string>("");
+  // Subscription plan — used purely to render the plan pill in the topbar
+  // (mirrors /dashboard/billing). One-shot fetch on mount; plan rarely
+  // changes inside a session.
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
 
   const endpoint = useMemo<Record<Tab, string>>(
     () => ({
@@ -1076,6 +1102,28 @@ export default function AutomationPage() {
     etagRef.current = null;
   }, [userId]);
 
+  // Plan pill — one-shot fetch when the user changes. /api/billing/subscription
+  // applies the local-user/admin → agency override server-side, so the pill
+  // here matches what /dashboard/billing renders.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `${BILLING_API}/subscription?user_id=${encodeURIComponent(userId)}`
+        );
+        if (!cancelled && res.ok) {
+          setSubscription((await res.json()) as Subscription);
+        }
+      } catch {
+        /* Pill is purely decorative; silently fall back to no pill. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
   // Adaptive polling: fast (3s) while something is running, slow (30s) when
   // idle, paused entirely while the tab is hidden. Resumes immediately on
   // `visibilitychange` so the user never sees stale data on tab return.
@@ -1185,23 +1233,41 @@ export default function AutomationPage() {
             <div className="flex items-center gap-3 min-w-0">
               <Link
                 href="/dashboard"
+                className="font-serif text-base font-bold tracking-tight bg-gradient-to-r from-indigo-300 via-blue-300 to-violet-300 bg-clip-text text-transparent hover:opacity-80 transition-opacity"
+              >
+                LinkdApply
+              </Link>
+              {subscription && <PlanPill plan={subscription.plan} />}
+            </div>
+            <div className="flex items-center space-x-6">
+              <Link
+                href="/dashboard"
                 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest hover:text-white transition-colors"
               >
-                ← Dashboard
+                Dashboard
               </Link>
-              <span className="font-serif text-base font-bold tracking-tight bg-gradient-to-r from-indigo-300 via-blue-300 to-violet-300 bg-clip-text text-transparent">
-                LinkedIn Automation
-              </span>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800">
-              <div
-                className={`size-1.5 rounded-full ${
-                  health.framework_available ? "bg-emerald-500" : "bg-red-500"
-                }`}
-              />
-              <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-tighter">
-                Framework {health.framework_available ? "Ready" : "Missing"}
-              </span>
+              <Link
+                href="/dashboard/automation"
+                className="text-[10px] font-bold text-white uppercase tracking-widest"
+              >
+                Automation
+              </Link>
+              <Link
+                href="/dashboard/billing"
+                className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest hover:text-white transition-colors"
+              >
+                Billing
+              </Link>
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800">
+                <div
+                  className={`size-1.5 rounded-full ${
+                    health.framework_available ? "bg-emerald-500" : "bg-red-500"
+                  }`}
+                />
+                <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-tighter">
+                  Framework {health.framework_available ? "Ready" : "Missing"}
+                </span>
+              </div>
             </div>
           </div>
         </div>

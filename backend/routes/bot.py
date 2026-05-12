@@ -183,3 +183,41 @@ async def get_bot_logs(lines: int = 120):
 async def get_bot_runs(limit: int = 10):
     runs = db.get_recent_bot_runs(limit)
     return {"runs": runs}
+
+
+@router.get("/active")
+async def get_active_bot_count(user_id: str = "local-user"):
+    """Live count of concurrently running bot processes for the billing tile.
+
+    Two sources contribute, deliberately:
+      * The job-applier supervisor (this process owns it, so we trust
+        ``supervisor_process.poll()`` over the ``bot_runs.status`` column,
+        which can lag if the supervisor was killed without ``end_bot_run``).
+      * LinkedIn-Automation-Framework subprocesses for the requested user,
+        counted via ``AutomationTask.status == 'running'`` — the same number
+        the automation dashboard surfaces.
+
+    Returns ``{active, supervisor, automation_tasks, limit, plan}`` so the
+    frontend can render ``active / limit`` and optionally break it down.
+    """
+    automation = int(
+        db.get_automation_task_stats(user_id=user_id).get("running", 0)
+    )
+    supervisor_running = bool(
+        sv.supervisor_process and sv.supervisor_process.poll() is None
+    )
+    supervisor = 1 if supervisor_running else 0
+
+    subscription = db.get_user_subscription(user_id)
+    plan = (subscription or {}).get("plan", "free_trial")
+    if user_id in ("himu09854@gmail.com", "local-user"):
+        plan = "agency"
+    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
+
+    return {
+        "active": supervisor + automation,
+        "supervisor": supervisor,
+        "automation_tasks": automation,
+        "limit": limits["max_active_bots"],
+        "plan": plan,
+    }

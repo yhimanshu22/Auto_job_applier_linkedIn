@@ -211,12 +211,10 @@ def start_task(
     # credentials + optional override are applied. This is what we persist on
     # the task / show in the dashboard. ``None`` is possible when no account
     # is configured at all.
-    if account and apply_linkedin_account({}, account) is None:
-        # ``apply_linkedin_account`` returns None when the requested account
-        # isn't found. Surface that as a clean error to the caller.
-        # NOTE: we pass an empty dict so the test is purely a lookup; the env
-        # used by the subprocess was already built above with the override.
-        raise LookupError(f"LinkedIn account {account!r} not configured")
+    if account:
+        resolved = (env.get("LINKEDIN_USERNAME") or "").strip()
+        if not resolved or resolved.lower() != str(account).strip().lower():
+            raise LookupError(f"LinkedIn account {account!r} not configured")
     account_username = get_active_linkedin_account(env)
 
     log_handle = open(log_path, "a", encoding="utf-8", buffering=1)

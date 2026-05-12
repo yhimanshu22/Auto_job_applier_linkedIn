@@ -969,6 +969,95 @@ def test_post_endpoint_400_for_unknown_account(
 
 
 # ---------------------------------------------------------------------------
+# Env-only accounts (loaded from .env: LINKEDIN_USERNAME_<n>)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def env_only_accounts(test_db, monkeypatch):
+    """No DB-side accounts; two env-only accounts loaded as if from .env."""
+    test_db.set_config("username", "", category="secrets")
+    test_db.set_config("password", "", category="secrets")
+    test_db.set_config("linkedin_extra_accounts", [], category="secrets")
+    monkeypatch.setenv("LINKEDIN_USERNAME_1", "envuser1@example.com")
+    monkeypatch.setenv("LINKEDIN_PASSWORD_1", "env-pw-1")
+    monkeypatch.setenv("LINKEDIN_USERNAME_2", "envuser2@example.com")
+    monkeypatch.setenv("LINKEDIN_PASSWORD_2", "env-pw-2")
+    monkeypatch.delenv("LINKEDIN_USERNAME", raising=False)
+    monkeypatch.delenv("LINKEDIN_PASSWORD", raising=False)
+    yield
+    test_db.set_config("linkedin_extra_accounts", [], category="secrets")
+
+
+def test_list_linkedin_accounts_includes_env_only_accounts(test_db, env_only_accounts):
+    from services.linkedin_env import list_linkedin_accounts
+
+    rows = list_linkedin_accounts()
+    usernames = [r["username"] for r in rows]
+    assert usernames == ["envuser1@example.com", "envuser2@example.com"]
+    for r in rows:
+        assert r["has_password"] is True
+        # No DB primary, no LINKEDIN_USERNAME — neither env entry should be
+        # promoted to primary just because it's index 1.
+        assert r["primary"] is False
+
+
+def test_accounts_endpoint_surfaces_env_only_accounts(client, test_db, env_only_accounts):
+    """Regression: the billing tile + dashboard selector showed 0 even when
+    the user had two LINKEDIN_USERNAME_<n> entries in their .env file."""
+    res = client.get("/api/linkedin-automation/accounts")
+    assert res.status_code == 200
+    body = res.json()
+    assert [a["username"] for a in body["accounts"]] == [
+        "envuser1@example.com",
+        "envuser2@example.com",
+    ]
+
+
+def test_apply_linkedin_account_resolves_env_only_account(test_db, env_only_accounts):
+    from services.linkedin_env import apply_linkedin_account
+
+    env = {
+        "LINKEDIN_USERNAME_1": "envuser1@example.com",
+        "LINKEDIN_PASSWORD_1": "env-pw-1",
+        "LINKEDIN_USERNAME_2": "envuser2@example.com",
+        "LINKEDIN_PASSWORD_2": "env-pw-2",
+    }
+    resolved = apply_linkedin_account(env, "envuser2@example.com")
+    assert resolved == "envuser2@example.com"
+    assert env["LINKEDIN_USERNAME"] == "envuser2@example.com"
+    assert env["LINKEDIN_PASSWORD"] == "env-pw-2"
+
+
+def test_db_primary_takes_precedence_over_duplicate_env_entry(
+    test_db, monkeypatch
+):
+    """When the same username appears in both DB and env, the merged listing
+    keeps the DB entry (with its primary=True flag) and drops the env dup."""
+    from services.linkedin_env import list_linkedin_accounts
+
+    test_db.set_config("username", "alice@example.com", category="secrets")
+    test_db.set_config("password", "db-pw", category="secrets")
+    test_db.set_config("linkedin_extra_accounts", [], category="secrets")
+    monkeypatch.setenv("LINKEDIN_USERNAME_1", "alice@example.com")
+    monkeypatch.setenv("LINKEDIN_PASSWORD_1", "env-pw")
+    monkeypatch.setenv("LINKEDIN_USERNAME_2", "bob@example.com")
+    monkeypatch.setenv("LINKEDIN_PASSWORD_2", "env-pw")
+
+    rows = list_linkedin_accounts()
+    assert [r["username"] for r in rows] == [
+        "alice@example.com",
+        "bob@example.com",
+    ]
+    assert rows[0]["primary"] is True
+    assert rows[1]["primary"] is False
+
+    # Cleanup
+    test_db.set_config("username", "", category="secrets")
+    test_db.set_config("password", "", category="secrets")
+
+
+# ---------------------------------------------------------------------------
 # Form defaults: dashboard inputs round-trip through the DB
 # ---------------------------------------------------------------------------
 

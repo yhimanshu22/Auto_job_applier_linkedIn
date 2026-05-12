@@ -32,3 +32,58 @@ def test_bot_logs_availability(client):
     response = client.get("/api/bot/logs")
     assert response.status_code == 200
     assert "logs" in response.json()
+
+
+def test_bot_active_zero_when_idle(client):
+    """No supervisor process and no running automation tasks → active == 0."""
+    res = client.get("/api/bot/active?user_id=local-user")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["active"] == 0
+    assert body["supervisor"] == 0
+    assert body["automation_tasks"] == 0
+    # local-user is force-promoted to the agency plan by the route.
+    assert body["plan"] == "agency"
+    assert body["limit"] >= 1
+
+
+def test_bot_active_counts_running_automation_tasks(client, test_db):
+    """Running automation tasks should bump the active count."""
+    test_db.create_automation_task(
+        "active-task-1", "post", ["arg"], "/log", user_id="active-user"
+    )
+    test_db.create_automation_task(
+        "active-task-2", "engage", ["arg"], "/log", user_id="active-user"
+    )
+    # A finished task must NOT count.
+    test_db.create_automation_task(
+        "done-task", "pursue", ["arg"], "/log", user_id="active-user"
+    )
+    test_db.finalize_automation_task("done-task", exit_code=0)
+
+    res = client.get("/api/bot/active?user_id=active-user")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["automation_tasks"] == 2
+    assert body["active"] == 2  # no supervisor running in tests
+    assert body["supervisor"] == 0
+
+
+def test_bot_active_includes_supervisor(client, monkeypatch):
+    """When the supervisor process is alive, supervisor counts as 1 bot."""
+    from services import supervisor_state as sv
+
+    class _FakeProc:
+        pid = 9999
+        def poll(self):
+            return None  # still running
+
+    monkeypatch.setattr(sv, "supervisor_process", _FakeProc())
+    try:
+        res = client.get("/api/bot/active?user_id=local-user")
+        assert res.status_code == 200
+        body = res.json()
+        assert body["supervisor"] == 1
+        assert body["active"] >= 1
+    finally:
+        monkeypatch.setattr(sv, "supervisor_process", None)

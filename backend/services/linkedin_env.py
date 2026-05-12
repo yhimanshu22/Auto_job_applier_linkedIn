@@ -156,13 +156,61 @@ def _load_secrets() -> dict:
         return {}
 
 
-def list_linkedin_accounts() -> list[dict]:
-    """Return all configured LinkedIn accounts (passwords never echoed).
+def _iter_env_accounts(env: dict) -> list[tuple[str, str | None, bool]]:
+    """Pull LinkedIn accounts that live in environment variables.
 
-    Each entry: ``{"username": str, "primary": bool, "has_password": bool}``.
-    The primary account (set via ``secrets.username``) appears first, followed
-    by extras from ``linkedin_extra_accounts`` in stored order.
+    Returns ``(username, password, is_primary)`` tuples. ``LINKEDIN_USERNAME``
+    is treated as primary; ``LINKEDIN_USERNAME_<suffix>`` entries follow in
+    numeric-suffix order (falling back to lexicographic for non-numeric
+    suffixes).
     """
+    out: list[tuple[str, str | None, bool]] = []
+
+    primary = env.get("LINKEDIN_USERNAME")
+    if isinstance(primary, str) and primary.strip():
+        out.append((primary.strip(), env.get("LINKEDIN_PASSWORD"), True))
+
+    indexed: list[tuple[str, str, str | None]] = []
+    prefix = "LINKEDIN_USERNAME_"
+    for key, value in env.items():
+        if not key.startswith(prefix):
+            continue
+        suffix = key[len(prefix):]
+        if not suffix or not isinstance(value, str):
+            continue
+        u = value.strip()
+        if not u:
+            continue
+        indexed.append((suffix, u, env.get(f"LINKEDIN_PASSWORD_{suffix}")))
+
+    def _suffix_sort_key(item: tuple[str, str, str | None]) -> tuple[int, object]:
+        s = item[0]
+        try:
+            return (0, int(s))
+        except ValueError:
+            return (1, s)
+
+    indexed.sort(key=_suffix_sort_key)
+    for _, u, pw in indexed:
+        out.append((u, pw, False))
+
+    return out
+
+
+def list_linkedin_accounts(env: dict | None = None) -> list[dict]:
+    """Return all configured LinkedIn accounts from BOTH the DB ``secrets``
+    category and the process environment (``LINKEDIN_USERNAME`` /
+    ``LINKEDIN_USERNAME_<n>`` style variables loaded from ``.env``).
+
+    Passwords are never echoed. Each entry has the shape
+    ``{"username": str, "primary": bool, "has_password": bool}``.
+    Ordering: DB primary first, then DB extras in stored order, then any
+    env-only accounts in suffix order. Duplicates (case-insensitive) are
+    collapsed to a single entry preferring the DB-side metadata.
+    """
+    if env is None:
+        env = preview_env_with_dashboard_credentials()
+
     secrets_cfg = _load_secrets()
     out: list[dict] = []
     seen_lc: set[str] = set()
@@ -191,6 +239,19 @@ def list_linkedin_accounts() -> list[dict]:
                 "has_password": bool(row.get("password")),
             })
             seen_lc.add(u.lower())
+
+    db_primary_set = any(r["primary"] for r in out)
+    for username, password, is_env_primary in _iter_env_accounts(env):
+        if username.lower() in seen_lc:
+            continue
+        out.append({
+            "username": username,
+            "primary": is_env_primary and not db_primary_set,
+            "has_password": bool(password and str(password).strip()),
+        })
+        seen_lc.add(username.lower())
+        if is_env_primary:
+            db_primary_set = True
     return out
 
 
@@ -246,5 +307,14 @@ def apply_linkedin_account(env: dict, account: str | None) -> str | None:
                 if pw is not None and str(pw).strip() != "":
                     env["LINKEDIN_PASSWORD"] = str(pw)
                 return u
+
+    # Fallback: env-only accounts loaded from .env (LINKEDIN_USERNAME_<n>).
+    for username, password, _is_primary in _iter_env_accounts(env):
+        if username.lower() != needle:
+            continue
+        env["LINKEDIN_USERNAME"] = username
+        if password is not None and str(password).strip() != "":
+            env["LINKEDIN_PASSWORD"] = str(password)
+        return username
 
     return None
