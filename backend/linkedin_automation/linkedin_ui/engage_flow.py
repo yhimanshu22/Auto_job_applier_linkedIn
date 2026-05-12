@@ -441,6 +441,18 @@ class EngageExecutor:
         try:
             return post_root.find_element(By.XPATH, ".//div[contains(@class,'feed-shared-social-action-bar')]")
         except Exception:
+            pass
+        # New 2026 feed UI does not expose a discrete action-bar container; the
+        # like/reaction button lives directly inside the post listitem. Fall back
+        # to the post root so downstream `_like_from_bar` can still find it via
+        # the "Reaction button state:" aria-label selector.
+        try:
+            post_root.find_element(
+                By.XPATH,
+                ".//button[starts-with(@aria-label,'Reaction button state:')]",
+            )
+            return post_root
+        except Exception:
             return None
 
     def _prepare_comment_plan(self, post_root, bar, urn: Optional[str]) -> CommentPlan:

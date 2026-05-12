@@ -90,6 +90,29 @@ class EngageDomMixin:
         except Exception:
             pass
 
+        # New DOM fallback: every post carries a control-menu button whose
+        # aria-label reads "Open control menu for post by <Author>".
+        try:
+            for btn in root.find_elements(
+                By.XPATH,
+                ".//button[starts-with(@aria-label,'Open control menu for post by ') or starts-with(@aria-label,'Hide post by ')]",
+            ):
+                try:
+                    label = (btn.get_attribute("aria-label") or "").strip()
+                except Exception:
+                    label = ""
+                if not label:
+                    continue
+                for prefix in ("Open control menu for post by ", "Hide post by "):
+                    if label.startswith(prefix):
+                        fragment = label[len(prefix):].strip()
+                        fragment = re.split(r"[|•·\-–—]|\s{2,}", fragment)[0].strip()
+                        candidate = self._normalize_person_name(fragment)
+                        if candidate:
+                            return candidate
+        except Exception:
+            pass
+
         return None
 
     def _normalize_person_name(self, name: str) -> str:
@@ -146,25 +169,62 @@ class EngageDomMixin:
             list[WebElement]: Visible post elements.
         """
         posts = []
-        selectors = [
+        seen_ids: set[int] = set()
+
+        def _add(el):
+            try:
+                key = el.id  # selenium internal id; stable per element handle
+            except Exception:
+                key = id(el)
+            if key in seen_ids:
+                return False
+            try:
+                if not el.is_displayed():
+                    return False
+            except Exception:
+                return False
+            seen_ids.add(key)
+            posts.append(el)
+            return True
+
+        legacy_selectors = [
             "//div[@data-id]",
             "//div[contains(@class,'fie-impression-container')]",
             "//div[contains(@class,'feed-shared-update-v2__control-menu-container')]/div[contains(@class,'fie-impression-container')]",
             "//div[contains(@class,'feed-shared-update-v2')]",
         ]
-        for xp in selectors:
+        # LinkedIn rolled out a new feed UI (2026) where every post is a
+        # role="listitem" inside data-testid="mainFeed" with obfuscated class names.
+        # The "Open control menu for post by <Author>" button is the most stable hook.
+        new_dom_selectors = [
+            "//div[@data-testid='mainFeed']//div[@role='listitem'][.//button[starts-with(@aria-label,'Open control menu')]]",
+            "//div[@role='listitem'][.//button[starts-with(@aria-label,'Open control menu for post')]]",
+        ]
+        for xp in legacy_selectors:
             try:
-                found = self.driver.find_elements(By.XPATH, xp)
-                for el in found:
-                    try:
-                        if el.is_displayed():
-                            posts.append(el)
-                            if len(posts) >= limit:
-                                return posts
-                    except Exception:
-                        continue
+                for el in self.driver.find_elements(By.XPATH, xp):
+                    if _add(el) and len(posts) >= limit:
+                        return posts
             except Exception:
                 continue
+
+        legacy_count = len(posts)
+        for xp in new_dom_selectors:
+            try:
+                for el in self.driver.find_elements(By.XPATH, xp):
+                    if _add(el) and len(posts) >= limit:
+                        break
+            except Exception:
+                continue
+            if len(posts) >= limit:
+                break
+
+        new_dom_count = len(posts) - legacy_count
+        if new_dom_count and not legacy_count:
+            try:
+                logging.info(f"NEW_DOM detected posts={new_dom_count} (LinkedIn 2026 feed UI)")
+            except Exception:
+                pass
         return posts
 
     def _visible_post_keys(self, limit: int = 16):
@@ -413,6 +473,17 @@ class EngageDomMixin:
                             return m.group(0)
                     except Exception:
                         continue
+            except Exception:
+                pass
+            # New DOM fallback: the 2026 feed UI no longer emits urn:li:activity
+            # markers in the post markup. Each post root carries a stable
+            # `componentkey` UUID which is reused across paint cycles within
+            # the same render. We use it as a dedupe surrogate, prefixed so
+            # downstream consumers can distinguish it from real URNs.
+            try:
+                ck = root.get_attribute("componentkey")
+                if ck and ck.strip():
+                    return f"componentkey:{ck.strip()}"
             except Exception:
                 pass
         except Exception:
@@ -806,6 +877,10 @@ class EngageDomMixin:
                 ".//button[contains(@class,'react-button__trigger')]",
                 ".//button[@aria-label='React Like']",
                 ".//button[.//span[normalize-space()='Like']]",
+                # New 2026 feed UI: reaction button advertises its own state in
+                # the aria-label, e.g. "Reaction button state: no reaction" or
+                # "Reaction button state: liked".
+                ".//button[starts-with(@aria-label,'Reaction button state:')]",
             ]:
                 try:
                     el = WebDriverWait(bar, 3).until(EC.presence_of_element_located((By.XPATH, sel)))
@@ -817,6 +892,16 @@ class EngageDomMixin:
             if not btn:
                 return False
             pressed = (btn.get_attribute("aria-pressed") or "").lower() == "true"
+            if not pressed:
+                # New DOM advertises pressed state through the aria-label text.
+                try:
+                    label = (btn.get_attribute("aria-label") or "").strip().lower()
+                except Exception:
+                    label = ""
+                if label.startswith("reaction button state:"):
+                    state = label.split(":", 1)[1].strip()
+                    if state and state != "no reaction":
+                        pressed = True
             if pressed:
                 return False
             try:
@@ -985,18 +1070,33 @@ class EngageDomMixin:
                     except Exception:
                         pass
 
-            for sel in [
+            submit_selectors = [
+                # Legacy DOM
                 "//button[contains(@class,'comments-comment-box__submit-button')]",
                 "//button[.//span[normalize-space()='Post']]",
                 "//button[@data-control-name='submit_comment']",
-            ]:
+                # 2026 feed UI — comment submit lives inside a <form> with the
+                # editor; obfuscated classes mean we have to anchor on type or
+                # aria-label.
+                "//form[.//div[@contenteditable='true']]//button[@type='submit']",
+                "//form[.//div[@contenteditable='true']]"
+                "//button[contains(translate(@aria-label,'COMMENTPOSTREPLY','commentpostreply'),'comment')"
+                " or contains(translate(@aria-label,'COMMENTPOSTREPLY','commentpostreply'),'post')"
+                " or contains(translate(@aria-label,'COMMENTPOSTREPLY','commentpostreply'),'reply')]",
+                "//button[@type='submit' and .//span[normalize-space()='Post' or normalize-space()='Reply']]",
+            ]
+            dismissed_once = False
+            submitted = False
+            for sel in submit_selectors:
                 try:
-                    try:
-                        logging.info("DISMISS before_submit: global search/typeahead overlay")
-                        self._dismiss_global_search_overlay()
-                    except Exception:
-                        pass
-                    post_btn = WebDriverWait(self.driver, 4).until(
+                    if not dismissed_once:
+                        try:
+                            logging.info("DISMISS before_submit: global search/typeahead overlay")
+                            self._dismiss_global_search_overlay()
+                        except Exception:
+                            pass
+                        dismissed_once = True
+                    post_btn = WebDriverWait(self.driver, 1.5).until(
                         EC.element_to_be_clickable((By.XPATH, sel))
                     )
                     try:
@@ -1004,33 +1104,58 @@ class EngageDomMixin:
                     except Exception:
                         pass
                     if self._click_element_with_fallback(post_btn, "Submit comment (stream)"):
-                        try:
-                            root = self._find_post_root_for_bar(bar)
-                            if root is None:
-                                root = bar
-                            self.driver.execute_script(
-                                "arguments[0].setAttribute('data-li-bot-commented','1');", root
-                            )
-                        except Exception:
-                            pass
-                        try:
-                            editor = root.find_element(By.XPATH, ".//div[@contenteditable='true']")
-                            try:
-                                editor.send_keys(Keys.ESCAPE)
-                            except Exception:
-                                pass
-                            try:
-                                self.driver.execute_script("arguments[0].blur && arguments[0].blur();", editor)
-                            except Exception:
-                                pass
-                        except Exception:
-                            pass
-                        return True
+                        submitted = True
+                        break
                 except Exception:
                     continue
+
+            # Last resort: LinkedIn's native Ctrl+Enter shortcut posts the
+            # active comment editor regardless of which DOM revision is live.
+            if not submitted:
+                try:
+                    self._scroll_into_view(editor)
+                except Exception:
+                    pass
+                try:
+                    editor.send_keys(Keys.CONTROL, Keys.ENTER)
+                    logging.info("Submit comment (stream) via Ctrl+Enter")
+                    submitted = True
+                except Exception:
+                    submitted = False
+
+            if not submitted:
+                try:
+                    self._dump_comment_submit_diagnostics()
+                except Exception:
+                    pass
+                return False
+
+            try:
+                root = self._find_post_root_for_bar(bar)
+                if root is None:
+                    root = bar
+                self.driver.execute_script(
+                    "arguments[0].setAttribute('data-li-bot-commented','1');", root
+                )
+            except Exception:
+                pass
+            try:
+                editor_after = root.find_element(By.XPATH, ".//div[@contenteditable='true']")
+                try:
+                    editor_after.send_keys(Keys.ESCAPE)
+                except Exception:
+                    pass
+                try:
+                    self.driver.execute_script(
+                        "arguments[0].blur && arguments[0].blur();", editor_after
+                    )
+                except Exception:
+                    pass
+            except Exception:
+                pass
+            return True
         except Exception:
             return False
-        return False
 
     def _scroll_into_view(self, el):
         """Scroll the viewport so the provided element becomes visible.
@@ -1055,3 +1180,66 @@ class EngageDomMixin:
             self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
         except Exception:
             pass
+
+    def _dump_comment_submit_diagnostics(self) -> None:
+        """Save the page HTML + a screenshot when a comment fails to submit.
+
+        Why:
+            The 2026 LinkedIn feed obfuscates class names; the only way to find
+            the new submit-button selector is to inspect a real open-editor
+            page. We capture one snapshot per engage run so we have material
+            to refine the selector list without spamming the user's disk.
+
+        When:
+            Called from :meth:`_comment_from_bar` after every known submit
+            selector and the Ctrl+Enter fallback have failed.
+
+        How:
+            Writes to ``<LOG_DIRECTORY>/diag/comment_submit_failed_<ts>.{html,png}``.
+            Subsequent failures within the same process noop because the
+            instance attribute ``_comment_submit_diag_done`` is set on first
+            success.
+        """
+        if getattr(self, "_comment_submit_diag_done", False):
+            return
+        import os
+        import time as _t
+
+        try:
+            base = os.path.join(getattr(config, "LOG_DIRECTORY", "logs"), "diag")
+            os.makedirs(base, exist_ok=True)
+            stamp = _t.strftime("%Y%m%d_%H%M%S")
+            slug = f"comment_submit_failed_{stamp}"
+
+            try:
+                url = self.driver.current_url
+            except Exception:
+                url = "<unavailable>"
+            try:
+                title = self.driver.title
+            except Exception:
+                title = "<unavailable>"
+            logging.info(
+                "ENGAGE_DIAG reason=comment_submit_failed url=%s title=%r dir=%s",
+                url,
+                title,
+                base,
+            )
+
+            html_path = os.path.join(base, f"{slug}.html")
+            png_path = os.path.join(base, f"{slug}.png")
+            try:
+                with open(html_path, "w", encoding="utf-8") as fh:
+                    fh.write(self.driver.page_source or "")
+                logging.info("ENGAGE_DIAG saved_html=%s", html_path)
+            except Exception as exc:
+                logging.warning("ENGAGE_DIAG html_dump_failed: %s", exc)
+            try:
+                self.driver.save_screenshot(png_path)
+                logging.info("ENGAGE_DIAG saved_png=%s", png_path)
+            except Exception as exc:
+                logging.warning("ENGAGE_DIAG screenshot_failed: %s", exc)
+        except Exception as exc:
+            logging.warning("ENGAGE_DIAG dump_failed: %s", exc)
+        finally:
+            self._comment_submit_diag_done = True
