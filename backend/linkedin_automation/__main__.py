@@ -55,6 +55,8 @@ def main() -> int:
         if args.headless:
             config.HEADLESS = True
 
+        exit_code = 0
+
         if args.command == "post":
             if args.post_text:
                 bot.post_custom_text(
@@ -79,6 +81,8 @@ def main() -> int:
         elif args.command == "engage":
             results = bot.engage_feed(action=args.action, max_actions=args.max_actions)
             logging.info(f"Engagement results: {json.dumps(results, indent=2)}")
+            if not results.get("success", True):
+                exit_code = 1
 
         elif args.command == "pursue":
             results = bot.pursue_investor(
@@ -91,11 +95,14 @@ def main() -> int:
                 bio_keywords=args.bio_keywords,
             )
             logging.info(f"Pursuit results: {json.dumps(results, indent=2)}")
-            return 0 if not results.get("errors") else 1
+            exit_code = 0 if not results.get("errors") else 1
 
         bot.close()
-        logging.info("LinkedIn Bot completed successfully")
-        return 0
+        if exit_code:
+            logging.info("LinkedIn Bot finished with exit code %s", exit_code)
+        else:
+            logging.info("LinkedIn Bot completed successfully")
+        return exit_code
 
     except Exception as e:
         logging.error(f"LinkedIn Bot encountered an error: {str(e)}", exc_info=True)

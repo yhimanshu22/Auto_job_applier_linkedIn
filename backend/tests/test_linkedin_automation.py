@@ -231,6 +231,104 @@ def test_build_env_sets_cookie_path_and_pythonpath():
 
 
 # ---------------------------------------------------------------------------
+# Per-account cookie path
+#
+# A single shared ``linkedin_cookies.pkl`` meant whichever LinkedIn identity
+# logged in first won — every subsequent run reused that session even when
+# the dashboard had selected a different account. The path is now derived
+# from the resolved account, with the legacy path kept for the primary so
+# existing sessions survive the upgrade.
+# ---------------------------------------------------------------------------
+
+
+def test_cookie_slug_sanitises_email():
+    from services.linkedin_automation import _cookie_slug
+
+    assert _cookie_slug("himu09854@gmail.com") == "himu09854_at_gmail.com"
+    assert _cookie_slug("YHimanshu220456@Gmail.com") == "yhimanshu220456_at_gmail.com"
+    # Anything outside [a-z0-9._-] collapses to underscores; trailing
+    # underscores trimmed so we don't produce names like ``foo_.pkl``.
+    assert _cookie_slug("weird ::name++") == "weird_name"
+    assert _cookie_slug("") == "default"
+
+
+def test_get_cookie_path_for_account_returns_legacy_when_no_account():
+    from services.linkedin_automation import (
+        get_cookie_path_for_account,
+        get_shared_cookie_path,
+    )
+
+    assert get_cookie_path_for_account(None) == get_shared_cookie_path()
+    assert get_cookie_path_for_account("") == get_shared_cookie_path()
+    assert get_cookie_path_for_account("   ") == get_shared_cookie_path()
+
+
+def test_get_cookie_path_for_account_returns_legacy_for_primary():
+    from services.linkedin_automation import (
+        get_cookie_path_for_account,
+        get_shared_cookie_path,
+    )
+
+    legacy = get_shared_cookie_path()
+    # Case-insensitive match against the primary returns the legacy path
+    # so the existing main-account session survives the migration.
+    assert (
+        get_cookie_path_for_account("himu09854@gmail.com", "Himu09854@Gmail.com")
+        == legacy
+    )
+
+
+def test_get_cookie_path_for_account_returns_per_account_for_other():
+    from services.linkedin_automation import (
+        get_cookie_path_for_account,
+        get_shared_cookie_path,
+    )
+
+    primary = "himu09854@gmail.com"
+    path = get_cookie_path_for_account("yhimanshu220456@gmail.com", primary)
+    assert path != get_shared_cookie_path()
+    # Per-account paths live under ``<root>/cookies/<slug>.pkl``.
+    assert os.sep + "cookies" + os.sep in path or "/cookies/" in path
+    assert path.endswith("yhimanshu220456_at_gmail.com.pkl")
+
+
+def test_build_env_uses_per_account_cookie_when_secondary_account_selected(
+    monkeypatch,
+):
+    """Selecting a non-primary account must point the subprocess at its own
+    cookie pickle so the previous account's session can't be reused."""
+    from services import linkedin_automation as la_service
+
+    monkeypatch.setenv("LINKEDIN_USERNAME", "himu09854@gmail.com")
+    monkeypatch.setenv("LINKEDIN_PASSWORD", "pw-primary")
+    monkeypatch.setenv("LINKEDIN_USERNAME_1", "yhimanshu220456@gmail.com")
+    monkeypatch.setenv("LINKEDIN_PASSWORD_1", "pw-secondary")
+
+    env = la_service._build_env(account="yhimanshu220456@gmail.com")
+
+    assert env["LINKEDIN_USERNAME"] == "yhimanshu220456@gmail.com"
+    assert env["LINKEDIN_PASSWORD"] == "pw-secondary"
+    # The cookie path must NOT be the legacy single file — that's what made
+    # both accounts share a session before.
+    assert not env["LINKEDIN_COOKIE_PATH"].endswith(os.sep + "linkedin_cookies.pkl")
+    assert env["LINKEDIN_COOKIE_PATH"].endswith("yhimanshu220456_at_gmail.com.pkl")
+
+
+def test_build_env_keeps_legacy_cookie_path_for_primary_account(monkeypatch):
+    """Asking for the primary account explicitly still uses the legacy file
+    so the user's existing main-account session survives this change."""
+    from services import linkedin_automation as la_service
+
+    monkeypatch.setenv("LINKEDIN_USERNAME", "himu09854@gmail.com")
+    monkeypatch.setenv("LINKEDIN_PASSWORD", "pw-primary")
+
+    env = la_service._build_env(account="himu09854@gmail.com")
+
+    assert env["LINKEDIN_USERNAME"] == "himu09854@gmail.com"
+    assert env["LINKEDIN_COOKIE_PATH"].endswith("linkedin_cookies.pkl")
+
+
+# ---------------------------------------------------------------------------
 # DB methods
 # ---------------------------------------------------------------------------
 

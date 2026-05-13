@@ -42,6 +42,8 @@ backend/logs/
 backend/chrome_profile/
 backend/chrome_profiles/
 backend/linkedin_cookies*.pkl
+backend/cookies/
+backend/cookies/*.pkl
 backend/bot_pid.txt
 backend/openclaw_out.log
 backend/test_output.txt

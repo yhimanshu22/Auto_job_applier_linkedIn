@@ -64,6 +64,8 @@ class EngageContext:
     empty_viewports: int = 0
     diag_dumped: bool = False
     ai_last_perspective: Optional[str] = None
+    # Set when the executor bails after repeated empty viewports (dead session / headless shell).
+    aborted_empty_feed: bool = False
 
     @property
     def ai_enabled(self) -> bool:

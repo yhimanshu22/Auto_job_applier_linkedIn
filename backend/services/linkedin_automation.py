@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -42,8 +43,54 @@ def get_framework_dir() -> str:
 
 
 def get_shared_cookie_path() -> str:
-    """Path to the shared LinkedIn cookie pickle used by both projects."""
+    """Path to the legacy shared LinkedIn cookie pickle.
+
+    Kept as the default for the **primary** account so existing sessions
+    survive the move to per-account cookie files. Non-primary accounts get
+    isolated files via :func:`get_cookie_path_for_account`.
+    """
     return os.path.join(get_runtime_writable_root(), "linkedin_cookies.pkl")
+
+
+def _cookie_slug(username: str) -> str:
+    """Sanitise a LinkedIn username into a safe filename fragment.
+
+    Lower-cases, swaps ``@`` for ``_at_`` so e-mails read naturally on disk,
+    then collapses any remaining non-``[a-z0-9._-]`` characters to ``_``.
+    Returns ``"default"`` when the input would otherwise become empty.
+    """
+    s = (username or "").strip().lower()
+    s = s.replace("@", "_at_")
+    s = re.sub(r"[^a-z0-9._-]+", "_", s).strip("_")
+    return s or "default"
+
+
+def get_cookie_path_for_account(
+    account: str | None, primary_username: str | None = None
+) -> str:
+    """Return the cookies pickle path the framework subprocess should use.
+
+    Why:
+        Without this, every account shared a single ``linkedin_cookies.pkl``
+        and the first session ever logged in won regardless of which account
+        the dashboard had selected.
+
+    Rules:
+      * No account specified, or the account *is* the primary → legacy path
+        (``<root>/linkedin_cookies.pkl``). This keeps the user's existing
+        session for their main account working without a forced re-login.
+      * Any other account → ``<root>/cookies/<safe-slug>.pkl``. First use
+        will have no file so the framework falls back to password login and
+        saves cookies to this per-account path on success.
+    """
+    legacy = get_shared_cookie_path()
+    if not account or not str(account).strip():
+        return legacy
+    if primary_username and account.strip().lower() == primary_username.strip().lower():
+        return legacy
+    return os.path.join(
+        get_runtime_writable_root(), "cookies", f"{_cookie_slug(account)}.pkl"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -92,13 +139,24 @@ def _build_env(account: str | None = None) -> dict[str, str]:
     ``apply_dashboard_linkedin_credentials`` are overridden so that account's
     username/password are used for this run. When ``account`` is ``None`` or
     empty, the primary account stays in place.
+
+    ``LINKEDIN_COOKIE_PATH`` is derived from the resolved account so each
+    LinkedIn identity gets its own cookies pickle. The primary account
+    continues to use the legacy ``linkedin_cookies.pkl`` for backwards
+    compatibility — non-primary accounts use ``cookies/<slug>.pkl``.
     """
     env = os.environ.copy()
     apply_dashboard_linkedin_credentials(env)
+    # Capture the primary username *before* any explicit-account override so
+    # we can decide whether to keep using the legacy single-cookie file.
+    primary_username = (env.get("LINKEDIN_USERNAME") or "").strip() or None
     if account:
         apply_linkedin_account(env, account)
     apply_dashboard_automation_settings(env)
-    env["LINKEDIN_COOKIE_PATH"] = get_shared_cookie_path()
+    resolved_username = (env.get("LINKEDIN_USERNAME") or "").strip() or None
+    env["LINKEDIN_COOKIE_PATH"] = get_cookie_path_for_account(
+        resolved_username, primary_username
+    )
 
     # `python -m linkedin_automation` needs the backend root on sys.path so the
     # package can be imported. The subprocess cwd is the package dir itself

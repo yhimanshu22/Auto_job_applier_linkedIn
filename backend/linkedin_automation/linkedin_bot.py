@@ -101,6 +101,7 @@ class LinkedInBot:
             self.driver = None
             self.linkedin = None
             self.post_extractor = None
+            self._login_succeeded = True
             return
 
         # Browser-dependent subsystems: heavy imports start here.
@@ -112,8 +113,15 @@ class LinkedInBot:
         self.linkedin = LinkedInInteraction(self.driver)
         self.post_extractor = PostExtractor(self.driver)
 
-        # Login to LinkedIn
-        self.linkedin.login()
+        # Login to LinkedIn (cookie pickle or credentials).
+        self._login_succeeded = bool(self.linkedin.login())
+        if not self._login_succeeded:
+            logging.error(
+                "LinkedIn login did not complete (wrong credentials, 2FA, closed "
+                "browser window, or Chrome crashed). Keep the automation window open "
+                "until login finishes; set HEADLESS=false for feed runs. Downstream "
+                "browser steps will be skipped where possible."
+            )
 
     def _get_random_perspective(self, perspectives: List[str]) -> str:
         """Select a perspective token for AI comment generation.
@@ -566,11 +574,23 @@ class LinkedInBot:
         """
         if not self.driver:
             return
+        drv = self.driver
+        self.driver = None
         try:
-            self.driver.quit()
+            drv.quit()
             logging.info("Driver session ended cleanly.")
         except Exception as e:
             logging.error(f"Error closing driver: {e}")
+
+    def _driver_window_alive(self) -> bool:
+        """True when the WebDriver session still has a usable top-level window."""
+        if not getattr(self, "driver", None):
+            return False
+        try:
+            self.driver.current_window_handle
+            return True
+        except Exception:
+            return False
 
     def engage_feed(
         self, action: str = "both", max_actions: int = 10
@@ -585,6 +605,27 @@ class LinkedInBot:
             Dict containing engagement stats
         """
         logging.info(f"Starting feed engagement (action={action}, max={max_actions})")
+
+        if not getattr(self, "_login_succeeded", True):
+            logging.error("Skipping feed engagement: login failed earlier in this run.")
+            return {
+                "success": False,
+                "action": action,
+                "max_actions": max_actions,
+                "error": "login_failed",
+            }
+        if not self._driver_window_alive():
+            logging.error(
+                "Skipping feed engagement: no browser window (closed manually, crashed, "
+                "or session lost). Keep the Chrome window open for the whole run and "
+                "avoid starting a second bot while this one is active."
+            )
+            return {
+                "success": False,
+                "action": action,
+                "max_actions": max_actions,
+                "error": "browser_window_closed",
+            }
 
         # Determine perspectives if commenting
         perspectives = None
@@ -604,7 +645,12 @@ class LinkedInBot:
             return {"success": success, "action": action, "max_actions": max_actions}
         except Exception as e:
             logging.error(f"Feed engagement failed: {e}")
-            return {"error": str(e), "count": 0}
+            return {
+                "success": False,
+                "error": str(e),
+                "action": action,
+                "max_actions": max_actions,
+            }
 
     def pursue_investor(
         self,

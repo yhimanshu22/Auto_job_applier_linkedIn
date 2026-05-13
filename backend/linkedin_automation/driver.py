@@ -19,6 +19,7 @@ import platform
 import logging
 import shutil
 import subprocess
+import time
 
 from . import config
 
@@ -44,6 +45,85 @@ class DriverFactory:
         options, and cascade through multiple launch strategies until a driver
         succeeds or all attempts fail.
     """
+
+    _uc_teardown_patch_applied = False
+
+    @staticmethod
+    def _apply_uc_teardown_patch() -> None:
+        """Prevent ``Chrome.__del__`` from re-running ``quit()`` after explicit teardown.
+
+        undetected-chromedriver's destructor always calls ``quit()``; on Windows
+        a second ``quit()`` during interpreter shutdown often raises
+        ``OSError: [WinError 6] The handle is invalid`` (harmless but noisy).
+        """
+        if DriverFactory._uc_teardown_patch_applied:
+            return
+        try:
+            import undetected_chromedriver as uc
+        except ImportError:
+            return
+
+        _orig_quit = uc.Chrome.quit
+        _orig_del = uc.Chrome.__del__
+
+        def quit_patched(self):
+            try:
+                return _orig_quit(self)
+            finally:
+                try:
+                    self.__dict__["__linkedin_automation_uc_quit"] = True
+                except Exception:
+                    pass
+
+        def del_patched(self):
+            if getattr(self, "__linkedin_automation_uc_quit", False):
+                return
+            try:
+                return _orig_del(self)
+            except OSError:
+                pass
+
+        uc.Chrome.quit = quit_patched  # type: ignore[method-assign]
+        uc.Chrome.__del__ = del_patched  # type: ignore[method-assign]
+        DriverFactory._uc_teardown_patch_applied = True
+
+    @staticmethod
+    def _wait_for_browser_window(driver, timeout_seconds: float | None = None) -> bool:
+        """Block until at least one top-level window is attached (UC + Windows race).
+
+        undetected-chromedriver often returns from ``Chrome()`` before the first
+        window is addressable; ``get()`` then raises ``NoSuchWindowException``.
+        """
+        if timeout_seconds is None:
+            timeout_seconds = 35.0 if platform.system() == "Windows" else 20.0
+        deadline = time.monotonic() + float(timeout_seconds)
+        last_err: Exception | None = None
+        interval = 0.2
+        logged_wait = False
+        started = time.monotonic()
+        while time.monotonic() < deadline:
+            try:
+                handles = driver.window_handles
+                if handles:
+                    driver.switch_to.window(handles[0])
+                driver.current_window_handle
+                return True
+            except Exception as e:
+                last_err = e
+                if not logged_wait and time.monotonic() - started > 2.0:
+                    logging.info(
+                        "Waiting for Chrome window to attach (%.0fs max, common on Windows with UC)...",
+                        timeout_seconds,
+                    )
+                    logged_wait = True
+                time.sleep(interval)
+                interval = min(interval * 1.12, 0.9)
+        logging.error(
+            "Chrome did not expose a usable window within %.0fs: %s",
+            timeout_seconds,
+            last_err,
+        )
+        return False
 
     @staticmethod
     def setup_driver():
@@ -88,7 +168,16 @@ class DriverFactory:
             
             # Try multiple initialization strategies
             driver = DriverFactory._initialize_driver_with_fallbacks(browser_path, browser_version, options)
-            
+
+            # UC often returns before the first window is navigable (especially on Windows).
+            time.sleep(1.0 if platform.system() == "Windows" else 0.65)
+            if not DriverFactory._wait_for_browser_window(driver):
+                logging.warning(
+                    "Chrome window wait timed out; login will still retry navigation. "
+                    "Quit other Chrome instances, disable 'Continue running background apps', "
+                    "and avoid starting two bots at once."
+                )
+
             logging.info("Successfully initialized ChromeDriver")
             return driver
         except Exception as e:
@@ -299,6 +388,8 @@ class DriverFactory:
         from selenium import webdriver
         from selenium.webdriver.chrome.service import Service
         from webdriver_manager.chrome import ChromeDriverManager, ChromeType
+
+        DriverFactory._apply_uc_teardown_patch()
 
         # 0) Prefer a locally installed chromedriver to avoid network
         local_driver_path = DriverFactory._find_local_chromedriver()

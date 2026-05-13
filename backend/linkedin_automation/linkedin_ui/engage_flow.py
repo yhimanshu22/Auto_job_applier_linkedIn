@@ -146,7 +146,7 @@ class EngageExecutor:
                 self._handle_no_progress()
 
         logging.info(f"Engage stream finished (actions={self.ctx.actions_done})")
-        return True
+        return not self.ctx.aborted_empty_feed
 
     # Internals -----------------------------------------------------------
 
@@ -202,6 +202,7 @@ class EngageExecutor:
                     "and try again. See diagnostic dump above.",
                     self.ctx.empty_viewports,
                 )
+                self.ctx.aborted_empty_feed = True
                 return True
         else:
             self.ctx.empty_viewports = 0
