@@ -5,6 +5,8 @@ FastAPI entrypoint: middleware, router registration, and CLI modes (--bot / --su
 import os
 import sys
 
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,7 +32,27 @@ from routes.linkedin_accounts import router as linkedin_accounts_router
 from routes.linkedin_automation import router as linkedin_automation_router
 from routes.uploads import router as uploads_router
 
-app = FastAPI(title="LinkedIn Bot API")
+from db_manager import db
+
+
+@asynccontextmanager
+async def _app_lifespan(app: FastAPI):
+    import logging
+
+    log = logging.getLogger(__name__)
+    try:
+        n = db.reconcile_stale_automation_tasks()
+        if n:
+            log.warning(
+                "Reconciled %s automation task(s) stuck as running (no live process).",
+                n,
+            )
+    except Exception:
+        log.exception("Stale automation task reconcile failed")
+    yield
+
+
+app = FastAPI(title="LinkedIn Bot API", lifespan=_app_lifespan)
 
 app.include_router(billing_router)
 app.include_router(applications_router, prefix="/api/applications")

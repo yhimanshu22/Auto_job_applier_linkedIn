@@ -57,7 +57,13 @@ AUTOMATION_KEY_TO_ENV: dict[str, str] = {
     "openai_api_key": "OPENAI_API_KEY",
     "openai_model": "OPENAI_MODEL",
     "gemini_api_key": "GEMINI_API_KEY",
+    "gemini_model": "GEMINI_MODEL",
     "use_gemini": "USE_GEMINI",
+    "linkedin_ai_provider": "LINKEDIN_AI_PROVIDER",
+    "grok_api_key": "GROK_API_KEY",
+    "grok_model": "GROK_MODEL",
+    "groq_api_key": "GROQ_API_KEY",
+    "groq_model": "GROQ_MODEL",
     "headless": "HEADLESS",
     "marketing_mode": "MARKETING_MODE",
     "project_name": "PROJECT_NAME",
@@ -66,9 +72,18 @@ AUTOMATION_KEY_TO_ENV: dict[str, str] = {
     "project_short_pitch": "PROJECT_SHORT_PITCH",
     "project_context": "PROJECT_CONTEXT",
     "project_tagline": "PROJECT_TAGLINE",
+    "linkedin_resume_url": "LINKEDIN_RESUME_URL",
+    "linkedin_github_username": "LINKEDIN_GITHUB_USERNAME",
+    "linkedin_comment_display_name": "LINKEDIN_COMMENT_DISPLAY_NAME",
+    "linkedin_comment_voice": "LINKEDIN_COMMENT_VOICE",
 }
 
-AUTOMATION_SENSITIVE_KEYS: set[str] = {"openai_api_key", "gemini_api_key"}
+AUTOMATION_SENSITIVE_KEYS: set[str] = {
+    "openai_api_key",
+    "gemini_api_key",
+    "grok_api_key",
+    "groq_api_key",
+}
 
 
 def _coerce_env_value(value) -> str | None:

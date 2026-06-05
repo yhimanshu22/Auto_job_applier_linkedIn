@@ -1,42 +1,16 @@
-"""OpenAI-powered helpers for LinkedIn post, comment, and calendar generation.
+"""LLM helpers for LinkedIn post, comment, and calendar generation.
 
-Why:
-    Centralise prompt engineering and client management so automation flows can
-    request AI content with one-liners.
-
-When:
-    Imported by the bot during initialisation when an ``OPENAI_API_KEY`` exists.
-
-How:
-    Instantiates a shared :class:`openai.OpenAI` client, defines request payloads,
-    and exposes convenience methods for posts, comments, and content calendars.
+Supports OpenAI, Google Gemini, xAI Grok, and Groq (OpenAI-compatible APIs),
+selected via ``LINKEDIN_AI_PROVIDER`` / available API keys in ``config``.
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from typing import List, Literal, Optional
 
 from . import config
-from .config import OPENAI_API_KEY, OPENAI_MODEL
 from .text_utils import preprocess_for_ai
-
-# ``openai`` import is **deferred** until an :class:`OpenAIClient` instance is
-# constructed. The previous module-level ``OpenAI(...)`` call pulled the SDK
-# (and its httpx / pydantic transitive imports) into every subprocess on
-# startup, even when the run never touched OpenAI.
-
-
-def _make_openai_client():
-    """Lazy constructor for the shared OpenAI SDK client.
-
-    Returns the configured ``openai.OpenAI`` instance, or ``None`` when no key
-    is set. Subsequent calls re-import from ``sys.modules`` (cached).
-    """
-    if not OPENAI_API_KEY:
-        return None
-    from openai import OpenAI
-
-    return OpenAI(api_key=OPENAI_API_KEY)
 
 
 @dataclass
@@ -69,45 +43,52 @@ class ContentCalendarRequest:
 
 
 class OpenAIClient:
-    """Wrapper around the OpenAI client tailored for LinkedIn content.
+    """Multi-provider LLM client (OpenAI, Gemini, Grok, Groq) for LinkedIn copy.
 
-    Why:
-        Encapsulate prompt templates and client defaults, reducing duplication.
-
-    When:
-        Instantiated by :class:`LinkedInBot` whenever OpenAI credentials are
-        available.
-
-    How:
-        Holds a reference to the shared :class:`OpenAI` client, stores style
-        templates, and exposes methods to craft posts, comments, and calendars.
+    Instantiated by :class:`LinkedInBot` when :func:`config.has_linkedin_llm_credentials`
+    is true. OpenAI-compatible hosts use the ``openai`` Python package; Gemini
+    uses ``google.generativeai``.
     """
 
-    def __init__(self, model: str = OPENAI_MODEL) -> None:
-        """Initialise the wrapper with a preferred OpenAI model.
+    def __init__(self, model: Optional[str] = None) -> None:
+        self.provider = config.resolve_linkedin_ai_provider()
+        self.client = None
+        self.model = ""
 
-        Why:
-            Allow callers to override model aliases (e.g., for testing or cost
-            control) without altering code elsewhere.
+        from openai import OpenAI
 
-        When:
-            Called during bot construction.
+        if self.provider == "openai":
+            self.model = model or config.OPENAI_MODEL
+            if config.OPENAI_API_KEY:
+                self.client = OpenAI(api_key=config.OPENAI_API_KEY)
+        elif self.provider == "grok":
+            self.model = model or config.GROK_MODEL
+            if config.GROK_API_KEY:
+                self.client = OpenAI(
+                    api_key=config.GROK_API_KEY,
+                    base_url=config.GROK_API_BASE,
+                )
+        elif self.provider == "groq":
+            self.model = model or config.GROQ_MODEL
+            gk = config.effective_groq_api_key()
+            if gk:
+                self.client = OpenAI(
+                    api_key=gk,
+                    base_url=config.GROQ_API_BASE,
+                )
+        elif self.provider == "gemini":
+            self.model = model or config.LINKEDIN_GEMINI_MODEL
 
-        How:
-            Stores the chosen model name, references the shared client, and
-            prepares reusable style templates used by :meth:`generate_post`.
+        try:
+            logging.info(
+                "LinkedIn LLM: provider=%s model=%s client_ready=%s",
+                self.provider,
+                self.model,
+                bool(self.client) or self.provider == "gemini",
+            )
+        except Exception:
+            pass
 
-        Args:
-            model (str): Name or alias of the OpenAI chat completion model to use.
-        """
-        self.model = model
-        # Build the SDK client lazily so subprocesses that never call OpenAI
-        # (e.g. ``generate-calendar`` with Gemini, or ``--no-ai`` runs) don't
-        # pay for the import. ``_make_openai_client`` returns ``None`` when no
-        # API key is configured, matching the previous module-level behavior.
-        self.client = _make_openai_client()
-
-        # Style templates to add variation
         self.style_templates: dict[str, str] = {
             "professional": "Write with clarity, authority, and professionalism.",
             "storytelling": "Start with a short, engaging story or anecdote before the main lesson.",
@@ -116,6 +97,80 @@ class OpenAIClient:
             "funny": "Use light humor, analogies, or playful tone to explain the idea.",
             "inspirational": "Be motivational and uplifting, focusing on big-picture impact."
         }
+
+    def _llm_ready(self) -> bool:
+        if self.provider == "gemini":
+            return bool(config.GEMINI_API_KEY)
+        return self.client is not None
+
+    def _missing_credentials_message(self) -> str:
+        return (
+            f"AI not configured for provider {self.provider!r}. Set one of: "
+            "OPENAI_API_KEY, GEMINI_API_KEY, GROK_API_KEY, GROQ_API_KEY / LLM_API_KEY "
+            "(with LLM_API_URL for Groq), or LINKEDIN_AI_PROVIDER to pick a backend."
+        )
+
+    def _complete_chat(
+        self,
+        *,
+        system: str,
+        user: str,
+        max_tokens: int,
+        temperature: float,
+        top_p: float = 0.9,
+        frequency_penalty: float = 0.2,
+        presence_penalty: float = 0.2,
+    ) -> str:
+        if self.provider == "gemini":
+            return self._gemini_generate(system, user, max_tokens, temperature)
+        if not self.client:
+            raise ValueError(self._missing_credentials_message())
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=min(max(temperature, 0.1), 1.0),
+            max_tokens=max_tokens,
+            top_p=top_p,
+            frequency_penalty=frequency_penalty,
+            presence_penalty=presence_penalty,
+        )
+        msg = response.choices[0].message
+        return (getattr(msg, "content", None) or "").strip()
+
+    def _gemini_generate(
+        self, system: str, user: str, max_tokens: int, temperature: float
+    ) -> str:
+        if not config.GEMINI_API_KEY:
+            raise ValueError(self._missing_credentials_message())
+        import google.generativeai as genai
+
+        genai.configure(api_key=config.GEMINI_API_KEY)
+        model = genai.GenerativeModel(self.model)
+        combined = f"{system}\n\n{user}" if system.strip() else user
+        gc = genai.types.GenerationConfig(
+            max_output_tokens=max(1, min(max_tokens, 8192)),
+            temperature=min(max(temperature, 0.0), 2.0),
+        )
+        resp = model.generate_content(combined, generation_config=gc)
+        if not resp.candidates:
+            raise ValueError("Gemini returned no candidates (blocked or empty).")
+        text = (getattr(resp, "text", None) or "").strip()
+        if not text:
+            raise ValueError("Gemini returned empty text.")
+        return text
+
+    def _strip_disallowed_github_urls(self, text: str) -> str:
+        """Remove any github.com links except this account (and its repos)."""
+        if not isinstance(text, str) or not text.strip():
+            return text
+        user = re.escape(config.LINKEDIN_GITHUB_USERNAME)
+        pattern = re.compile(rf"https?://github\.com/(?!{user}(?:/|$))[^\s)\]\"']+", re.I)
+        cleaned = pattern.sub("", text)
+        cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+        return cleaned
 
     def _append_marketing_tail(self, text: str) -> str:
         """Append a promotional tail encouraging readers to explore the project.
@@ -170,8 +225,8 @@ class OpenAIClient:
             ValueError: If the OpenAI client is not initialised.
             Exception: Propagates API errors for upstream handling.
         """
-        if not self.client:
-            raise ValueError("OpenAI client not initialized. Please set OPENAI_API_KEY in .env")
+        if not self._llm_ready():
+            raise ValueError(self._missing_credentials_message())
 
         if summarize_input and len(topic) > 200:
             topic = preprocess_for_ai(topic, summarize_ratio=0.3, max_chars=200)
@@ -215,22 +270,17 @@ Rules:
         )
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a LinkedIn growth strategist who writes engaging, human-like posts."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=min(temperature, 0.9),
+            generated = self._complete_chat(
+                system="You are a LinkedIn growth strategist who writes engaging, human-like posts.",
+                user=prompt,
                 max_tokens=min(max_tokens, 1000),
-                top_p=0.9,
+                temperature=min(temperature, 0.9),
                 frequency_penalty=0.3,
-                presence_penalty=0.3
+                presence_penalty=0.3,
             )
-            generated = response.choices[0].message.content.strip()
             return self._append_marketing_tail(generated)
         except Exception as e:
-            logging.error(f"Error generating post with OpenAI: {str(e)}")
+            logging.error(f"Error generating post with LLM ({self.provider}): {str(e)}")
             raise
 
     def generate_comment(
@@ -268,13 +318,13 @@ Rules:
         Raises:
             ValueError: If the OpenAI client is missing.
         """
-        if not self.client:
-            raise ValueError("OpenAI client not initialized. Please set OPENAI_API_KEY in .env")
+        if not self._llm_ready():
+            raise ValueError(self._missing_credentials_message())
 
         perspective_map: dict[str, str] = {
-            "funny": "Add a witty, light-hearted take on the post. Keep it professional but funny. Include one well-placed emoji if it heightens the punchline.",
-            "motivational": "Provide encouragement and uplifting perspective. Be inspiring. Add a single emoji that reinforces the encouragement.",
-            "insightful": "Give a thoughtful comment that adds unique value to the discussion. Share a unique insight or perspective. You may finish with a subtle emoji that signals appreciation or curiosity."
+            "funny": "Light wit or a dry aside that fits the post — still professional.",
+            "motivational": "Warm, specific encouragement tied to what they actually said.",
+            "insightful": "One concrete observation, question, or experience that extends their point.",
         }
 
         processed_text = post_text
@@ -285,61 +335,82 @@ Rules:
                 max_chars=300
             )
 
-        COMMENT_PROMPT_TEMPLATE = """Write a LinkedIn comment in response to this post.
+        resume_block = (
+            f"You may offer your resume only when it genuinely fits (e.g. hiring, referrals, "
+            f"resume feedback, job search, interviews). If you mention it, use exactly this link: {config.LINKEDIN_RESUME_URL}. "
+            "If it does not fit, do not mention a resume."
+            if config.LINKEDIN_RESUME_URL
+            else "Do not mention a resume or portfolio file unless the post explicitly asks for one (then say you can share it in a DM without inventing links)."
+        )
+
+        cfbr_block = (
+            "Optional last line: you may add CFBR alone (nothing else on that line) when the post is light, "
+            "celebratory, tips, hiring shout-outs, or generic professional wins — never on setbacks.\n"
+            if config.LINKEDIN_COMMENT_CFBR
+            else ""
+        )
+
+        project_cta_block = (
+            f"After your reply, add one short line inviting readers to explore {config.PROJECT_NAME} — "
+            f"{config.PROJECT_SHORT_PITCH} — only this link: {config.PROJECT_URL}. Under ~20 words.\n"
+            if config.LINKEDIN_COMMENT_APPEND_PROJECT_CTA
+            else "Do not promote any product, repo, newsletter, or 'LinkedIn bot' / automation toolkit. No PS lines.\n"
+        )
+
+        COMMENT_PROMPT_TEMPLATE = """Write ONE LinkedIn comment as {who}.
 
 Post content:
 {post_text}
 
-Project context you can reference:
-{project_context}
+Tone and safety (critical):
+- Read the emotional context. If the post is about a revoked or rescinded offer, layoffs, rejection, job loss, grief, serious illness, legal trouble, discrimination, burnout, or similar — respond with brief empathy, solidarity, or a thoughtful question. Never use celebratory praise, "Thanks for sharing", "Great post", "love this", or upbeat corporate cheer — that reads as tone-deaf and inauthentic.
+- If they are venting or hurting, acknowledge that; do not pivot to self-promotion or jokes.
 
-Guidelines:
-- Tone: {perspective_instruction}
-- Length: 1-2 concise sentences
-- Style: Natural, conversational, and professional
-- No emojis or quotes
-- Sound like a real human, not AI-generated
-- Add value to the conversation
-- Be specific and relevant to the post
-- After addressing the post, include a short CTA inviting readers to explore {project_name}, {project_short_pitch} ({project_url}). Keep it friendly and under 20 words.
+Hard rules:
+- {voice}
+- Tone angle: {perspective_instruction} — but defer to the tone-and-safety rules above when they conflict.
+- First person; sound like a human who read the post, not a bot or growth hack.
+- 1–3 short sentences max (CFBR line counts as its own line if used). No bullet lists, no emojis, no quotation marks around the whole comment.
+- React to something specific in the post — not generic praise.
+- GitHub: if you mention GitHub at all, the ONLY GitHub profile URL allowed is {allowed_github_url}. You may link repos under that profile (e.g. {allowed_github_url}/repo). Never link or name any other GitHub user or org.
+- {resume_block}
+- {project_cta_block}{cfbr_block}
+Comment (plain text only):"""
 
-Comment:"""
         prompt = COMMENT_PROMPT_TEMPLATE.format(
+            who=who,
             post_text=processed_text,
+            voice=config.LINKEDIN_COMMENT_VOICE,
             perspective_instruction=perspective_map[perspective],
-            project_name=config.PROJECT_NAME,
-            project_short_pitch=config.PROJECT_SHORT_PITCH,
-            project_url=config.PROJECT_URL,
-            project_context=config.PROJECT_CONTEXT,
+            allowed_github_url=config.LINKEDIN_GITHUB_URL,
+            resume_block=resume_block,
+            project_cta_block=project_cta_block,
+            cfbr_block=cfbr_block,
+        )
+
+        system = (
+            f"You write LinkedIn comments as {who}. "
+            "You never fabricate links. You follow the user's GitHub and resume rules exactly."
         )
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are Joseph Edomobi, a Nigerian full-stack developer and entrepreneur. "
-                            "You write authentic, engaging LinkedIn comments that add value to the conversation."
-                        )
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=min(max(temperature, 0.1), 1.0),  # Clamp between 0.1 and 1.0
-                max_tokens=min(max(max_tokens, 20), 300),    # Clamp between 20 and 300 tokens
-                top_p=0.9,
+            comment = self._complete_chat(
+                system=system,
+                user=prompt,
+                max_tokens=min(max(max_tokens, 20), 300),
+                temperature=min(max(temperature, 0.1), 1.0),
                 frequency_penalty=0.2,
-                presence_penalty=0.2
+                presence_penalty=0.2,
             )
-
-            comment = response.choices[0].message.content.strip()
             comment = comment.strip('"\'').strip()
 
             if comment:
-                comment = self._append_marketing_tail(comment)
+                if config.LINKEDIN_COMMENT_APPEND_PROJECT_CTA:
+                    comment = self._append_marketing_tail(comment)
             else:
-                comment = self._append_marketing_tail("Great post! Thanks for sharing.")
+                comment = config.LINKEDIN_COMMENT_FALLBACK
+
+            comment = self._strip_disallowed_github_urls(comment)
 
             logging.info(f"Generated {perspective} comment with {len(comment)} characters")
 
@@ -347,7 +418,7 @@ Comment:"""
 
         except Exception as e:
             logging.error(f"Error generating comment: {e}")
-            return self._append_marketing_tail("Great post! Thanks for sharing.")
+            return self._strip_disallowed_github_urls(config.LINKEDIN_COMMENT_FALLBACK)
 
     def generate_content_calendar(self, request: ContentCalendarRequest) -> str:
         """Draft a LinkedIn content calendar based on user-supplied goals.
@@ -375,8 +446,8 @@ Comment:"""
             Exception: Propagates API errors for caller handling.
         """
 
-        if not self.client:
-            raise ValueError("OpenAI client not initialized. Please set OPENAI_API_KEY in .env")
+        if not self._llm_ready():
+            raise ValueError(self._missing_credentials_message())
 
         content_types = ", ".join(request.content_types) if request.content_types else "a variety of formats"
         hashtags = ", ".join(f"#{tag.lstrip('#')}" for tag in request.hashtags) if request.hashtags else "relevant hashtags"
@@ -405,25 +476,17 @@ Avoid duplicate ideas and keep the tone consistent with the brief.
 """
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are an expert LinkedIn content strategist who creates month-long content calendars "
-                            "with concise, actionable ideas."
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.7,
+            calendar_text = self._complete_chat(
+                system=(
+                    "You are an expert LinkedIn content strategist who creates month-long content calendars "
+                    "with concise, actionable ideas."
+                ),
+                user=prompt,
                 max_tokens=min(max(request.total_posts * 80, 600), 3000),
-                top_p=0.9,
+                temperature=0.7,
                 frequency_penalty=0.2,
                 presence_penalty=0.2,
             )
-            calendar_text = response.choices[0].message.content.strip()
             logging.info(
                 "Generated content calendar with %d characters", len(calendar_text)
             )

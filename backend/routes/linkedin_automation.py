@@ -2,7 +2,7 @@
 
 Exposes posting, engagement, content-calendar generation, and profile pursuit
 flows from the sibling `Linkedln-Automation-Framework/` project as HTTP endpoints
-the Electron dashboard can call. Each call spawns an isolated subprocess and
+the web dashboard can call. Each call spawns an isolated subprocess and
 returns a task id the dashboard can poll for logs / status / stop.
 """
 
@@ -606,7 +606,13 @@ class AutomationSettings(BaseModel):
     openai_api_key: Optional[str] = None
     openai_model: Optional[str] = None
     gemini_api_key: Optional[str] = None
+    gemini_model: Optional[str] = None
     use_gemini: Optional[bool] = None
+    linkedin_ai_provider: Optional[str] = None
+    grok_api_key: Optional[str] = None
+    grok_model: Optional[str] = None
+    groq_api_key: Optional[str] = None
+    groq_model: Optional[str] = None
     headless: Optional[bool] = None
     marketing_mode: Optional[bool] = None
     project_name: Optional[str] = None
@@ -615,6 +621,10 @@ class AutomationSettings(BaseModel):
     project_short_pitch: Optional[str] = None
     project_context: Optional[str] = None
     project_tagline: Optional[str] = None
+    linkedin_resume_url: Optional[str] = None
+    linkedin_github_username: Optional[str] = None
+    linkedin_comment_display_name: Optional[str] = None
+    linkedin_comment_voice: Optional[str] = None
 
 
 _SENTINEL_PRESERVE = {"set", "***", "********"}

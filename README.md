@@ -10,7 +10,7 @@
 
 - 🤖 **AI-Driven Applications**: Uses OpenAI, DeepSeek, or Gemini to intelligently answer application-specific questions based on your profile.
 - ⚡ **Lightning Fast Search**: Automatically filters and identifies jobs that match your skills and preferences.
-- 🖥️ **Premium Desktop Dashboard**: A sleek, modern UI built with Next.js and Electron to manage your settings, view real-time logs, and track performance.
+- 🖥️ **Premium Local Dashboard**: A sleek, modern UI built with Next.js to manage your settings, view real-time logs, and track performance in your browser.
 - 🛡️ **Anti-Detection System**: Features "Safe Mode" and human-like interaction patterns to keep your LinkedIn account secure.
 - 💳 **Seamless Subscriptions**: Integrated with Stripe for premium features.
 - 📂 **Resume Management**: Automatically handles multiple resumes and dynamically selects the best one for each role.
@@ -21,7 +21,6 @@
 
 - **Frontend**: Next.js 16, React 19, Tailwind CSS
 - **Backend**: FastAPI (Python), Selenium, Playwright
-- **Desktop**: Electron Wrapper
 - **AI Integration**: OpenAI, DeepSeek, Google Gemini, Anthropic Claude
 - **Database**: SQLite
 - **Payments**: Stripe
@@ -30,35 +29,37 @@
 
 ## 🚀 Quick Start
 
-### 1. Prerequisites
-- Python 3.10+
-- Node.js & npm/pnpm
-- Google Chrome
+### One-command install
 
-### 2. Installation
+**macOS / Linux**
 ```bash
-# Clone the repository
-git clone https://github.com/yhimanshu22/Auto_job_applier_linkedIn.git
-
-# Install Backend dependencies
-cd backend
-pip install uv
-uv sync
-
-# Install Frontend dependencies
-cd ../frontend
-npm install
+curl -fsSL "https://raw.githubusercontent.com/yhimanshu22/Auto_job_applier_linkedIn/main/install.sh" | bash
 ```
 
-### 3. Run the App
+**Windows (PowerShell)**
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb 'https://raw.githubusercontent.com/yhimanshu22/Auto_job_applier_linkedIn/main/install.ps1' | iex"
+```
+
+This clones the repo, installs dependencies, creates `.env` templates, and starts the backend (`http://127.0.0.1:8000`) and dashboard (`http://localhost:3000`).
+
+### Prerequisites
+- Git
+- Python 3.10+
+- Node.js & npm
+- Google Chrome
+
+### Manual setup (alternative)
 ```bash
-# Backend (from backend/)
-uv run uvicorn server:app --host 127.0.0.1 --port 8000
+git clone https://github.com/yhimanshu22/Auto_job_applier_linkedIn.git
+cd Auto_job_applier_linkedIn/backend && pip install uv && uv sync
+cd ../frontend && npm install
 
-# Frontend (from frontend/, separate terminal)
-npm run dev
+# Terminal 1 (backend)
+cd backend && uv run uvicorn server:app --host 127.0.0.1 --port 8000
 
-# Or launch the Electron app from the repo root if configured
+# Terminal 2 (frontend)
+cd frontend && npm run dev
 ```
 
 ---

@@ -23,7 +23,7 @@ def _ensure_packaged_runtime_subdirs(root: str) -> None:
 def get_runtime_writable_root() -> str:
     """
     Writable root for DB, logs, uploads, chrome_profiles, bot working directory.
-    Electron sets LINKDAPPLY_USER_DATA when packaged; dev uses the backend folder.
+    Set LINKDAPPLY_USER_DATA to override the writable data directory; otherwise uses the backend folder.
     """
     override = os.getenv("LINKDAPPLY_USER_DATA", "").strip()
     if override:

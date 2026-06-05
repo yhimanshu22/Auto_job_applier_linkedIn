@@ -11,6 +11,8 @@ SENSITIVE_KEYS = [
     "llm_api_key",
     "openai_api_key",
     "gemini_api_key",
+    "grok_api_key",
+    "groq_api_key",
     "password",
     "username",
     "linkedin_extra_accounts",  # JSON list of {username, password}
@@ -379,6 +381,38 @@ class DatabaseManager:
     # LinkedIn Automation Framework task history
     # ------------------------------------------------------------------
 
+    def reconcile_stale_automation_tasks(self, max_age_minutes: int | None = None) -> int:
+        """Mark ``running`` tasks with no ``ended_at`` as interrupted if they are too old.
+
+        When the API process restarts or ``finalize_automation_task`` fails, rows can
+        stay ``status='running'`` forever — the dashboard then shows bots active when
+        nothing is running. This is a cheap periodic repair (see env
+        ``LINKEDIN_STALE_TASK_MINUTES``, default 30).
+        """
+        if max_age_minutes is None:
+            try:
+                max_age_minutes = int(os.getenv("LINKEDIN_STALE_TASK_MINUTES", "30"))
+            except ValueError:
+                max_age_minutes = 30
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
+        now = datetime.now(timezone.utc)
+        with self.get_session() as session:
+            result = session.execute(
+                update(AutomationTask)
+                .where(
+                    AutomationTask.status == "running",
+                    AutomationTask.ended_at.is_(None),
+                    AutomationTask.started_at < cutoff,
+                )
+                .values(
+                    status="interrupted",
+                    exit_code=-9,
+                    ended_at=now,
+                )
+            )
+            session.commit()
+            return int(result.rowcount or 0)
+
     def create_automation_task(
         self,
         task_id,
@@ -424,6 +458,7 @@ class DatabaseManager:
             return self._automation_task_to_dict(row)
 
     def list_automation_tasks(self, limit=50, user_id=None):
+        self.reconcile_stale_automation_tasks()
         with self.get_session() as session:
             q = session.query(AutomationTask)
             if user_id:
@@ -463,6 +498,8 @@ class DatabaseManager:
         now = datetime.now(timezone.utc)
         day_cutoff = now - timedelta(hours=24)
         month_cutoff = now - timedelta(days=30)
+
+        self.reconcile_stale_automation_tasks()
 
         # Common WHERE clause(s) — applied to both queries so the user_id
         # filter (or lack thereof) stays consistent.

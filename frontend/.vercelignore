@@ -10,8 +10,6 @@ out
 coverage
 .DS_Store
 
-# Electron / local bundles — not needed for the web app
-../electron
 ../backend
 
 # Large media — host on CDN or add under 50MB if required on Vercel

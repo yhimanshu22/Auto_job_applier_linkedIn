@@ -31,7 +31,6 @@ const cspHeader = isDev
   `;
 
 const nextConfig: NextConfig = {
-  output: "standalone",
   async headers() {
     return [
       {

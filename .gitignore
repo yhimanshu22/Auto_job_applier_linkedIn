@@ -61,18 +61,12 @@ frontend/.next/
 frontend/node_modules/
 frontend/package-lock.json
 
-# Electron
-electron/node_modules/
-electron/dist/
-electron/package-lock.json
-
 # OS
 Thumbs.db
 .DS_Store
 
 # Compiled Executables and Large Binaries
 *.exe
-frontend/public/download/*.exe
 
 backend/data.db
 backend/test_data.db

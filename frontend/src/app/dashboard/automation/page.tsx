@@ -1420,7 +1420,7 @@ export default function AutomationPage() {
         if (navigator.clipboard?.writeText) {
           await navigator.clipboard.writeText(text);
         } else {
-          // Fallback for older Electron/browser surfaces without the
+          // Fallback for older browser surfaces without the
           // async clipboard API.
           const ta = document.createElement("textarea");
           ta.value = text;

@@ -89,10 +89,8 @@ export default function BillingPage() {
 
   const userId = session?.user?.email || "local-user";
 
-  // Note: We don't bounce on ``status === "unauthenticated"``. The Electron
-  // deep-link auth flow stores a token in localStorage but doesn't create a
-  // NextAuth session cookie, so ``useSession`` reports "unauthenticated"
-  // even when the user is signed in. Other dashboard pages just fall back
+  // Note: We don't bounce on ``status === "unauthenticated"``. Local installs
+  // may run without a NextAuth session cookie; other dashboard pages fall back
   // to ``userId = "local-user"``.
   useEffect(() => {
     if (status === "loading") return;

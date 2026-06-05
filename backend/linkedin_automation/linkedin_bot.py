@@ -88,7 +88,7 @@ class LinkedInBot:
 
         self.content_generator = ContentGenerator()
 
-        if use_openai and config.OPENAI_API_KEY:
+        if use_openai and config.has_linkedin_llm_credentials():
             from .openai_client import OpenAIClient
 
             self.openai_client = OpenAIClient()
@@ -277,9 +277,11 @@ class LinkedInBot:
                     try:
                         engagement_results = self.linkedin.engage_stream(
                             mode="comment",
-                            comment_text="Great post, thanks for sharing!",
+                            comment_text=config.LINKEDIN_COMMENT_FALLBACK,
                             max_actions=max_posts_to_engage,
                             include_promoted=False,
+                            ai_client=self.openai_client,
+                            post_extractor=self.post_extractor,
                             ai_perspectives=perspectives,
                             ai_max_tokens=150,
                             ai_temperature=0.7,
@@ -635,9 +637,11 @@ class LinkedInBot:
         try:
             success = self.linkedin.engage_stream(
                 mode=action,
-                comment_text="Great post! Thanks for sharing.",
+                comment_text=config.LINKEDIN_COMMENT_FALLBACK,
                 max_actions=max_actions,
                 include_promoted=False,
+                ai_client=self.openai_client,
+                post_extractor=self.post_extractor,
                 ai_perspectives=perspectives,
                 ai_max_tokens=150,
                 ai_temperature=0.7,
@@ -726,7 +730,7 @@ class LinkedInBot:
             if should_comment:
 
                 def build_comment(post_root):  # type: ignore[return-type]
-                    base_text = "Great post! Thanks for sharing."
+                    base_text = config.LINKEDIN_COMMENT_FALLBACK
                     if self.openai_client:
                         try:
                             post_text = self.post_extractor.extract_text(post_root)
@@ -755,8 +759,8 @@ class LinkedInBot:
                 should_like=should_like,
                 should_comment=should_comment,
                 comment_generator=comment_generator,
-                mention_author=True,
-                mention_position="prepend",
+                mention_author=False,
+                mention_position="append",
             )
 
             results["posts_engaged"] = engagement.get("posts_engaged", 0)
