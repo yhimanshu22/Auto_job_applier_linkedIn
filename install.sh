@@ -23,8 +23,9 @@ fi
 
 cd "$REPO_DIR"
 
-# Backend
+# Backend (uv project venv lives in backend/.venv — not repo root)
 cd backend
+unset VIRTUAL_ENV
 python -m pip install -U uv >/dev/null
 uv sync
 

@@ -62,8 +62,6 @@ def main() -> None:
                 aiClient = deepseek_create_client()
             elif ai_provider == "gemini":
                 aiClient = gemini_create_client()
-            elif ai_provider == "openclaw":
-                aiClient = openclaw_create_client()
             ##<
 
             try:
@@ -191,8 +189,6 @@ def main() -> None:
                     ai_close_openai_client(aiClient)
                 elif ai_provider.lower() == "gemini":
                     pass  # Gemini client does not need to be closed
-                elif ai_provider.lower() == "openclaw":
-                    openclaw_close_client(aiClient)
                 print_lg(f"Closed {ai_provider} AI client.")
             except Exception as e:
                 print_lg("Failed to close AI client:", e)

@@ -45,11 +45,6 @@ if use_AI:
         ai_answer_question,
         ai_close_openai_client,
     )
-    from modules.ai.openclawConnections import (
-        ai_create_openai_client as openclaw_create_client,
-        ai_answer_question as openclaw_answer_question,
-        ai_close_openai_client as openclaw_close_client,
-    )
     from modules.ai.deepseekConnections import (
         deepseek_create_client,
         deepseek_answer_question,

@@ -55,8 +55,8 @@ git clone https://github.com/yhimanshu22/Auto_job_applier_linkedIn.git
 cd Auto_job_applier_linkedIn/backend && pip install uv && uv sync
 cd ../frontend && npm install
 
-# Terminal 1 (backend)
-cd backend && uv run uvicorn server:app --host 127.0.0.1 --port 8000
+# Terminal 1 (backend — use run script to avoid root .venv / uv mismatch warnings)
+cd backend && ./run.sh
 
 # Terminal 2 (frontend)
 cd frontend && npm run dev

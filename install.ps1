@@ -21,8 +21,9 @@ if (-not (Test-Path "$RepoDir\.git")) {
 
 Set-Location $RepoDir
 
-# Backend
+# Backend (uv project venv lives in backend/.venv — not repo root)
 Set-Location backend
+Remove-Item Env:VIRTUAL_ENV -ErrorAction SilentlyContinue
 python -m pip install -U uv | Out-Null
 uv sync
 

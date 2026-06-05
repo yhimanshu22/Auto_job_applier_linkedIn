@@ -45,7 +45,6 @@ backend/linkedin_cookies*.pkl
 backend/cookies/
 backend/cookies/*.pkl
 backend/bot_pid.txt
-backend/openclaw_out.log
 backend/test_output.txt
 backend/old/
 
@@ -70,4 +69,3 @@ Thumbs.db
 
 backend/data.db
 backend/test_data.db
-backend/scratch/data.db

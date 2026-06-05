@@ -14,26 +14,15 @@ Follow these steps to get the bot running in minutes!
 
 ### 2. Installation
 
-You can set up the project using either `uv` (recommended) or standard `pip`.
-
-#### Option A: Using `uv` (Recommended)
-`uv` is a strictly faster Python package installer and resolver.
+#### Using `uv` (recommended)
 
 1.  **Install uv** (if not already installed):
     ```bash
     pip install uv
     ```
-2.  **Install Dependencies**:
+2.  **Install dependencies**:
     ```bash
     uv sync
-    # OR if you just want to install requirements directly
-    uv pip install -r requirements.txt
-    ```
-
-#### Option B: Using standard `pip`
-1.  **Install Dependencies**:
-    ```bash
-    pip install -r requirements.txt
     ```
 
 ### 3. Setup Drivers
@@ -46,7 +35,7 @@ You can set up the project using either `uv` (recommended) or standard `pip`.
 The easiest way to configure the bot is using the built-in Next.js Dashboard.
 
 ### Method 1: Dashboard Configuration (Recommended)
-1. Start the backend (`uv run uvicorn server:app --host 127.0.0.1 --port 8000` in `backend/`) and frontend (`npm run dev` in `frontend/`).
+1. Start the backend (`./run.sh` or `.\run.ps1` in `backend/`) and frontend (`npm run dev` in `frontend/`).
 2. Open your browser to `http://localhost:3000`.
 3. Navigate to the Configuration or Settings page to edit your personal details, answers, and search preferences.
 

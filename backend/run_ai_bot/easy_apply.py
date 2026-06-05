@@ -418,14 +418,6 @@ def answer_questions(
                                     about_company=None,
                                     user_information_all=user_information_all,
                                 )
-                            elif ai_provider.lower() == "openclaw":
-                                answer = openclaw_answer_question(
-                                    aiClient,
-                                    label_org,
-                                    question_type="text",
-                                    job_description=job_description,
-                                    user_information_all=user_information_all,
-                                )
                             else:
                                 randomly_answered_questions.add((label_org, "text"))
                                 answer = years_of_experience
@@ -500,14 +492,6 @@ def answer_questions(
                                     question_type="textarea",
                                     job_description=job_description,
                                     about_company=None,
-                                    user_information_all=user_information_all,
-                                )
-                            elif ai_provider.lower() == "openclaw":
-                                answer = openclaw_answer_question(
-                                    aiClient,
-                                    label_org,
-                                    question_type="textarea",
-                                    job_description=job_description,
                                     user_information_all=user_information_all,
                                 )
                             else:

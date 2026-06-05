@@ -101,7 +101,7 @@ export default function SecretsForm({ data, onChange, onAccountsSaved, isActive 
     }
   };
 
-  const aiProviders = ["openai", "deepseek", "gemini", "openclaw"];
+  const aiProviders = ["openai", "deepseek", "gemini"];
 
   return (
     <div className="space-y-10 p-1 overflow-y-auto max-h-[550px] scrollbar-thin scrollbar-thumb-zinc-900">

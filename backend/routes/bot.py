@@ -146,7 +146,6 @@ async def get_bot_logs(lines: int = 120):
     for title, filename in (
         ("Supervisor console (stdout/stderr)", "supervisor-console.log"),
         ("Supervisor", "supervisor.log"),
-        ("OpenClaw gateway", "openclaw.log"),
     ):
         path = os.path.join(log_dir, filename)
         chunk = tail_file(path).strip()

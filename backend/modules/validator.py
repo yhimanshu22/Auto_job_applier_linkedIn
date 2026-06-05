@@ -242,7 +242,9 @@ def validate_secrets() -> None | ValueError | TypeError:
 
     ##> ------ Yang Li : MARKYangL - Feature ------
     # Validate DeepSeek configuration
-    check_string(ai_provider, "ai_provider", ["openai", "deepseek", "gemini", "openclaw"])
+    if ai_provider == "openclaw":
+        ai_provider = "openai"
+    check_string(ai_provider, "ai_provider", ["openai", "deepseek", "gemini"])
 
     ##> ------ Tim L : tulxoro - Refactor ------
     if ai_provider == "deepseek":

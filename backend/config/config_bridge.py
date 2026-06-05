@@ -5,6 +5,14 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db_manager import db
 
+
+def _apply_config_normalizations(config_dict: dict) -> dict:
+    """Migrate legacy settings (e.g. removed providers) before export to the bot."""
+    if config_dict.get("ai_provider") == "openclaw":
+        config_dict["ai_provider"] = "openai"
+    return config_dict
+
+
 def load_config_to_module(module_name):
     # Default values to prevent crashes if DB keys are missing
     config_dict = {
@@ -24,7 +32,9 @@ def load_config_to_module(module_name):
         config_dict["username"] = os.getenv("LINKEDIN_USERNAME")
     if os.getenv("LINKEDIN_PASSWORD"):
         config_dict["password"] = os.getenv("LINKEDIN_PASSWORD")
-    
+
+    _apply_config_normalizations(config_dict)
+
     current_module = sys.modules[module_name]
     for k, v in config_dict.items():
         setattr(current_module, k, v)
@@ -47,6 +57,8 @@ if os.getenv("LINKEDIN_USERNAME"):
     config_data["username"] = os.getenv("LINKEDIN_USERNAME")
 if os.getenv("LINKEDIN_PASSWORD"):
     config_data["password"] = os.getenv("LINKEDIN_PASSWORD")
+
+_apply_config_normalizations(config_data)
 
 # Export all keys to this module
 for k, v in config_data.items():

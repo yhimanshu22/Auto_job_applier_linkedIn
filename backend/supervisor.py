@@ -2,7 +2,6 @@ import subprocess
 import time
 import sys
 import os
-import shutil
 import signal
 import logging
 from datetime import datetime
@@ -39,7 +38,6 @@ class BotSupervisor:
         self.bot_processes = {}  # Map bot_id -> subprocess.Popen
         self._bot_log_handles = {}  # Keep stdout log files open while children run
         self.accounts = self._get_accounts()
-        self.openclaw_process = None
         self.is_running = True
 
     def _close_bot_stdio(self, bot_id):
@@ -78,53 +76,6 @@ class BotSupervisor:
         
         logging.info(f"Identified {len(accounts)} accounts: {[a['id'] for a in accounts]}")
         return accounts
-
-    def start_openclaw(self):
-        """Starts the OpenClaw gateway."""
-        skip = os.getenv("SKIP_OPENCLAW", "").strip().lower() in ("1", "true", "yes")
-        if skip:
-            logging.info(
-                "Skipping OpenClaw gateway (SKIP_OPENCLAW is set). "
-                "Use this when ai_provider is not openclaw or the LLM is a remote API only."
-            )
-            return
-        try:
-            logging.info("Starting OpenClaw gateway...")
-            # Redirect OpenClaw output to a log file for debugging
-            log_file = open(os.path.join(_LOG_DIR, "openclaw.log"), "a")
-            # Avoid shell=True to prevent cmd.exe dependency
-            exe = os.getenv("OPENCLAW_EXE", "").strip()
-            if exe:
-                cmd = [exe, "gateway", "--allow-unconfigured", "--port", "3000"]
-            else:
-                # npm installs `openclaw.cmd` on Windows, not `openclaw.exe`; resolve via PATH/PATHEXT.
-                openclaw_bin = shutil.which("openclaw")
-                if openclaw_bin is None and os.name == "nt":
-                    openclaw_bin = shutil.which("openclaw.exe")
-                cmd = [
-                    openclaw_bin or "openclaw",
-                    "gateway",
-                    "--allow-unconfigured",
-                    "--port",
-                    "3000",
-                ]
-
-            self.openclaw_process = subprocess.Popen(
-                cmd,
-                stdout=log_file,
-                stderr=log_file,
-                shell=False,
-                creationflags=_nt_background_creationflags(),
-            )
-            logging.info(f"OpenClaw started (PID: {self.openclaw_process.pid})")
-        except FileNotFoundError:
-            logging.warning(
-                "OpenClaw executable not found. AI gateway features will be disabled. "
-                "Install the OpenClaw CLI and ensure it is on PATH, or set OPENCLAW_EXE to the full path "
-                "to the CLI (e.g. npm's openclaw.cmd). If you do not use the openclaw provider, set SKIP_OPENCLAW=1."
-            )
-        except Exception as e:
-            logging.error(f"Failed to start OpenClaw: {e}")
 
     def start_bot(self, account):
         """Starts the runAiBot.py process for a specific account."""
@@ -183,20 +134,8 @@ class BotSupervisor:
                 logging.error(f"Error stopping bot {bot_id}: {e}")
             self._close_bot_stdio(bot_id)
 
-        if self.openclaw_process:
-            try:
-                if os.name == 'nt':
-                    subprocess.run(["taskkill", "/F", "/PID", str(self.openclaw_process.pid), "/T"], capture_output=True)
-                else:
-                    self.openclaw_process.terminate()
-                logging.info("OpenClaw process stopped.")
-            except Exception as e:
-                logging.error(f"Error stopping OpenClaw: {e}")
-
     def run(self):
         """Main supervisor loop."""
-        self.start_openclaw()
-        
         while self.is_running:
             for account in self.accounts:
                 bot_id = account["id"]
@@ -225,11 +164,6 @@ class BotSupervisor:
                     if len(self.accounts) > 1:
                         logging.info("Waiting 15 seconds before checking next account for staggered startup...")
                         time.sleep(15)
-            
-            # Check OpenClaw (optional, usually quite stable)
-            if self.openclaw_process and self.openclaw_process.poll() is not None:
-                logging.warning("OpenClaw gateway crashed. Restarting...")
-                self.start_openclaw()
 
             time.sleep(10)
 
