@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, LargeBinary, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, LargeBinary, Boolean, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 
@@ -35,6 +35,12 @@ class BotRun(Base):
     end_time = Column(DateTime(timezone=True))
     applications_count = Column(Integer, default=0)
 
+    # `get_recent_bot_runs` orders by start_time DESC; this index turns the
+    # otherwise full-table sort into an indexed reverse scan.
+    __table_args__ = (
+        Index("ix_bot_runs_start_time", "start_time"),
+    )
+
 class Application(Base):
     __tablename__ = "applications"
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -48,6 +54,16 @@ class Application(Base):
     resume_used = Column(String)
     answer_generated = Column(Text)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+    # `(user_id, timestamp)` covers `get_recent_applications` and the
+    # `get_application_stats` user filter.
+    # `(user_id, status, timestamp)` covers `get_monthly_application_count`
+    # (user + applied + 30d window) and `get_last_activity_snapshot` (user +
+    # status ORDER BY timestamp).
+    __table_args__ = (
+        Index("ix_applications_user_timestamp", "user_id", "timestamp"),
+        Index("ix_applications_user_status_ts", "user_id", "status", "timestamp"),
+    )
 
 class UserSession(Base):
     __tablename__ = "user_sessions"
@@ -71,3 +87,37 @@ class ResumeMetadata(Base):
     mime_type = Column(String, default="application/pdf")
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class AutomationTask(Base):
+    """Persisted history of Linkedln-Automation-Framework subprocess runs.
+
+    Mirrors the in-memory ``services.linkedin_automation.AutomationTask`` so the
+    dashboard can surface task history (post / engage / pursue / calendar)
+    across backend restarts.
+    """
+    __tablename__ = "automation_tasks"
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False, default="local-user")
+    action = Column(String, nullable=False)
+    args_json = Column(Text)
+    log_path = Column(String)
+    status = Column(String, default="running")  # running | completed | failed | stopped
+    exit_code = Column(Integer)
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    ended_at = Column(DateTime(timezone=True))
+    # LinkedIn account the run authenticated as (email/username from env when
+    # the subprocess starts). Useful for the dashboard so users with multiple
+    # accounts can see which one each task touched.
+    account_username = Column(String)
+
+    # Hot read paths:
+    #   - `(user_id, started_at)` → list_automation_tasks (ORDER BY started_at
+    #     DESC), count_automation_tasks_today (started_at >= cutoff), and the
+    #     user-scoped slices of get_automation_task_stats. SQLite scans the
+    #     index in reverse for DESC, so one index covers both directions.
+    #   - `(status,)` → get_automation_task_stats running-count query (no
+    #     user_id), plus future "list-by-status" queries.
+    __table_args__ = (
+        Index("ix_automation_tasks_user_started", "user_id", "started_at"),
+        Index("ix_automation_tasks_status", "status"),
+    )

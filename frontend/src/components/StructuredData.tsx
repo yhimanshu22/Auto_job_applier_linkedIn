@@ -1,13 +1,14 @@
 import React from 'react';
-import { WINDOWS_INSTALLER_URL } from '@/lib/downloads';
+import { rawInstallScriptUrl } from '@/lib/install';
 
 export default function StructuredData() {
   const softwareSchema = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "LinkdApply",
-    "operatingSystem": "Windows, MacOS",
-    "downloadUrl": WINDOWS_INSTALLER_URL,
+    "operatingSystem": "Windows, MacOS, Linux",
+    "downloadUrl": rawInstallScriptUrl("install.sh"),
+    "installUrl": rawInstallScriptUrl("install.sh"),
     "applicationCategory": "BusinessApplication",
     "aggregateRating": {
       "@type": "AggregateRating",

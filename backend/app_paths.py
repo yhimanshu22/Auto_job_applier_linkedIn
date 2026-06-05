@@ -16,7 +16,7 @@ def get_base_path() -> str:
 
 def _ensure_packaged_runtime_subdirs(root: str) -> None:
     """CSV / uploads / Chrome expect these folders relative to the bot cwd."""
-    for sub in ("logs", "all excels", "all resumes", "chrome_profiles"):
+    for sub in ("logs", "all excels", "all resumes", "chrome_profiles", "cookies"):
         os.makedirs(os.path.join(root, sub), exist_ok=True)
 
 

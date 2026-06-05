@@ -1,0 +1,62 @@
+# 30-Day AI/ML LinkedIn Content Plan
+
+**Day 1 | Introduction to Deep Learning** | Explain what deep learning is, how it relates to AI/ML, and why it’s powerful. Share your motivation to learn it. | "Where have you seen deep learning in real life?" | #DeepLearning #AI #MachineLearning
+
+**Day 2 | Neural Networks Basics** | Break down neurons, layers (input, hidden, output), and how data flows in a neural network. | "What confuses you most about neural networks?" | #NeuralNetworks #AI
+
+**Day 3 | Forward vs Backpropagation** | Explain how predictions are made (forward pass) and how errors are corrected (backpropagation). | "Why do you think backpropagation is important?" | #DeepLearning #Learning
+
+**Day 4 | Activation Functions** | Discuss ReLU, Sigmoid, Tanh and why non-linearity is needed. | "Which activation function have you used?" | #AI #DeepLearning
+
+**Day 5 | Loss Functions** | Explain MSE vs Cross-Entropy with simple intuition. | "How do you evaluate your model?" | #MachineLearning #AI
+
+**Day 6 | Gradient Descent** | Share how models optimize weights step-by-step to reduce loss. | "What learning rate works best in your experience?" | #DeepLearning #Optimization
+
+**Day 7 | Overfitting vs Underfitting** | Explain the trade-off and how to fix it (regularization, more data). | "How do you handle overfitting?" | #ML #AI
+
+**Day 8 | Supervised vs Unsupervised Learning** | Compare both types with examples. | "Which one do you find more interesting?" | #MachineLearning
+
+**Day 9 | Linear Regression** | Explain prediction of continuous values with real example. | "Where can linear regression fail?" | #MLBasics
+
+**Day 10 | Logistic Regression** | Explain classification problem solving. | "Binary or multi-class — what have you worked on?" | #AI
+
+**Day 11 | Decision Trees** | Explain tree-based decision making. | "Why are decision trees easy to interpret?" | #ML
+
+**Day 12 | Random Forest** | Explain ensemble learning and why it improves accuracy. | "Have you used ensemble methods?" | #MachineLearning
+
+**Day 13 | K-Means Clustering** | Explain grouping data without labels. | "Where can clustering be useful?" | #UnsupervisedLearning
+
+**Day 14 | Model Evaluation Metrics** | Explain accuracy, precision, recall, F1-score. | "Which metric do you prefer?" | #AI
+
+**Day 15 | CNN (Convolutional Neural Networks)** | Explain how CNNs process images. | "Where have you used CNNs?" | #DeepLearning
+
+**Day 16 | RNN (Recurrent Neural Networks)** | Explain sequence data handling. | "What are RNN limitations?" | #AI
+
+**Day 17 | LSTM** | Explain how LSTM solves vanishing gradient problem. | "Why are LSTMs better than RNNs?" | #DeepLearning
+
+**Day 18 | Transformers** | Give intuition of transformer models. | "Have you explored transformers?" | #AI
+
+**Day 19 | Attention Mechanism** | Explain focusing on important parts of input. | "Why is attention powerful?" | #DeepLearning
+
+**Day 20 | Transfer Learning** | Explain reusing pre-trained models. | "Which pre-trained model have you used?" | #MachineLearning
+
+**Day 21 | Fine-Tuning Models** | Explain adjusting models for specific tasks. | "Have you fine-tuned any model?" | #AI
+
+**Day 22 | ML Pipeline** | Explain steps from data collection to deployment. | "Which step is most challenging?" | #MachineLearning
+
+**Day 23 | Feature Engineering** | Explain importance of selecting good features. | "What features improved your model?" | #DataScience
+
+**Day 24 | Model Deployment** | Explain deploying using APIs (Flask/FastAPI). | "Have you deployed any model?" | #AI
+
+**Day 25 | Project Breakdown** | Share one of your AI/ML projects in detail. | "Want me to share code?" | #Projects
+
+**Day 26 | Common ML Mistakes** | Share mistakes beginners make. | "What mistakes did you make?" | #Learning
+
+**Day 27 | MLOps Basics** | Explain CI/CD for ML models. | "Do you think MLOps is important?" | #MLOps
+
+**Day 28 | Case Study** | Explain a real-world system (recommendation system, fraud detection). | "Which system interests you?" | #AI
+
+**Day 29 | My 30-Day Learning Journey** | Share your key learnings and improvements. | "What did you learn this month?" | #Growth
+
+**Day 30 | Open to Work + Portfolio** | Share your skills, projects, and job interest. | "Let’s connect if you're hiring!" | #OpenToWork #AIJobs
+

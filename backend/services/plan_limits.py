@@ -108,3 +108,65 @@ def assert_can_start_bot(user_id: str) -> None:
             status_code=403,
             detail=f"Your '{plan}' plan allows only {limits['max_active_bots']} active bot(s). Please reduce your active accounts.",
         )
+
+
+# ---------------------------------------------------------------------------
+# Linkedln-Automation-Framework (posting / engagement) gating
+# ---------------------------------------------------------------------------
+
+# Daily ceiling on Linkedln-Automation-Framework actions per plan. Distinct
+# from job-applier monthly_applications so the two automations don't compete
+# for the same quota.
+AUTOMATION_DAILY_LIMITS: dict[str, int] = {
+    "free_trial": 5,
+    "starter": 25,
+    "pro": 200,
+    "agency": 1000,
+}
+
+
+def assert_can_run_automation(user_id: str) -> None:
+    """Gate the LinkedIn automation endpoints.
+
+    Same admin bypass as ``assert_can_start_bot``, otherwise:
+      * Require an active / trialing subscription (and not an expired trial).
+      * Enforce a per-day count of completed-or-running automation tasks
+        based on ``AUTOMATION_DAILY_LIMITS`` for the user's plan.
+    """
+    if user_id in ["himu09854@gmail.com", "local-user"]:
+        return
+
+    subscription = db.get_user_subscription(user_id)
+
+    if not subscription or subscription["status"] not in ["active", "trialing"]:
+        raise HTTPException(
+            status_code=402,
+            detail="Active subscription or trial required to run LinkedIn automation",
+        )
+
+    if subscription["status"] == "trialing" and subscription.get("current_period_end"):
+        try:
+            expiry = datetime.fromisoformat(subscription["current_period_end"])
+            if datetime.utcnow() > expiry:
+                db.upsert_subscription(user_id=user_id, status="expired")
+                raise HTTPException(
+                    status_code=402,
+                    detail="Your free trial has expired. Please upgrade to a paid plan to continue.",
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            print(f"Error checking trial expiry for automation gating: {exc}")
+
+    plan = subscription.get("plan", "free_trial")
+    daily_cap = AUTOMATION_DAILY_LIMITS.get(plan, AUTOMATION_DAILY_LIMITS["free_trial"])
+
+    used_today = db.count_automation_tasks_today(user_id)
+    if used_today >= daily_cap:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Daily automation limit reached ({used_today}/{daily_cap}) on the "
+                f"'{plan}' plan. Try again tomorrow or upgrade your plan."
+            ),
+        )

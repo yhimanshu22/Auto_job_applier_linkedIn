@@ -1,0 +1,20 @@
+# Vercel CLI upload excludes (deployment installs deps and builds on the server)
+node_modules
+.next
+out
+.vercel
+.git
+*.log
+.env*
+.env.local
+coverage
+.DS_Store
+
+# Electron / local bundles — not needed for the web app
+../electron
+../backend
+
+# Large media — host on CDN or add under 50MB if required on Vercel
+*.mp4
+*.mov
+*.zip
