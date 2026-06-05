@@ -390,7 +390,7 @@ def answer_questions(
                 if answer == "":
                     if use_AI and aiClient:
                         try:
-                            if ai_provider.lower() == "openai":
+                            if ai_provider.lower() in ("openai", "openclaw"):
                                 answer = ai_answer_question(
                                     aiClient,
                                     label_org,
@@ -466,7 +466,7 @@ def answer_questions(
                     ##> ------ Yang Li : MARKYangL - Feature ------
                     if use_AI and aiClient:
                         try:
-                            if ai_provider.lower() == "openai":
+                            if ai_provider.lower() in ("openai", "openclaw"):
                                 answer = ai_answer_question(
                                     aiClient,
                                     label_org,

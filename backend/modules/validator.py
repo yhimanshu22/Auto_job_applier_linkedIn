@@ -241,13 +241,12 @@ def validate_secrets() -> None | ValueError | TypeError:
     check_boolean(stream_output, "stream_output")
 
     ##> ------ Yang Li : MARKYangL - Feature ------
-    # Validate DeepSeek configuration
-    if ai_provider == "openclaw":
-        ai_provider = "openai"
-    check_string(ai_provider, "ai_provider", ["openai", "deepseek", "gemini"])
+    # Validate DeepSeek configuration (openclaw was removed; treat as openai-compatible)
+    provider = "openai" if ai_provider == "openclaw" else ai_provider
+    check_string(provider, "ai_provider", ["openai", "deepseek", "gemini"])
 
     ##> ------ Tim L : tulxoro - Refactor ------
-    if ai_provider == "deepseek":
+    if provider == "deepseek":
         check_string(
             llm_model, "deepseek_model", ["deepseek-chat", "deepseek-reasoner"]
         )
