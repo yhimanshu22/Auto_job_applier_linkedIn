@@ -37,6 +37,74 @@ USE_GEMINI = (
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
+# Which LLM powers LinkedIn comments / calendar / OpenAIClient helpers.
+# Values: openai | gemini | grok | groq (case-insensitive). Empty = auto-pick
+# from available keys (OpenAI → Gemini → Grok → Groq).
+LINKEDIN_AI_PROVIDER = (os.getenv("LINKEDIN_AI_PROVIDER") or "").strip().lower()
+
+# xAI Grok (OpenAI-compatible Chat Completions API)
+GROK_API_KEY = os.getenv("GROK_API_KEY")
+GROK_API_BASE = (os.getenv("GROK_API_BASE") or "https://api.x.ai/v1").rstrip("/")
+GROK_MODEL = os.getenv("GROK_MODEL", "grok-2-latest")
+
+# Groq — optional dedicated vars, or reuse job-applier ``LLM_API_KEY`` when
+# ``LLM_API_URL`` points at Groq. If ``LINKEDIN_AI_PROVIDER=groq``, ``LLM_API_KEY``
+# is accepted even without "groq" in the URL.
+_LLM_API_KEY = os.getenv("LLM_API_KEY")
+_LLM_API_URL = (os.getenv("LLM_API_URL") or "").strip().rstrip("/")
+
+
+def effective_groq_api_key() -> str | None:
+    """Resolve the Groq API key from GROQ_* or shared LLM_* settings."""
+    k = os.getenv("GROQ_API_KEY")
+    if k:
+        return k
+    if not _LLM_API_KEY:
+        return None
+    if "groq" in _LLM_API_URL.lower():
+        return _LLM_API_KEY
+    if LINKEDIN_AI_PROVIDER == "groq":
+        return _LLM_API_KEY
+    return None
+
+
+GROQ_API_BASE = (
+    os.getenv("GROQ_API_BASE") or (_LLM_API_URL if _LLM_API_URL else "https://api.groq.com/openai/v1")
+).rstrip("/")
+GROQ_MODEL = os.getenv("GROQ_MODEL") or os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
+
+# Gemini model for OpenAIClient (comments / calendar); content posts use their own picker.
+LINKEDIN_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+
+
+def resolve_linkedin_ai_provider() -> str:
+    """Pick the LLM backend for :class:`openai_client.OpenAIClient`."""
+    if LINKEDIN_AI_PROVIDER in ("openai", "gemini", "grok", "groq"):
+        return LINKEDIN_AI_PROVIDER
+    if OPENAI_API_KEY:
+        return "openai"
+    if GEMINI_API_KEY:
+        return "gemini"
+    if GROK_API_KEY:
+        return "grok"
+    if effective_groq_api_key():
+        return "groq"
+    return "openai"
+
+
+def has_linkedin_llm_credentials() -> bool:
+    """True when at least one configured provider has the keys it needs."""
+    p = resolve_linkedin_ai_provider()
+    if p == "openai":
+        return bool(OPENAI_API_KEY)
+    if p == "gemini":
+        return bool(GEMINI_API_KEY)
+    if p == "grok":
+        return bool(GROK_API_KEY)
+    if p == "groq":
+        return bool(effective_groq_api_key())
+    return False
+
 # Project marketing defaults
 MARKETING_MODE = os.getenv("MARKETING_MODE", "true").lower() == "true"
 PROJECT_NAME = os.getenv("PROJECT_NAME", "LinkedIn Bot")
@@ -56,6 +124,35 @@ PROJECT_CONTEXT = os.getenv(
 PROJECT_TAGLINE = os.getenv(
     "PROJECT_TAGLINE", f"{PROJECT_PITCH} Grab the code: {PROJECT_URL}"
 )
+
+# Comment persona: sound human; optional resume / single allowed GitHub profile
+def _normalize_github_username(raw: str | None) -> str:
+    s = (raw or "").strip()
+    if not s:
+        return "yhimanshu22"
+    s = s.split("/")[-1].split("?")[0].strip()
+    return s or "yhimanshu22"
+
+
+LINKEDIN_GITHUB_USERNAME = _normalize_github_username(os.getenv("LINKEDIN_GITHUB_USERNAME"))
+LINKEDIN_GITHUB_URL = f"https://github.com/{LINKEDIN_GITHUB_USERNAME}"
+LINKEDIN_RESUME_URL = (os.getenv("LINKEDIN_RESUME_URL") or "").strip()
+LINKEDIN_COMMENT_DISPLAY_NAME = (os.getenv("LINKEDIN_COMMENT_DISPLAY_NAME") or "").strip()
+LINKEDIN_COMMENT_VOICE = os.getenv(
+    "LINKEDIN_COMMENT_VOICE",
+    "Write in first person as the real person behind this LinkedIn account — like you paused scrolling to leave a quick authentic thought. "
+    "Vary rhythm and length; avoid corporate filler, buzzword stacks, and generic praise. No bullet lists.",
+).strip()
+# Comments: no "PS: check out …" toolkit plug unless explicitly enabled.
+LINKEDIN_COMMENT_APPEND_PROJECT_CTA = (
+    os.getenv("LINKEDIN_COMMENT_APPEND_PROJECT_CTA", "false").lower() == "true"
+)
+# Optional "comment for better reach" line — model adds only when tone fits (see prompt).
+LINKEDIN_COMMENT_CFBR = os.getenv("LINKEDIN_COMMENT_CFBR", "true").lower() == "true"
+LINKEDIN_COMMENT_FALLBACK = os.getenv(
+    "LINKEDIN_COMMENT_FALLBACK",
+    "Appreciate you putting this out there — following along.",
+).strip()
 
 # Browser settings
 # Headless defaults to **false** because LinkedIn serves an empty / heavily-

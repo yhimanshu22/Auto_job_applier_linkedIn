@@ -4,56 +4,25 @@ import React from "react";
 import Link from "next/link";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import TitleBar from "@/components/TitleBar";
-
 export default function LoginPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
-  const [electronAPI, setElectronAPI] = React.useState<any>(null);
+  const { status } = useSession();
   const [isLoading, setIsLoading] = React.useState(false);
 
   React.useEffect(() => {
-    // 1. Check if Electron API is available
-    if (typeof window !== "undefined" && (window as any).electron) {
-      console.log("[LoginPage] Electron API detected in window");
-      setElectronAPI((window as any).electron);
-    }
-
-    // 2. Auto-redirect if already authenticated
-    const hasToken = typeof window !== "undefined" && localStorage.getItem("auth_token");
-    if (status === "authenticated" || hasToken) {
-        console.log("[LoginPage] User already authenticated, redirecting to dashboard...");
-        router.push("/dashboard");
+    if (status === "authenticated") {
+      router.push("/dashboard");
     }
   }, [status, router]);
 
   const handleGoogleSignIn = () => {
     if (isLoading) return;
     setIsLoading(true);
-
-    // Direct, real-time check of the window object
-    const api = typeof window !== "undefined" ? (window as any).electron : null;
-    
-    if (api && typeof api.openExternal === "function") {
-        console.log("[LoginPage] Triggering external browser auth via IPC...");
-        // The server-side redirect callback handles the routing to Electron
-        const authUrl = `http://localhost:3000/api/auth/signin/google`;
-        try {
-            api.openExternal(authUrl);
-        } catch (err) {
-            console.error("[LoginPage] IPC Call failed:", err);
-            signIn("google", { callbackUrl: "/dashboard" });
-            setIsLoading(false);
-        }
-    } else {
-        console.log("[LoginPage] Electron API not found, using browser fallback...");
-        signIn("google", { callbackUrl: "/dashboard" });
-    }
+    signIn("google", { callbackUrl: "/dashboard" });
   };
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col selection:bg-accent/30">
-      <TitleBar />
       <div className="grow flex items-center justify-center p-6 bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.1),transparent_50%)]">
         <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
           <div className="text-center">

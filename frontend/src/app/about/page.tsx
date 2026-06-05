@@ -97,7 +97,7 @@ export default function AboutPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-2">
                     <h4 className="text-accent font-bold uppercase tracking-widest text-xs">Core Frameworks</h4>
-                    <p className="text-sm text-zinc-400">Next.js 15 for a lightning-fast frontend, FastAPI for a robust Python backend, and Electron for a seamless desktop experience.</p>
+                    <p className="text-sm text-zinc-400">Next.js 15 for a lightning-fast frontend and FastAPI for a robust Python backend, installed locally with a single command.</p>
                   </div>
                   <div className="space-y-2">
                     <h4 className="text-accent font-bold uppercase tracking-widest text-xs">AI Engine</h4>

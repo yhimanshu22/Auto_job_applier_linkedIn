@@ -92,15 +92,6 @@ input[type="file"],
   box-shadow: 0 4px 14px 0 rgba(124, 58, 237, 0.39);
 }
 
-/* Electron Titlebar Helpers */
-.drag-region {
-  -webkit-app-region: drag;
-}
-
-.no-drag {
-  -webkit-app-region: no-drag;
-}
-
 .grid-pattern {
   background-image: 
     linear-gradient(to right, rgba(0, 0, 0, 0.12) 1px, transparent 1px),

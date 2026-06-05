@@ -476,6 +476,34 @@ def test_get_automation_task_stats_empty_db_safe(test_db, clear_automation_tasks
     }
 
 
+def test_reconcile_stale_running_automation_tasks(test_db, clear_automation_tasks):
+    """DB rows stuck in ``running`` must be repairable so dashboards do not lie."""
+    from sqlalchemy import update
+    from models import AutomationTask
+
+    test_db.create_automation_task("stale-run", "engage", [], "/x", user_id="u-stale")
+    old = datetime.now(timezone.utc) - timedelta(hours=2)
+    with test_db.get_session() as s:
+        s.execute(
+            update(AutomationTask)
+            .where(AutomationTask.id == "stale-run")
+            .values(started_at=old)
+        )
+        s.commit()
+
+    assert test_db.get_automation_task("stale-run")["status"] == "running"
+
+    n = test_db.reconcile_stale_automation_tasks(max_age_minutes=30)
+    assert n == 1
+
+    row = test_db.get_automation_task("stale-run")
+    assert row["status"] == "interrupted"
+    assert row["exit_code"] == -9
+    assert row["ended_at"] is not None
+
+    assert test_db.get_automation_task_stats(user_id="u-stale")["running"] == 0
+
+
 def test_get_automation_task_stats_ignores_other_users(
     test_db, clear_automation_tasks
 ):

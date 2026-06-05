@@ -63,7 +63,6 @@ export const metadata: Metadata = {
 };
 
 import AuthContext from "@/components/AuthContext";
-import DeepLinkHandler from "@/components/DeepLinkHandler";
 
 export default function RootLayout({
   children,
@@ -84,7 +83,6 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <AuthContext>
-          <DeepLinkHandler />
           {children}
         </AuthContext>
       </body>

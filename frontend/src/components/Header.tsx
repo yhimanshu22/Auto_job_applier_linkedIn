@@ -32,6 +32,13 @@ export default function Header() {
             </Link>
             <Link 
               className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
+              href="/#install"
+              title="Install LinkdApply locally"
+            >
+              Install
+            </Link>
+            <Link 
+              className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
               href="/#faq"
               title="Frequently Asked Questions"
             >

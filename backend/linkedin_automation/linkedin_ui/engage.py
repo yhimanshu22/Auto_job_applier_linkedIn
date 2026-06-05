@@ -262,8 +262,6 @@ class EngageStreamMixin(EngageDomMixin):
             EngageContext: Prepared context for :class:`EngageExecutor`.
         """
 
-        force_prepend = bool(ai_client)
-
         return EngageContext(
             mode=mode,
             comment_text=str(comment_text).strip() if comment_text else None,
@@ -271,8 +269,8 @@ class EngageStreamMixin(EngageDomMixin):
             include_promoted=include_promoted,
             delay_min=delay_min if delay_min is not None else config.MIN_ACTION_DELAY,
             delay_max=delay_max if delay_max is not None else config.MAX_ACTION_DELAY,
-            mention_author=mention_author or force_prepend,
-            mention_position="prepend" if force_prepend else (mention_position or "append"),
+            mention_author=bool(mention_author),
+            mention_position=mention_position or "append",
             infinite=infinite,
             scroll_wait_min=scroll_wait_min if scroll_wait_min is not None else 1.5,
             scroll_wait_max=scroll_wait_max if scroll_wait_max is not None else 3.0,
