@@ -2,7 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Link from "next/link";
 import StructuredData from "@/components/StructuredData";
-import { RELEASES_PAGE_URL, WINDOWS_INSTALLER_URL } from "@/lib/downloads";
+import QuickInstall from "@/components/QuickInstall";
 
 export default function LandingPage() {
   return (
@@ -53,16 +53,18 @@ export default function LandingPage() {
                 Start Applying Free
               </Link>
               <a
-                href={WINDOWS_INSTALLER_URL}
-                rel="noopener noreferrer"
+                href="#install"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-10 py-4 text-white font-semibold shadow-xl transition-all hover:bg-zinc-800 hover:scale-[1.02]"
               >
-                <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M0 3.449L9.75 2.1V11.7H0V3.449zm0 9.15h9.75V22.25L0 20.926V12.599zM11.25 1.875L24 0V11.7H11.25V1.875zm0 10.725H24v11.7L11.25 22.425V12.6z"/>
+                <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <polyline points="16 18 22 12 16 6" />
+                  <polyline points="8 6 2 12 8 18" />
                 </svg>
-                Get for Windows
+                Install locally
               </a>
             </div>
+
+            <QuickInstall variant="compact" />
           </div>
 
           {/* Hero Demo Image */}
@@ -166,51 +168,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Windows CTA Section */}
-        <section className="py-24 bg-white text-zinc-900 overflow-hidden relative">
-          <div className="hero-gradient absolute inset-0 opacity-10"></div>
-          <div className="mx-auto max-w-7xl px-6 relative z-10">
-            <div className="flex flex-col items-center justify-center text-center">
-              <div className="max-w-3xl space-y-8">
-                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-accent/10 border border-accent/20 text-xs font-bold tracking-[0.2em] uppercase text-accent">
-                   Coming to Windows
-                </div>
-                <h2 className="font-serif text-5xl lg:text-7xl font-medium tracking-tight leading-[1.1] text-zinc-900">
-                  Job Application AI that <span className="text-accent italic tracking-tight">works for you</span>, 24/7.
-                </h2>
-                <p className="text-xl text-zinc-500">
-                  Try LinkdApply on your Windows desktop today. Automate the boring parts of the job search while you stay focused on what matters—interviewing.
-                </p>
-                <div id="download" className="flex flex-col items-center gap-4 pt-4 justify-center lg:items-start">
-                  <a
-                    href={WINDOWS_INSTALLER_URL}
-                    rel="noopener noreferrer"
-                    className="w-full sm:w-auto purple-gradient-button inline-flex items-center justify-center gap-2 rounded-xl px-10 py-4 text-white font-semibold shadow-2xl hover:scale-[1.02] transition-all"
-                  >
-                    <svg className="size-5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M0 3.449L9.75 2.1V11.7H0V3.449zm0 9.15h9.75V22.25L0 20.926V12.599zM11.25 1.875L24 0V11.7H11.25V1.875zm0 10.725H24v11.7L11.25 22.425V12.6z"/>
-                    </svg>
-                    Get LinkdApply for Windows
-                  </a>
-                  <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6 text-xs text-zinc-500 font-bold tracking-widest uppercase">
-                    <a
-                      href={RELEASES_PAGE_URL}
-                      rel="noopener noreferrer"
-                      className="underline-offset-4 hover:text-zinc-700 hover:underline"
-                    >
-                      Release notes
-                    </a>
-                    <span className="hidden sm:inline text-zinc-300">·</span>
-                    <span className="flex items-center gap-2">
-                      <span className="size-1 rounded-full bg-zinc-600" aria-hidden />
-                      MacOS version coming soon
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <QuickInstall id="install" />
 
         {/* FAQ Section */}
         <section id="faq" className="py-24 lg:py-32 bg-white">
