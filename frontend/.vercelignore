@@ -13,6 +13,5 @@ coverage
 ../backend
 
 # Large media — host on CDN or add under 50MB if required on Vercel
-*.mp4
 *.mov
 *.zip
