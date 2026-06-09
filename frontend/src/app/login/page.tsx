@@ -2,12 +2,13 @@
 
 import React from "react";
 import Link from "next/link";
-import { signIn, useSession } from "next-auth/react";
+import { getProviders, signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 export default function LoginPage() {
   const router = useRouter();
   const { status } = useSession();
   const [isLoading, setIsLoading] = React.useState(false);
+  const [authError, setAuthError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (status === "authenticated") {
@@ -15,8 +16,18 @@ export default function LoginPage() {
     }
   }, [status, router]);
 
+  React.useEffect(() => {
+    getProviders().then((providers) => {
+      if (!providers?.google) {
+        setAuthError(
+          "Google sign-in is not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to frontend/.env.local, then restart the dev server."
+        );
+      }
+    });
+  }, []);
+
   const handleGoogleSignIn = () => {
-    if (isLoading) return;
+    if (isLoading || authError) return;
     setIsLoading(true);
     signIn("google", { callbackUrl: "/dashboard" });
   };
@@ -34,10 +45,16 @@ export default function LoginPage() {
           </div>
 
           <div className="glass-card rounded-3xl p-8 border border-zinc-800/50 shadow-2xl space-y-6">
+            {authError ? (
+              <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                {authError}
+              </p>
+            ) : null}
+
             <div className="space-y-4">
               <button 
                 onClick={handleGoogleSignIn}
-                disabled={isLoading}
+                disabled={isLoading || Boolean(authError)}
                 className={`w-full h-14 rounded-xl bg-white text-zinc-950 font-bold hover:bg-zinc-200 transition-all flex items-center justify-center gap-4 group shadow-xl ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
                 {isLoading ? (

@@ -38,10 +38,13 @@ if [ ! -f "linkedin_automation/.env" ] && [ -f "linkedin_automation/.env.example
 fi
 
 echo "Starting backend on http://${BACKEND_HOST}:${BACKEND_PORT} ..."
-nohup uv run uvicorn server:app --host "${BACKEND_HOST}" --port "${BACKEND_PORT}" > backend.log 2>&1 &
+nohup uv run python -m uvicorn server:app --host "${BACKEND_HOST}" --port "${BACKEND_PORT}" > backend.log 2>&1 &
 
 # Frontend
 cd ../frontend
+if [ ! -f ".env.local" ] && [ -f ".env.local.template" ]; then
+  cp ".env.local.template" ".env.local"
+fi
 npm install
 
 echo "Starting frontend on http://localhost:3000 ..."

@@ -1,3 +1,4 @@
+import path from "path";
 import type { NextConfig } from "next";
 
 // In development we must allow 'unsafe-eval' for Next.js hot-reloading (React Refresh / Webpack)
@@ -19,18 +20,23 @@ const cspHeader = isDev
   `
   : `
     default-src 'self';
-    script-src 'self';
-    style-src 'self' 'unsafe-inline';
-    img-src 'self' blob: data:;
-    font-src 'self';
+    script-src 'self' 'unsafe-inline' https://accounts.google.com;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    img-src 'self' blob: data: https:;
+    font-src 'self' data: https://fonts.gstatic.com;
+    frame-src 'self' https://accounts.google.com;
     object-src 'none';
     base-uri 'self';
     form-action 'self';
     frame-ancestors 'none';
-    connect-src 'self' http://127.0.0.1:8000;
+    connect-src 'self' http://127.0.0.1:8000 https://accounts.google.com;
   `;
 
 const nextConfig: NextConfig = {
+  // Turbopack can mis-detect the project root on Windows in nested repos.
+  turbopack: {
+    root: path.join(__dirname),
+  },
   async headers() {
     return [
       {
