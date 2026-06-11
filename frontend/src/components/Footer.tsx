@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { COMPANY } from "@/lib/company";
 
 export default function Footer() {
   return (
@@ -39,10 +38,7 @@ export default function Footer() {
             </Link>
           </nav>
         </div>
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-t border-zinc-100 pt-8 text-center md:text-left">
-          <p className="text-xs text-zinc-400 max-w-xl">
-            This website is operated by {COMPANY.legalName}. Registered address: {COMPANY.registeredAddress} | {COMPANY.email} | {COMPANY.phone}
-          </p>
+        <div className="flex justify-center border-t border-zinc-100 pt-8">
           <p className="text-xs font-bold text-zinc-400 tracking-[0.2em] uppercase whitespace-nowrap">
             © 2026 LinkdApply v1.1.0. All Rights Reserved.
           </p>
