@@ -6,6 +6,12 @@ from unittest.mock import patch, MagicMock
 
 client = TestClient(app)
 
+
+@pytest.fixture(autouse=True)
+def _billing_session(auth_as):
+    auth_as("test-user")
+
+
 def test_create_checkout_session_valid_monthly():
     with patch("stripe.checkout.Session.create") as mock_stripe:
         mock_stripe.return_value = MagicMock(url="https://checkout.stripe.com/test")
@@ -71,9 +77,9 @@ def test_create_checkout_session_invalid_cycle():
     )
     assert response.status_code == 422
 
-def test_start_free_trial_success():
-    # Use a fresh user ID
+def test_start_free_trial_success(auth_as):
     user_id = "new-trial-user"
+    auth_as(user_id)
     response = client.post(
         "/api/billing/start-free-trial",
         json={"user_id": user_id}
@@ -82,8 +88,9 @@ def test_start_free_trial_success():
     assert response.json()["status"] == "success"
     assert "expires_at" in response.json()
 
-def test_start_free_trial_duplicate_prevented():
+def test_start_free_trial_duplicate_prevented(auth_as):
     user_id = "existing-trial-user"
+    auth_as(user_id)
     # First time
     client.post("/api/billing/start-free-trial", json={"user_id": user_id})
     

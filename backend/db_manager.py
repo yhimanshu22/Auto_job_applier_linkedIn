@@ -265,14 +265,12 @@ class DatabaseManager:
                 run.applications_count = count
                 session.commit()
 
-    def get_recent_bot_runs(self, limit=10):
+    def get_recent_bot_runs(self, limit=10, user_id=None):
         with self.get_session() as session:
-            rows = (
-                session.query(BotRun)
-                .order_by(BotRun.start_time.desc())
-                .limit(limit)
-                .all()
-            )
+            q = session.query(BotRun)
+            if user_id:
+                q = q.filter(BotRun.user_id == user_id)
+            rows = q.order_by(BotRun.start_time.desc()).limit(limit).all()
             return [
                 {c.name: getattr(run, c.name) for c in run.__table__.columns}
                 for run in rows

@@ -619,12 +619,13 @@ def test_stats_endpoint_admin_user_uses_agency_plan(client):
 
 
 def test_tasks_list_endpoint_returns_db_rows(
-    client, test_db, clear_automation_tasks
+    client, test_db, clear_automation_tasks, auth_as
 ):
+    auth_as("lu")
     test_db.create_automation_task("hist-1", "post", [], "/log/hist-1", user_id="lu")
     test_db.finalize_automation_task("hist-1", exit_code=0)
 
-    res = client.get("/api/linkedin-automation/tasks?user_id=lu")
+    res = client.get("/api/linkedin-automation/tasks")
     assert res.status_code == 200
     ids = {t["id"] for t in res.json()["tasks"]}
     assert "hist-1" in ids
@@ -701,7 +702,8 @@ def test_config_post_rejects_empty_body(client):
 # ---------------------------------------------------------------------------
 
 
-def test_post_endpoint_requires_subscription_for_non_admin(client, test_db):
+def test_post_endpoint_requires_subscription_for_non_admin(client, test_db, auth_as):
+    auth_as("anon-user")
     test_db.upsert_subscription("anon-user", plan="free_trial", status="inactive")
     res = client.post(
         "/api/linkedin-automation/post",
@@ -710,7 +712,8 @@ def test_post_endpoint_requires_subscription_for_non_admin(client, test_db):
     assert res.status_code == 402
 
 
-def test_post_endpoint_blocks_expired_trial(client, test_db):
+def test_post_endpoint_blocks_expired_trial(client, test_db, auth_as):
+    auth_as("expired-auto-user")
     expired = datetime.utcnow() - timedelta(hours=1)
     test_db.upsert_subscription(
         "expired-auto-user",
@@ -727,8 +730,9 @@ def test_post_endpoint_blocks_expired_trial(client, test_db):
 
 
 def test_post_endpoint_blocks_when_daily_limit_reached(
-    client, test_db, clear_automation_tasks
+    client, test_db, clear_automation_tasks, auth_as
 ):
+    auth_as("freeq")
     test_db.upsert_subscription("freeq", plan="free_trial", status="active")
     # free_trial daily cap is 5 (see AUTOMATION_DAILY_LIMITS)
     for i in range(5):
@@ -865,28 +869,30 @@ def test_dashboard_returns_combined_payload(client, clear_automation_tasks):
 
 
 def test_dashboard_etag_is_stable_when_nothing_changes(
-    client, test_db, clear_automation_tasks
+    client, test_db, clear_automation_tasks, auth_as
 ):
+    auth_as("lu")
     test_db.create_automation_task("etag-1", "post", [], "/log", user_id="lu")
     test_db.finalize_automation_task("etag-1", exit_code=0)
 
-    res1 = client.get("/api/linkedin-automation/dashboard?user_id=lu")
-    res2 = client.get("/api/linkedin-automation/dashboard?user_id=lu")
+    res1 = client.get("/api/linkedin-automation/dashboard")
+    res2 = client.get("/api/linkedin-automation/dashboard")
     assert res1.headers["ETag"] == res2.headers["ETag"]
     assert res1.json()["etag"] == res2.json()["etag"]
 
 
 def test_dashboard_returns_304_for_matching_if_none_match(
-    client, test_db, clear_automation_tasks
+    client, test_db, clear_automation_tasks, auth_as
 ):
+    auth_as("lu")
     test_db.create_automation_task("etag-2", "post", [], "/log", user_id="lu")
     test_db.finalize_automation_task("etag-2", exit_code=0)
 
-    first = client.get("/api/linkedin-automation/dashboard?user_id=lu")
+    first = client.get("/api/linkedin-automation/dashboard")
     etag = first.headers["ETag"]
 
     second = client.get(
-        "/api/linkedin-automation/dashboard?user_id=lu",
+        "/api/linkedin-automation/dashboard",
         headers={"If-None-Match": etag},
     )
     assert second.status_code == 304
@@ -896,15 +902,16 @@ def test_dashboard_returns_304_for_matching_if_none_match(
 
 
 def test_dashboard_etag_changes_when_new_task_added(
-    client, test_db, clear_automation_tasks
+    client, test_db, clear_automation_tasks, auth_as
 ):
-    first = client.get("/api/linkedin-automation/dashboard?user_id=lu")
+    auth_as("lu")
+    first = client.get("/api/linkedin-automation/dashboard")
     etag_before = first.headers["ETag"]
 
     test_db.create_automation_task("etag-3", "post", [], "/log", user_id="lu")
 
     second = client.get(
-        "/api/linkedin-automation/dashboard?user_id=lu",
+        "/api/linkedin-automation/dashboard",
         headers={"If-None-Match": etag_before},
     )
     assert second.status_code == 200
@@ -912,16 +919,17 @@ def test_dashboard_etag_changes_when_new_task_added(
 
 
 def test_dashboard_etag_changes_when_task_completes(
-    client, test_db, clear_automation_tasks
+    client, test_db, clear_automation_tasks, auth_as
 ):
+    auth_as("lu")
     test_db.create_automation_task("etag-4", "post", [], "/log", user_id="lu")
-    first = client.get("/api/linkedin-automation/dashboard?user_id=lu")
+    first = client.get("/api/linkedin-automation/dashboard")
     etag_before = first.headers["ETag"]
 
     test_db.finalize_automation_task("etag-4", exit_code=0)
 
     second = client.get(
-        "/api/linkedin-automation/dashboard?user_id=lu",
+        "/api/linkedin-automation/dashboard",
         headers={"If-None-Match": etag_before},
     )
     assert second.status_code == 200
@@ -929,24 +937,27 @@ def test_dashboard_etag_changes_when_task_completes(
 
 
 def test_dashboard_wildcard_if_none_match_returns_304(
-    client, clear_automation_tasks
+    client, clear_automation_tasks, auth_as
 ):
     """Standard HTTP: ``If-None-Match: *`` should also yield 304 when content exists."""
+    auth_as("lu")
     res = client.get(
-        "/api/linkedin-automation/dashboard?user_id=lu",
+        "/api/linkedin-automation/dashboard",
         headers={"If-None-Match": "*"},
     )
     assert res.status_code == 304
 
 
-def test_dashboard_etag_per_user(client, test_db, clear_automation_tasks):
+def test_dashboard_etag_per_user(client, test_db, clear_automation_tasks, auth_as):
     """Two users with different state must get different ETags."""
     test_db.create_automation_task("u1-t1", "post", [], "/log", user_id="dashboard-u1")
     test_db.create_automation_task("u2-t1", "post", [], "/log", user_id="dashboard-u2")
     test_db.create_automation_task("u2-t2", "engage", [], "/log", user_id="dashboard-u2")
 
-    r1 = client.get("/api/linkedin-automation/dashboard?user_id=dashboard-u1")
-    r2 = client.get("/api/linkedin-automation/dashboard?user_id=dashboard-u2")
+    auth_as("dashboard-u1")
+    r1 = client.get("/api/linkedin-automation/dashboard")
+    auth_as("dashboard-u2")
+    r2 = client.get("/api/linkedin-automation/dashboard")
     assert r1.headers["ETag"] != r2.headers["ETag"]
 
 

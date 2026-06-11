@@ -3,9 +3,10 @@ import subprocess
 from datetime import datetime, timedelta
 
 
-def test_free_trial_user_can_start_bot(client, test_db, monkeypatch):
+def test_free_trial_user_can_start_bot(client, test_db, monkeypatch, auth_as):
     monkeypatch.setenv("LINKEDIN_USERNAME", "trial@test.com")
     monkeypatch.setenv("LINKEDIN_PASSWORD", "secret")
+    auth_as("trial-user")
 
     # Mock a trial subscription that expires in 1 hour
     expiry = datetime.utcnow() + timedelta(hours=1)
@@ -31,7 +32,8 @@ def test_free_trial_user_can_start_bot(client, test_db, monkeypatch):
     assert response.status_code == 200
     assert response.json()["status"] == "started"
 
-def test_expired_trial_cannot_start_bot(client, test_db):
+def test_expired_trial_cannot_start_bot(client, test_db, auth_as):
+    auth_as("expired-user")
     # Mock a trial subscription that expired 1 hour ago
     expiry = datetime.utcnow() - timedelta(hours=1)
     test_db.upsert_subscription(
@@ -49,12 +51,13 @@ def test_expired_trial_cannot_start_bot(client, test_db):
     assert response.status_code == 402
     assert "expired" in response.json()["detail"].lower()
 
-def test_plan_limits_enforcement(client, test_db, monkeypatch):
+def test_plan_limits_enforcement(client, test_db, monkeypatch, auth_as):
     # Trial allows only 1 LinkedIn account — simulate two (primary + extra) with passwords.
     monkeypatch.setenv("LINKEDIN_USERNAME", "primary@test.com")
     monkeypatch.setenv("LINKEDIN_PASSWORD", "secret")
     monkeypatch.setenv("LINKEDIN_USERNAME_1", "extra@test.com")
     monkeypatch.setenv("LINKEDIN_PASSWORD_1", "secret")
+    auth_as("limit-user")
 
     test_db.upsert_subscription("limit-user", plan="free_trial", status="trialing")
     
@@ -66,7 +69,8 @@ def test_plan_limits_enforcement(client, test_db, monkeypatch):
     assert response.status_code == 403
     assert "allows only 1 LinkedIn account(s)" in response.json()["detail"]
 
-def test_subscription_status_includes_cycle(client, test_db):
+def test_subscription_status_includes_cycle(client, test_db, auth_as):
+    auth_as("cycle-user")
     test_db.upsert_subscription(
         "cycle-user", 
         plan="pro", 
@@ -74,15 +78,16 @@ def test_subscription_status_includes_cycle(client, test_db):
         status="active"
     )
     
-    response = client.get("/api/billing/subscription?user_id=cycle-user")
+    response = client.get("/api/billing/subscription")
     assert response.status_code == 200
     data = response.json()
     assert data["plan"] == "pro"
     assert data["billing_cycle"] == "yearly"
 
-def test_monthly_limit_enforcement(client, test_db, monkeypatch):
+def test_monthly_limit_enforcement(client, test_db, monkeypatch, auth_as):
     monkeypatch.setenv("LINKEDIN_USERNAME", "starter@test.com")
     monkeypatch.setenv("LINKEDIN_PASSWORD", "secret")
+    auth_as("starter-user")
 
     # Starter allows 100 applications (based on PLAN_LIMITS)
     test_db.upsert_subscription("starter-user", plan="starter", status="active")

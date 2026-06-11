@@ -1,6 +1,11 @@
 import os
 from pathlib import Path
 
+# Set before db_manager imports utils.encryption (no hardcoded app key in source).
+os.environ.setdefault(
+    "ENCRYPTION_KEY", "XFtHFGnbGxBxIpsi0IUUxlz7U6v9Dtf28dUCO7a-FsM="
+)
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -61,6 +66,21 @@ def isolate_env(monkeypatch):
     for key in list(os.environ.keys()):
         if key.startswith("LINKEDIN_USERNAME_"):
             monkeypatch.delenv(key, raising=False)
+
+
+@pytest.fixture
+def auth_as(monkeypatch):
+    """Simulate a verified NextAuth session for the given email."""
+
+    def _set(email: str):
+        async def _session_email(_request):
+            return email
+
+        monkeypatch.setattr(
+            "utils.user_resolution._session_email", _session_email
+        )
+
+    return _set
 
 
 @pytest.fixture

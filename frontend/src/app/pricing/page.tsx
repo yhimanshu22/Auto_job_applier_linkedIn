@@ -106,6 +106,9 @@ const PLANS = [
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
+const TRIAL_LOGIN_URL = `/login?callbackUrl=${encodeURIComponent("/pricing?trial=1")}`;
+const PRICING_LOGIN_URL = `/login?callbackUrl=${encodeURIComponent("/pricing")}`;
+
 function PricingPageContent() {
   const [loading, setLoading] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
@@ -115,13 +118,22 @@ function PricingPageContent() {
   const searchParams = useSearchParams();
   const autoTrialStarted = useRef(false);
 
+  const redirectToLogin = useCallback(
+    (callbackUrl: string = TRIAL_LOGIN_URL) => {
+      router.push(callbackUrl);
+    },
+    [router]
+  );
+
   const startFreeTrial = useCallback(async () => {
-    const email = session?.user?.email;
-    if (!email) {
-      router.push(`/login?callbackUrl=${encodeURIComponent("/pricing?trial=1")}`);
+    if (status === "loading") return;
+
+    if (status !== "authenticated" || !session?.user?.email) {
+      redirectToLogin();
       return;
     }
 
+    const email = session.user.email;
     setLoading("free_trial");
     try {
       const res = await fetch("/api/billing/start-free-trial", {
@@ -132,6 +144,10 @@ function PricingPageContent() {
       });
 
       const data = await res.json();
+      if (res.status === 401 || res.status === 403) {
+        redirectToLogin();
+        return;
+      }
       if (!res.ok) throw new Error(data.detail || "Failed to start trial");
 
       router.replace("/dashboard");
@@ -142,22 +158,31 @@ function PricingPageContent() {
     } finally {
       setLoading(null);
     }
-  }, [router, session?.user?.email]);
+  }, [redirectToLogin, router, session?.user?.email, status]);
 
   useEffect(() => {
-    if (status !== "authenticated" || searchParams.get("trial") !== "1") return;
-    if (autoTrialStarted.current) return;
-    autoTrialStarted.current = true;
-    void startFreeTrial();
-  }, [status, searchParams, startFreeTrial]);
+    if (searchParams.get("trial") !== "1") return;
+    if (status === "loading") return;
 
-  async function startStripeCheckout(plan: Exclude<PlanType, "free_trial">) {
-    const email = session?.user?.email;
-    if (!email) {
-      router.push(`/login?callbackUrl=${encodeURIComponent("/pricing")}`);
+    if (status !== "authenticated" || !session?.user?.email) {
+      redirectToLogin();
       return;
     }
 
+    if (autoTrialStarted.current) return;
+    autoTrialStarted.current = true;
+    void startFreeTrial();
+  }, [status, searchParams, startFreeTrial, session?.user?.email, redirectToLogin]);
+
+  async function startStripeCheckout(plan: Exclude<PlanType, "free_trial">) {
+    if (status === "loading") return;
+
+    if (status !== "authenticated" || !session?.user?.email) {
+      redirectToLogin(PRICING_LOGIN_URL);
+      return;
+    }
+
+    const email = session.user.email;
     setLoading(plan);
     try {
       const res = await fetch("/api/billing/create-checkout-session", {
@@ -173,6 +198,10 @@ function PricingPageContent() {
       });
 
       const data = await res.json();
+      if (res.status === 401 || res.status === 403) {
+        redirectToLogin(PRICING_LOGIN_URL);
+        return;
+      }
       if (!res.ok) throw new Error(data.detail || "Failed to start checkout");
       window.location.href = data.url;
     } catch (error: unknown) {
@@ -185,8 +214,19 @@ function PricingPageContent() {
   }
 
   function handleBuy(plan: PlanType) {
+    if (status === "loading") return;
+
     if (plan === "free_trial") {
+      if (status !== "authenticated" || !session?.user?.email) {
+        redirectToLogin();
+        return;
+      }
       void startFreeTrial();
+      return;
+    }
+
+    if (status !== "authenticated" || !session?.user?.email) {
+      redirectToLogin(PRICING_LOGIN_URL);
       return;
     }
     void startStripeCheckout(plan as Exclude<PlanType, "free_trial">);

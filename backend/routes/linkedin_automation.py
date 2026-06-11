@@ -183,7 +183,7 @@ class CalendarRequest(_CommonOpts):
 
 async def _start(action: str, params: dict[str, Any], request: Request) -> dict[str, Any]:
     claimed = params.pop("user_id", None)
-    user_id = await resolve_user_id(request, claimed or "local-user")
+    user_id = await resolve_user_id(request, claimed)
     account = params.pop("account", None)
     assert_can_run_automation(user_id)
     try:
@@ -378,7 +378,9 @@ async def get_task_artifact(request: Request, task_id: str, max_bytes: int = 200
 
 @router.get("/calendar")
 async def get_calendar_file(
-    file: str = "content_calendar.txt", max_bytes: int = 200_000
+    request: Request,
+    file: str = "content_calendar.txt",
+    max_bytes: int = 200_000,
 ):
     """Read a content-calendar file directly, independent of any task.
 
@@ -386,6 +388,7 @@ async def get_calendar_file(
     (or a custom output file) without forcing the user to dig into a task
     modal. Same path-traversal guard as ``/tasks/{id}/artifact``.
     """
+    await resolve_user_id(request)
     safe = (file or "").strip() or "content_calendar.txt"
     payload = _read_framework_file(safe, max_bytes)
     payload["action"] = "generate-calendar"
@@ -412,8 +415,9 @@ async def stop_task(request: Request, task_id: str):
 
 
 @router.get("/health")
-async def health():
+async def health(request: Request, user_id: Optional[str] = None):
     """Report whether the framework is reachable and a shared cookie is in place."""
+    await resolve_user_id(request, user_id)
     return _health_snapshot()
 
 

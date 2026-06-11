@@ -100,7 +100,8 @@ export default function BillingPage() {
       try {
         const [subRes, statsRes, accountsRes, activeRes] = await Promise.all([
           fetch(
-            `/api/billing/subscription?user_id=${encodeURIComponent(userId)}`
+            `/api/billing/subscription?user_id=${encodeURIComponent(userId)}`,
+            { credentials: "include" }
           ),
           fetch(
             `/api/applications/stats?user_id=${encodeURIComponent(userId)}`

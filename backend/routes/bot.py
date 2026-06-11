@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/bot", tags=["bot"])
 @router.post("/start")
 async def start_bot(request: Request, payload: dict = None):
     claimed = payload.get("user_id") if payload else None
-    user_id = await resolve_user_id(request, claimed or "local-user")
+    user_id = await resolve_user_id(request, claimed)
 
     assert_can_start_bot(user_id)
 
@@ -71,7 +71,8 @@ async def start_bot(request: Request, payload: dict = None):
 
 
 @router.post("/stop")
-async def stop_bot():
+async def stop_bot(request: Request):
+    await resolve_user_id(request)
     try:
         was_running = sv.supervisor_process is not None and sv.supervisor_process.poll() is None
 
@@ -101,7 +102,7 @@ async def stop_bot():
 
 
 @router.get("/status")
-async def get_bot_status(request: Request, user_id: str = "local-user"):
+async def get_bot_status(request: Request, user_id: str | None = None):
     user_id = await resolve_user_id(request, user_id)
     subscription = db.get_user_subscription(user_id)
     plan = subscription.get("plan", "free_trial") if subscription else "free_trial"
@@ -129,7 +130,8 @@ async def get_bot_status(request: Request, user_id: str = "local-user"):
 
 
 @router.get("/logs")
-async def get_bot_logs(lines: int = 120):
+async def get_bot_logs(request: Request, lines: int = 120):
+    await resolve_user_id(request)
     lines = max(20, min(int(lines), 500))
     log_dir = get_logs_dir()
     os.makedirs(log_dir, exist_ok=True)
@@ -182,13 +184,14 @@ async def get_bot_logs(lines: int = 120):
 
 
 @router.get("/runs")
-async def get_bot_runs(limit: int = 10):
-    runs = db.get_recent_bot_runs(limit)
+async def get_bot_runs(request: Request, user_id: str | None = None, limit: int = 10):
+    user_id = await resolve_user_id(request, user_id)
+    runs = db.get_recent_bot_runs(limit, user_id=user_id)
     return {"runs": runs}
 
 
 @router.get("/active")
-async def get_active_bot_count(request: Request, user_id: str = "local-user"):
+async def get_active_bot_count(request: Request, user_id: str | None = None):
     """Live count of concurrently running bot processes for the billing tile.
 
     Two sources contribute, deliberately:

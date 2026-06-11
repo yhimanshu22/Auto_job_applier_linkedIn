@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from db_manager import db
 from utils.user_resolution import resolve_user_id
+from services.plan_limits import PLAN_LIMITS
 
 load_dotenv()
 
@@ -84,7 +85,7 @@ async def create_checkout_session(payload: CheckoutRequest, request: Request):
 
 
 class FreeTrialRequest(BaseModel):
-    user_id: str = "local-user"
+    user_id: str | None = None
 
 
 @router.post("/start-free-trial")
@@ -233,27 +234,40 @@ def handle_payment_failed(invoice):
 
 
 class PortalRequest(BaseModel):
-    user_id: str = "local-user"
+    user_id: str | None = None
 
 ADMIN_EMAILS = ["himu09854@gmail.com", "local-user"]
 
+
+def _enrich_subscription(sub: dict) -> dict:
+    plan = (sub.get("plan") or "free_trial").lower()
+    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
+    out = dict(sub)
+    out["limit"] = limits["monthly_applications"]
+    out["max_accounts"] = limits["max_accounts"]
+    out["max_active_bots"] = limits["max_active_bots"]
+    return out
+
+
 @router.get("/subscription")
-async def get_subscription(request: Request, user_id: str = "local-user"):
+async def get_subscription(request: Request, user_id: str | None = None):
     user_id = await resolve_user_id(request, user_id)
     # Administrative Bypass for Project Admin
-    if user_id in ["himu09854@gmail.com", "local-user"]:
+    if user_id in ADMIN_EMAILS:
         return {
             "plan": "agency",
             "status": "active",
             "current_period_end": 4102444800,  # Far future (Year 2100)
             "billing_cycle": "yearly",
-            "limit": 3000
+            "limit": 3000,
+            "max_accounts": 10,
+            "max_active_bots": 5,
         }
-        
+
     sub = db.get_user_subscription(user_id)
     if not sub:
         return {"plan": "free", "status": "inactive", "limit": 0}
-    return sub
+    return _enrich_subscription(sub)
 
 
 @router.post("/create-portal-session")

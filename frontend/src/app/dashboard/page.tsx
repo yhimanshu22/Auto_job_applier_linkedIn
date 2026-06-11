@@ -40,6 +40,37 @@ function formatShortTime(iso: string | null | undefined) {
   }
 }
 
+function formatPeriodEnd(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  try {
+    if (typeof value === "number") {
+      return new Date(value * 1000).toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    }
+    return new Date(String(value)).toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch {
+    return String(value);
+  }
+}
+
+function getSubAccess(sub: { plan?: string; status?: string } | null) {
+  if (!sub) {
+    return { canApply: false, isTrial: false, isExpiredTrial: false, needsUpgrade: true };
+  }
+  const status = String(sub.status || "").toLowerCase();
+  const plan = String(sub.plan || "").toLowerCase();
+  const canApply = status === "active" || status === "trialing";
+  const isTrial = plan === "free_trial" && status === "trialing";
+  const isExpiredTrial =
+    plan === "free_trial" && (status === "expired" || status === "inactive");
+  return { canApply, isTrial, isExpiredTrial, needsUpgrade: !canApply };
+}
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState(CONFIG_FILES[0]);
   const [content, setContent] = useState("");
@@ -127,7 +158,10 @@ export default function Dashboard() {
 
     const fetchSubscription = async () => {
       try {
-        const res = await fetch(`/api/billing/subscription?user_id=${userId}`);
+        const res = await fetch(
+          `/api/billing/subscription?user_id=${encodeURIComponent(userId)}`,
+          { credentials: "include" }
+        );
         if (res.ok) {
           const data = await res.json();
           setSubscription(data);
@@ -452,9 +486,9 @@ export default function Dashboard() {
     document.getElementById("dashboard-configuration")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const subActive =
-    subscription &&
-    (subscription.status === "active" || subscription.status === "trialing");
+  const subAccess = getSubAccess(subscription);
+  const subActive = subAccess.canApply;
+  const usageLimit = subscription?.limit ?? (subAccess.isTrial ? 10 : 0);
   const startDisabled =
     isLoading ||
     isStarting ||
@@ -533,9 +567,10 @@ export default function Dashboard() {
                   <span className={`text-[9px] font-bold uppercase tracking-wider ${
                     subscription.plan === 'pro' ? 'text-indigo-400' :
                     subscription.plan === 'agency' ? 'text-amber-400' :
+                    subscription.plan === 'free_trial' ? 'text-amber-400' :
                     'text-zinc-500'
                   }`}>
-                    {subscription.plan}
+                    {subscription.plan === 'free_trial' ? 'Free Trial' : subscription.plan}
                   </span>
                 </div>
               )}
@@ -599,8 +634,36 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Subscription Banner */}
-      {subscription && subscription.status !== 'active' && subscription.status !== 'trialing' && (
+      {/* Free trial active banner */}
+      {subAccess.isTrial && subscription && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+          <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="size-10 bg-amber-500/20 rounded-full flex items-center justify-center text-amber-400">
+                <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="text-white font-bold">Free Trial Active</h4>
+                <p className="text-sm text-amber-200/80">
+                  24-hour trial · Up to {usageLimit} applications · 1 LinkedIn account · Expires{" "}
+                  {formatPeriodEnd(subscription.current_period_end)}
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/pricing"
+              className="px-6 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold rounded-xl transition-all shrink-0 text-sm"
+            >
+              Upgrade Anytime
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Upgrade banner — only when no active trial or paid plan */}
+      {subscription && subAccess.needsUpgrade && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
           <div className="bg-indigo-600/20 border border-indigo-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -610,15 +673,27 @@ export default function Dashboard() {
                 </svg>
               </div>
               <div>
-                <h4 className="text-white font-bold">Upgrade to {subscription.plan === 'free' ? 'Start Applying' : 'Reactivate'}</h4>
-                <p className="text-sm text-indigo-200/80">You need an active subscription to launch the bot and automate your applications.</p>
+                <h4 className="text-white font-bold">
+                  {subAccess.isExpiredTrial
+                    ? "Trial Expired"
+                    : subscription.plan === "free"
+                      ? "Start Your Free Trial"
+                      : "Reactivate Your Plan"}
+                </h4>
+                <p className="text-sm text-indigo-200/80">
+                  {subAccess.isExpiredTrial
+                    ? "Your 24-hour free trial has ended. Upgrade to keep applying automatically."
+                    : subscription.plan === "free"
+                      ? "Try LinkdApply free for 24 hours — 10 applications, no credit card required."
+                      : "You need an active subscription to launch the bot and automate your applications."}
+                </p>
               </div>
             </div>
-            <Link 
-              href="/pricing"
+            <Link
+              href={subscription.plan === "free" || subAccess.isExpiredTrial ? "/pricing?trial=1" : "/pricing"}
               className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shrink-0"
             >
-              View Plans
+              {subscription.plan === "free" || subAccess.isExpiredTrial ? "Start Free Trial" : "View Plans"}
             </Link>
           </div>
         </div>
@@ -716,7 +791,7 @@ export default function Dashboard() {
                 <div className="text-lg font-bold text-white tracking-tight">
                   {stats?.monthly_count ?? 0}
                   <span className="text-zinc-600 text-xs font-medium ml-1">
-                    / {applyLimit || subscription?.limit || "?"}
+                    / {applyLimit || usageLimit || "?"}
                   </span>
                 </div>
                 <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Monthly quota</div>
@@ -738,13 +813,24 @@ export default function Dashboard() {
                   type="button"
                   onClick={() => {
                     if (!subActive) {
-                      window.location.href = "/pricing";
+                      window.location.href =
+                        subscription?.plan === "free" || subAccess.isExpiredTrial
+                          ? "/pricing?trial=1"
+                          : "/pricing";
                       return;
                     }
                     setShowConfirm(true);
                   }}
                   disabled={startDisabled}
-                  title={!isBackendHealthy ? "Backend offline" : !subActive ? "Subscription required" : undefined}
+                  title={
+                    !isBackendHealthy
+                      ? "Backend offline"
+                      : !subActive
+                        ? subAccess.isExpiredTrial
+                          ? "Trial expired — upgrade to continue"
+                          : "Start a free trial or subscribe to apply"
+                        : undefined
+                  }
                   className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                     subActive ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"
                   }`}
