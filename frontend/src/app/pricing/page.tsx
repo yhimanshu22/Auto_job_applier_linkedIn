@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 
 import PricingCard from '@/components/PricingCard';
@@ -106,58 +106,79 @@ const PLANS = [
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
-export default function PricingPage() {
+function PricingPageContent() {
   const [loading, setLoading] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
   const [currency, setCurrency] = useState<Currency>("inr");
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const autoTrialStarted = useRef(false);
 
-  async function startFreeTrial() {
+  const startFreeTrial = useCallback(async () => {
+    const email = session?.user?.email;
+    if (!email) {
+      router.push(`/login?callbackUrl=${encodeURIComponent("/pricing?trial=1")}`);
+      return;
+    }
+
     setLoading("free_trial");
     try {
       const res = await fetch("/api/billing/start-free-trial", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          user_id: session?.user?.email || "local-user",
-          email: session?.user?.email || "user@example.com"
-        }),
+        body: JSON.stringify({ user_id: email }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Failed to start trial");
-      
-      alert("Trial activated! Redirecting to dashboard...");
-      router.push("/dashboard");
-    } catch (error: any) {
+
+      router.replace("/dashboard");
+    } catch (error: unknown) {
       console.error(error);
-      alert(error.message || "Failed to start free trial.");
+      const message = error instanceof Error ? error.message : "Failed to start free trial.";
+      alert(message);
     } finally {
       setLoading(null);
     }
-  }
+  }, [router, session?.user?.email]);
+
+  useEffect(() => {
+    if (status !== "authenticated" || searchParams.get("trial") !== "1") return;
+    if (autoTrialStarted.current) return;
+    autoTrialStarted.current = true;
+    void startFreeTrial();
+  }, [status, searchParams, startFreeTrial]);
 
   async function startStripeCheckout(plan: Exclude<PlanType, "free_trial">) {
+    const email = session?.user?.email;
+    if (!email) {
+      router.push(`/login?callbackUrl=${encodeURIComponent("/pricing")}`);
+      return;
+    }
+
     setLoading(plan);
     try {
       const res = await fetch("/api/billing/create-checkout-session", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           plan,
           billing_cycle: billingCycle,
-          user_id: session?.user?.email || "local-user",
-          email: session?.user?.email || "user@example.com",
+          user_id: email,
+          email,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Failed to start checkout");
       window.location.href = data.url;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      alert(error.message || "Failed to initiate checkout. Is the backend running?");
+      const message = error instanceof Error ? error.message : "Failed to initiate checkout. Is the backend running?";
+      alert(message);
     } finally {
       setLoading(null);
     }
@@ -165,10 +186,10 @@ export default function PricingPage() {
 
   function handleBuy(plan: PlanType) {
     if (plan === "free_trial") {
-      startFreeTrial();
+      void startFreeTrial();
       return;
     }
-    startStripeCheckout(plan as Exclude<PlanType, "free_trial">);
+    void startStripeCheckout(plan as Exclude<PlanType, "free_trial">);
   }
 
   return (
@@ -271,6 +292,20 @@ export default function PricingPage() {
 
       <Footer />
     </div>
+  );
+}
+
+export default function PricingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-white">
+          <div className="size-6 animate-spin rounded-full border-2 border-zinc-200 border-t-accent" />
+        </div>
+      }
+    >
+      <PricingPageContent />
+    </Suspense>
   );
 }
 

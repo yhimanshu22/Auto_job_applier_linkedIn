@@ -1,20 +1,23 @@
 "use client";
 
-import React from "react";
+import React, { Suspense } from "react";
 import Link from "next/link";
 import { getProviders, signIn, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-export default function LoginPage() {
+import { useRouter, useSearchParams } from "next/navigation";
+
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
   const { status } = useSession();
   const [isLoading, setIsLoading] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (status === "authenticated") {
-      router.push("/dashboard");
+      router.push(callbackUrl);
     }
-  }, [status, router]);
+  }, [status, router, callbackUrl]);
 
   React.useEffect(() => {
     getProviders().then((providers) => {
@@ -29,7 +32,7 @@ export default function LoginPage() {
   const handleGoogleSignIn = () => {
     if (isLoading || authError) return;
     setIsLoading(true);
-    signIn("google", { callbackUrl: "/dashboard" });
+    signIn("google", { callbackUrl });
   };
 
   return (
@@ -85,5 +88,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+          <div className="size-6 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   );
 }

@@ -90,17 +90,14 @@ class FreeTrialRequest(BaseModel):
 @router.post("/start-free-trial")
 async def start_free_trial(payload: FreeTrialRequest, request: Request):
     user_id = await resolve_user_id(request, payload.user_id)
-    # Check if user already has/had a trial or paid plan
     sub = db.get_user_subscription(user_id)
-    
-    if sub and sub.get("plan") != "free":
-        # If they already have a plan (trial or paid), don't allow another trial
+
+    if sub:
         raise HTTPException(
-            status_code=400, 
-            detail="You have already used your trial or have an active plan."
+            status_code=400,
+            detail="You have already used your trial or have an active plan.",
         )
 
-    # Set trial to expire in 24 hours
     expiry = datetime.utcnow() + timedelta(hours=24)
     
     try:
