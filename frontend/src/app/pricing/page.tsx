@@ -9,6 +9,7 @@ import PricingCard from '@/components/PricingCard';
 
 type PlanType = "free_trial" | "starter" | "pro" | "agency";
 type BillingCycle = "monthly" | "yearly";
+type Currency = "inr" | "usd";
 
 const PLANS = [
   {
@@ -17,6 +18,9 @@ const PLANS = [
     monthlyPrice: 0,
     yearlyMonthlyPrice: 0,
     yearlyTotal: 0,
+    inrMonthlyPrice: 0,
+    inrYearlyMonthlyPrice: 0,
+    inrYearlyTotal: 0,
     suffix: "1 day",
     badge: "No card required",
     description: "Try LinkdApply for 24 hours with limited applications.",
@@ -36,6 +40,9 @@ const PLANS = [
     monthlyPrice: 19,
     yearlyMonthlyPrice: 15,
     yearlyTotal: 180,
+    inrMonthlyPrice: 1599,
+    inrYearlyMonthlyPrice: 1299,
+    inrYearlyTotal: 15588,
     description: "For individual job seekers who want consistent applications.",
     features: [
       "1 LinkedIn account",
@@ -54,6 +61,9 @@ const PLANS = [
     monthlyPrice: 49,
     yearlyMonthlyPrice: 39,
     yearlyTotal: 468,
+    inrMonthlyPrice: 3999,
+    inrYearlyMonthlyPrice: 3299,
+    inrYearlyTotal: 39588,
     badge: "Most Popular",
     highlighted: true,
     description: "For serious job seekers who want AI answers and higher limits.",
@@ -75,6 +85,9 @@ const PLANS = [
     monthlyPrice: 149,
     yearlyMonthlyPrice: 119,
     yearlyTotal: 1428,
+    inrMonthlyPrice: 11999,
+    inrYearlyMonthlyPrice: 9999,
+    inrYearlyTotal: 119988,
     description: "For agencies and power users managing multiple accounts.",
     features: [
       "10 LinkedIn accounts",
@@ -96,6 +109,7 @@ import Footer from '@/components/Footer';
 export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
+  const [currency, setCurrency] = useState<Currency>("inr");
   const { data: session } = useSession();
   const router = useRouter();
 
@@ -180,8 +194,34 @@ export default function PricingPage() {
               Try LinkdApply for 24 hours, then choose the plan that matches your application volume.
             </p>
 
+            {/* Currency Toggle */}
+            <div className="mt-8 flex justify-center">
+              <div className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 p-1 shadow-sm">
+                <button
+                  onClick={() => setCurrency("inr")}
+                  className={`rounded-full px-6 py-2 text-sm font-bold transition-all ${
+                    currency === "inr"
+                      ? "bg-white text-zinc-950 shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-900"
+                  }`}
+                >
+                  ₹ INR (India)
+                </button>
+                <button
+                  onClick={() => setCurrency("usd")}
+                  className={`rounded-full px-6 py-2 text-sm font-bold transition-all ${
+                    currency === "usd"
+                      ? "bg-white text-zinc-950 shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-900"
+                  }`}
+                >
+                  $ USD (International)
+                </button>
+              </div>
+            </div>
+
             {/* Billing Cycle Toggle */}
-            <div className="mt-8 inline-flex rounded-full border border-zinc-200 bg-zinc-50 p-1 shadow-sm">
+            <div className="mt-4 inline-flex rounded-full border border-zinc-200 bg-zinc-50 p-1 shadow-sm">
               <button
                 onClick={() => setBillingCycle("monthly")}
                 className={`rounded-full px-8 py-2.5 text-sm font-bold transition-all ${
@@ -209,17 +249,23 @@ export default function PricingPage() {
             </div>
           </div>
 
-          <div className="mt-20 space-y-12 lg:space-y-0 lg:grid lg:grid-cols-4 lg:gap-x-4 items-stretch mb-24">
+          <div className="mt-20 space-y-12 lg:space-y-0 lg:grid lg:grid-cols-4 lg:gap-x-4 items-stretch mb-12">
             {PLANS.map((plan) => (
               <PricingCard 
                 key={plan.key}
                 plan={plan}
                 billingCycle={billingCycle}
+                currency={currency}
                 loading={loading === plan.key}
                 onBuy={() => handleBuy(plan.key as PlanType)}
               />
             ))}
           </div>
+
+          <p className="text-center text-sm text-zinc-500 max-w-3xl mx-auto mb-24">
+            All prices for Indian customers are listed in Indian Rupees (INR) and are inclusive of applicable
+            taxes. International payments are processed securely in USD via Stripe.
+          </p>
         </div>
       </main>
 

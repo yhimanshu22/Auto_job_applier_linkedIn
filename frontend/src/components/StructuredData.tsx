@@ -26,7 +26,7 @@ export default function StructuredData() {
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "LinkdApply",
-    "url": "https://linkdapply.com",
+    "url": "https://linkdapply.duckdns.org",
     "sameAs": [
       "https://twitter.com/linkdapply",
       "https://linkedin.com/company/linkdapply"

@@ -13,7 +13,7 @@ const ebGaramond = EB_Garamond({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://linkdapply.com'),
+  metadataBase: new URL('https://linkdapply.duckdns.org'),
   title: {
     default: "LinkdApply | #1 AI LinkedIn Job Application Automation Bot",
     template: "%s | LinkdApply"
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://linkdapply.com",
+    url: "https://linkdapply.duckdns.org",
     siteName: "LinkdApply",
     title: "LinkdApply | AI-Powered LinkedIn Job Automation",
     description: "Land your dream job faster. Automate applications with the world's most human-like AI bot.",
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
     },
   },
   alternates: {
-    canonical: 'https://linkdapply.com',
+    canonical: 'https://linkdapply.duckdns.org',
   },
   icons: {
     icon: "/icon.png",

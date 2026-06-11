@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: '/dashboard/',
     },
-    sitemap: 'https://linkdapply.com/sitemap.xml',
+    sitemap: 'https://linkdapply.duckdns.org/sitemap.xml',
   }
 }

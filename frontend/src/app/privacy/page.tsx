@@ -153,8 +153,8 @@ export default function PrivacyPage() {
               personal information, and to object to or restrict certain processing. You may also have the
               right to lodge a complaint with a supervisory authority. To exercise these rights, contact us
               via{' '}
-              <Link href="/support" className="text-zinc-900 underline underline-offset-2 hover:text-zinc-600">
-                Support
+              <Link href="/contact" className="text-zinc-900 underline underline-offset-2 hover:text-zinc-600">
+                Contact Us
               </Link>
               . We will respond consistent with applicable law.
             </p>
@@ -191,8 +191,8 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-bold text-zinc-900">13. Contact</h2>
             <p>
               Questions about this Privacy Policy: please reach out through{' '}
-              <Link href="/support" className="text-zinc-900 underline underline-offset-2 hover:text-zinc-600">
-                Support
+              <Link href="/contact" className="text-zinc-900 underline underline-offset-2 hover:text-zinc-600">
+                Contact Us
               </Link>
               .
             </p>

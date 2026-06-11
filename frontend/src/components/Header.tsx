@@ -58,6 +58,13 @@ export default function Header() {
             >
               About
             </Link>
+            <Link 
+              className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
+              href="/contact"
+              title="Contact Us"
+            >
+              Contact
+            </Link>
           </nav>
         </div>
         <div className="flex items-center gap-4">

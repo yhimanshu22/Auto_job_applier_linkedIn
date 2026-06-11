@@ -44,10 +44,23 @@ const nextConfig: NextConfig = {
     root: path.join(__dirname),
   },
   async rewrites() {
+    // Use fallback so Next.js App Router handlers (e.g. /api/auth/*) win first.
+    // The default array form is afterFiles and can proxy auth to FastAPI (404).
+    return {
+      fallback: [
+        {
+          source: "/api/:path*",
+          destination: `${backendUrl}/api/:path*`,
+        },
+      ],
+    };
+  },
+  async redirects() {
     return [
       {
-        source: "/api/:path*",
-        destination: `${backendUrl}/api/:path*`,
+        source: "/support",
+        destination: "/contact",
+        permanent: true,
       },
     ];
   },
