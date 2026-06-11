@@ -8,7 +8,7 @@ export default function BillingSettingsPage() {
   async function openBillingPortal() {
     setLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/billing/create-portal-session", {
+      const res = await fetch("/api/billing/create-portal-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

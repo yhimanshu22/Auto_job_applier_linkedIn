@@ -18,6 +18,18 @@ SENSITIVE_KEYS = [
     "linkedin_extra_accounts",  # JSON list of {username, password}
 ]
 
+# The pseudo-user that owns shared/template config rows. Single-user installs
+# (no login) read and write this namespace directly. Named "local-user" because
+# that's the id legacy data (applications, tasks) was already stored under.
+DEFAULT_USER = "local-user"
+
+# Behavioral categories that real users inherit from DEFAULT_USER when they
+# have no row of their own. Identity-ish categories (personals, secrets,
+# linkedin_automation) are deliberately excluded — one user must never see
+# another's name, credentials, or API keys. Encrypted rows are never inherited
+# regardless of category.
+INHERIT_CATEGORIES = {"settings", "search", "questions"}
+
 
 def _ts_to_utc_iso(dt: datetime | None) -> str | None:
     """Serialize DB timestamps as RFC3339 UTC so browsers parse local time correctly."""
@@ -57,46 +69,79 @@ class DatabaseManager:
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
 
     def _migrate_runtime_columns(self):
-        """Best-effort additive schema migration for SQLite-backed installs.
+        """Best-effort additive schema migration (no Alembic for two changes).
 
-        We don't pull in Alembic for a single-column change. Each entry is a
-        ``(table, column, ddl_type)`` triple; we look up the table via
-        ``PRAGMA table_info`` and ``ALTER TABLE ... ADD COLUMN`` when missing.
-        Postgres / MySQL ignore this path (handled by proper migrations there).
+        Handles:
+          * ``automation_tasks.account_username`` (SQLite-only legacy add).
+          * ``configs.user_id`` — multi-tenant config namespace. Existing rows
+            are assigned to ``DEFAULT_USER`` and the primary key becomes
+            ``(user_id, key)``. Implemented for both SQLite and Postgres.
         """
-        if "sqlite" not in self.db_url:
-            return
-
-        # ``automation_tasks.account_username`` was added after some installs
-        # already created the table — backfill it without losing rows.
-        migrations = [
-            ("automation_tasks", "account_username", "TEXT"),
-        ]
         try:
             with self.engine.begin() as conn:
-                for table, column, ddl in migrations:
-                    cols = {
-                        row[1]
-                        for row in conn.exec_driver_sql(
-                            f"PRAGMA table_info({table})"
-                        ).fetchall()
-                    }
-                    if not cols:
-                        # Table doesn't exist (fresh DB); create_all already
-                        # made it with the column included.
-                        continue
-                    if column not in cols:
-                        conn.exec_driver_sql(
-                            f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"
-                        )
+                if "sqlite" in self.db_url:
+                    self._sqlite_migrations(conn)
+                elif self.db_url.startswith("postgresql"):
+                    self._postgres_migrations(conn)
         except Exception as exc:
             import logging
             logging.warning(f"Runtime schema migration skipped: {exc}")
 
+    @staticmethod
+    def _sqlite_migrations(conn):
+        # automation_tasks.account_username (additive)
+        cols = {
+            row[1]
+            for row in conn.exec_driver_sql(
+                "PRAGMA table_info(automation_tasks)"
+            ).fetchall()
+        }
+        if cols and "account_username" not in cols:
+            conn.exec_driver_sql(
+                "ALTER TABLE automation_tasks ADD COLUMN account_username TEXT"
+            )
+
+        # configs.user_id — SQLite can't alter a PK, so rebuild the table.
+        cols = {
+            row[1]
+            for row in conn.exec_driver_sql("PRAGMA table_info(configs)").fetchall()
+        }
+        if cols and "user_id" not in cols:
+            conn.exec_driver_sql(
+                "CREATE TABLE configs_new ("
+                f"user_id TEXT NOT NULL DEFAULT '{DEFAULT_USER}', "
+                "key TEXT NOT NULL, "
+                "value TEXT, category TEXT, is_encrypted INTEGER DEFAULT 0, "
+                "PRIMARY KEY (user_id, key))"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO configs_new (user_id, key, value, category, is_encrypted) "
+                f"SELECT '{DEFAULT_USER}', key, value, category, is_encrypted FROM configs"
+            )
+            conn.exec_driver_sql("DROP TABLE configs")
+            conn.exec_driver_sql("ALTER TABLE configs_new RENAME TO configs")
+
+    @staticmethod
+    def _postgres_migrations(conn):
+        cols = {
+            r[0]
+            for r in conn.exec_driver_sql(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'configs'"
+            ).fetchall()
+        }
+        if cols and "user_id" not in cols:
+            conn.exec_driver_sql(
+                "ALTER TABLE configs ADD COLUMN user_id VARCHAR NOT NULL "
+                f"DEFAULT '{DEFAULT_USER}'"
+            )
+            conn.exec_driver_sql("ALTER TABLE configs DROP CONSTRAINT configs_pkey")
+            conn.exec_driver_sql("ALTER TABLE configs ADD PRIMARY KEY (user_id, key)")
+
     def get_session(self) -> Session:
         return self.SessionLocal()
 
-    def set_config(self, key, value, category):
+    def set_config(self, key, value, category, user_id=DEFAULT_USER):
         is_encrypted = 1 if key in SENSITIVE_KEYS else 0
         val_str = json.dumps(value)
         
@@ -104,17 +149,17 @@ class DatabaseManager:
             val_str = encrypt_data(val_str)
             
         with self.get_session() as session:
-            config = session.get(Config, key)
+            config = session.get(Config, (user_id, key))
             if config:
                 config.value = val_str
                 config.category = category
                 config.is_encrypted = is_encrypted
             else:
-                config = Config(key=key, value=val_str, category=category, is_encrypted=is_encrypted)
+                config = Config(user_id=user_id, key=key, value=val_str, category=category, is_encrypted=is_encrypted)
                 session.add(config)
             session.commit()
 
-    def delete_config(self, key, category=None):
+    def delete_config(self, key, category=None, user_id=DEFAULT_USER):
         """Remove a config row outright (no-op if it doesn't exist).
 
         Used by the LinkedIn automation form-defaults clear flow — writing
@@ -127,7 +172,9 @@ class DatabaseManager:
         share a key name in the future.
         """
         with self.get_session() as session:
-            q = session.query(Config).filter(Config.key == key)
+            q = session.query(Config).filter(
+                Config.key == key, Config.user_id == user_id
+            )
             if category is not None:
                 q = q.filter(Config.category == category)
             row = q.first()
@@ -137,25 +184,49 @@ class DatabaseManager:
             session.commit()
             return True
 
-    def get_config(self, key, default=None):
+    @staticmethod
+    def _decode_config(config):
+        val_str = config.value
+        if config.is_encrypted:
+            val_str = decrypt_data(val_str)
+        return json.loads(val_str)
+
+    def get_config(self, key, default=None, user_id=DEFAULT_USER):
         with self.get_session() as session:
-            config = session.get(Config, key)
+            config = session.get(Config, (user_id, key))
+            if config is None and user_id != DEFAULT_USER:
+                # Fall back to the shared template row — but never inherit
+                # secrets/identity (see INHERIT_CATEGORIES).
+                fallback = session.get(Config, (DEFAULT_USER, key))
+                if (
+                    fallback is not None
+                    and not fallback.is_encrypted
+                    and fallback.category in INHERIT_CATEGORIES
+                ):
+                    config = fallback
             if config:
-                val_str = config.value
-                if config.is_encrypted:
-                    val_str = decrypt_data(val_str)
-                return json.loads(val_str)
+                return self._decode_config(config)
             return default
 
-    def get_all_by_category(self, category):
+    def get_all_by_category(self, category, user_id=DEFAULT_USER):
         with self.get_session() as session:
-            configs = session.query(Config).filter(Config.category == category).all()
             result = {}
+            # Shared template values first (only for inheritable categories,
+            # never encrypted rows), then the user's own rows on top.
+            if user_id != DEFAULT_USER and category in INHERIT_CATEGORIES:
+                defaults = session.query(Config).filter(
+                    Config.category == category,
+                    Config.user_id == DEFAULT_USER,
+                    Config.is_encrypted == 0,
+                ).all()
+                for config in defaults:
+                    result[config.key] = self._decode_config(config)
+
+            configs = session.query(Config).filter(
+                Config.category == category, Config.user_id == user_id
+            ).all()
             for config in configs:
-                val_str = config.value
-                if config.is_encrypted:
-                    val_str = decrypt_data(val_str)
-                result[config.key] = json.loads(val_str)
+                result[config.key] = self._decode_config(config)
             return result
 
     def upsert_subscription(self, user_id, **kwargs):

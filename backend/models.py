@@ -6,6 +6,9 @@ Base = declarative_base()
 
 class Config(Base):
     __tablename__ = "configs"
+    # Multi-tenant: each user has their own config namespace. "local-user"
+    # holds shared template values that non-secret categories inherit from.
+    user_id = Column(String, primary_key=True, default="local-user")
     key = Column(String, primary_key=True)
     value = Column(Text)
     category = Column(String)

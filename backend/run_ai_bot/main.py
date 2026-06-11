@@ -3,7 +3,7 @@
 import os
 import sys
 
-import pyautogui
+from modules import gui_safe as pyautogui
 
 from run_ai_bot.bootstrap_env import *
 from run_ai_bot.login import is_logged_in_LN, login_LN

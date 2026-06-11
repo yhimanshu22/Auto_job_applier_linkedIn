@@ -69,3 +69,5 @@ Thumbs.db
 
 backend/data.db
 backend/test_data.db
+backend/data.db.bak*
+backend/seed_log*.txt

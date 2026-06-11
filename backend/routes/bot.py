@@ -5,20 +5,22 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from app_paths import get_base_path, get_logs_dir, get_runtime_writable_root
 from db_manager import db
 from services.linkedin_env import apply_dashboard_linkedin_credentials
 from services.plan_limits import PLAN_LIMITS, assert_can_start_bot
 from services import supervisor_state as sv
+from utils.user_resolution import resolve_user_id
 
 router = APIRouter(prefix="/api/bot", tags=["bot"])
 
 
 @router.post("/start")
-async def start_bot(payload: dict = None):
-    user_id = payload.get("user_id", "local-user") if payload else "local-user"
+async def start_bot(request: Request, payload: dict = None):
+    claimed = payload.get("user_id") if payload else None
+    user_id = await resolve_user_id(request, claimed or "local-user")
 
     assert_can_start_bot(user_id)
 
@@ -36,7 +38,7 @@ async def start_bot(payload: dict = None):
         logging.info(f"Starting supervisor with {cmd} in {cwd}")
 
         env = os.environ.copy()
-        apply_dashboard_linkedin_credentials(env)
+        apply_dashboard_linkedin_credentials(env, user_id=user_id)
         env["USER_ID"] = user_id
 
         sv.close_supervisor_log()
@@ -99,7 +101,8 @@ async def stop_bot():
 
 
 @router.get("/status")
-async def get_bot_status(user_id: str = "local-user"):
+async def get_bot_status(request: Request, user_id: str = "local-user"):
+    user_id = await resolve_user_id(request, user_id)
     subscription = db.get_user_subscription(user_id)
     plan = subscription.get("plan", "free_trial") if subscription else "free_trial"
 
@@ -185,7 +188,7 @@ async def get_bot_runs(limit: int = 10):
 
 
 @router.get("/active")
-async def get_active_bot_count(user_id: str = "local-user"):
+async def get_active_bot_count(request: Request, user_id: str = "local-user"):
     """Live count of concurrently running bot processes for the billing tile.
 
     Two sources contribute, deliberately:
@@ -199,6 +202,7 @@ async def get_active_bot_count(user_id: str = "local-user"):
     Returns ``{active, supervisor, automation_tasks, limit, plan}`` so the
     frontend can render ``active / limit`` and optionally break it down.
     """
+    user_id = await resolve_user_id(request, user_id)
     automation = int(
         db.get_automation_task_stats(user_id=user_id).get("running", 0)
     )

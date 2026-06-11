@@ -3,7 +3,7 @@ from config.config_bridge import *
 from modules.helpers import print_lg, critical_error_log, convert_to_json
 from modules.ai.prompts import *
 
-from pyautogui import confirm
+from modules.gui_safe import confirm
 from openai import OpenAI
 from openai.types.model import Model
 from openai.types.chat import ChatCompletion, ChatCompletionChunk

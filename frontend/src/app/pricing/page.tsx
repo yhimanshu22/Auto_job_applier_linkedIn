@@ -102,7 +102,7 @@ export default function PricingPage() {
   async function startFreeTrial() {
     setLoading("free_trial");
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/billing/start-free-trial", {
+      const res = await fetch("/api/billing/start-free-trial", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -127,7 +127,7 @@ export default function PricingPage() {
   async function startStripeCheckout(plan: Exclude<PlanType, "free_trial">) {
     setLoading(plan);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/billing/create-checkout-session", {
+      const res = await fetch("/api/billing/create-checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

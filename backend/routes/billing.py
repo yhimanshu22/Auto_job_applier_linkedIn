@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from db_manager import db
+from utils.user_resolution import resolve_user_id
 
 load_dotenv()
 
@@ -38,7 +39,9 @@ class CheckoutRequest(BaseModel):
 
 
 @router.post("/create-checkout-session")
-async def create_checkout_session(payload: CheckoutRequest):
+async def create_checkout_session(payload: CheckoutRequest, request: Request):
+    # The verified session (when present) decides which account gets the plan.
+    user_id = await resolve_user_id(request, payload.user_id)
     price_id = PRICE_MAP.get(payload.billing_cycle, {}).get(payload.plan)
 
     if not price_id:
@@ -61,13 +64,13 @@ async def create_checkout_session(payload: CheckoutRequest):
             success_url=f"{FRONTEND_URL}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{FRONTEND_URL}/billing/cancel",
             metadata={
-                "user_id": payload.user_id,
+                "user_id": user_id,
                 "plan": payload.plan,
                 "billing_cycle": payload.billing_cycle,
             },
             subscription_data={
                 "metadata": {
-                    "user_id": payload.user_id,
+                    "user_id": user_id,
                     "plan": payload.plan,
                     "billing_cycle": payload.billing_cycle,
                 }
@@ -85,9 +88,10 @@ class FreeTrialRequest(BaseModel):
 
 
 @router.post("/start-free-trial")
-async def start_free_trial(payload: FreeTrialRequest):
+async def start_free_trial(payload: FreeTrialRequest, request: Request):
+    user_id = await resolve_user_id(request, payload.user_id)
     # Check if user already has/had a trial or paid plan
-    sub = db.get_user_subscription(payload.user_id)
+    sub = db.get_user_subscription(user_id)
     
     if sub and sub.get("plan") != "free":
         # If they already have a plan (trial or paid), don't allow another trial
@@ -101,7 +105,7 @@ async def start_free_trial(payload: FreeTrialRequest):
     
     try:
         db.upsert_subscription(
-            user_id=payload.user_id,
+            user_id=user_id,
             plan="free_trial",
             status="trialing",
             current_period_end=expiry.isoformat()
@@ -237,7 +241,8 @@ class PortalRequest(BaseModel):
 ADMIN_EMAILS = ["himu09854@gmail.com", "local-user"]
 
 @router.get("/subscription")
-async def get_subscription(user_id: str = "local-user"):
+async def get_subscription(request: Request, user_id: str = "local-user"):
+    user_id = await resolve_user_id(request, user_id)
     # Administrative Bypass for Project Admin
     if user_id in ["himu09854@gmail.com", "local-user"]:
         return {
@@ -255,9 +260,10 @@ async def get_subscription(user_id: str = "local-user"):
 
 
 @router.post("/create-portal-session")
-async def create_portal_session(payload: PortalRequest):
+async def create_portal_session(payload: PortalRequest, request: Request):
+    user_id = await resolve_user_id(request, payload.user_id)
     try:
-        sub = db.get_user_subscription(payload.user_id)
+        sub = db.get_user_subscription(user_id)
         if not sub or not sub.get("stripe_customer_id"):
             raise HTTPException(status_code=400, detail="No active Stripe customer found for this user.")
 

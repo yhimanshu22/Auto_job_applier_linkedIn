@@ -8,17 +8,17 @@ subprocess at launch time.
 import logging
 import os
 
-from db_manager import db
+from db_manager import DEFAULT_USER, db
 
 
-def apply_dashboard_linkedin_credentials(env: dict) -> None:
+def apply_dashboard_linkedin_credentials(env: dict, user_id: str = DEFAULT_USER) -> None:
     """
     Inject LinkedIn credentials from DB (dashboard) into env for the supervisor / bot:
     - Primary: username + password -> LINKEDIN_USERNAME, LINKEDIN_PASSWORD
     - Additional: linkedin_extra_accounts JSON -> LINKEDIN_USERNAME_1..N, LINKEDIN_PASSWORD_1..N
     """
     try:
-        secrets_cfg = db.get_all_by_category("secrets")
+        secrets_cfg = db.get_all_by_category("secrets", user_id=user_id)
     except Exception:
         logging.warning("Could not read secrets from DB for LinkedIn credentials.")
         return
@@ -42,9 +42,9 @@ def apply_dashboard_linkedin_credentials(env: dict) -> None:
             env[f"LINKEDIN_PASSWORD_{i}"] = str(p)
 
 
-def preview_env_with_dashboard_credentials() -> dict:
+def preview_env_with_dashboard_credentials(user_id: str = DEFAULT_USER) -> dict:
     env = os.environ.copy()
-    apply_dashboard_linkedin_credentials(env)
+    apply_dashboard_linkedin_credentials(env, user_id=user_id)
     return env
 
 
@@ -98,14 +98,14 @@ def _coerce_env_value(value) -> str | None:
     return s or None
 
 
-def apply_dashboard_automation_settings(env: dict) -> None:
+def apply_dashboard_automation_settings(env: dict, user_id: str = DEFAULT_USER) -> None:
     """Inject framework env vars from the dashboard DB (category 'linkedin_automation').
 
     Only sets keys that are configured and non-empty; existing env values win
     when no dashboard override has been saved.
     """
     try:
-        cfg = db.get_all_by_category("linkedin_automation")
+        cfg = db.get_all_by_category("linkedin_automation", user_id=user_id)
     except Exception:
         logging.warning("Could not read linkedin_automation config from DB.")
         return
@@ -120,14 +120,14 @@ def apply_dashboard_automation_settings(env: dict) -> None:
         env[env_key] = value
 
 
-def get_automation_settings(mask_sensitive: bool = True) -> dict:
+def get_automation_settings(mask_sensitive: bool = True, user_id: str = DEFAULT_USER) -> dict:
     """Return the dashboard-configured automation settings.
 
     Sensitive values (API keys) are reduced to ``"set"`` / ``""`` when
     ``mask_sensitive=True`` so we don't expose raw keys in HTTP responses.
     """
     try:
-        cfg = db.get_all_by_category("linkedin_automation")
+        cfg = db.get_all_by_category("linkedin_automation", user_id=user_id)
     except Exception:
         cfg = {}
     if not isinstance(cfg, dict):
@@ -162,9 +162,9 @@ def count_linkedin_accounts(env: dict) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _load_secrets() -> dict:
+def _load_secrets(user_id: str = DEFAULT_USER) -> dict:
     try:
-        s = db.get_all_by_category("secrets") or {}
+        s = db.get_all_by_category("secrets", user_id=user_id) or {}
         return s if isinstance(s, dict) else {}
     except Exception:
         logging.warning("Could not read secrets from DB.")
@@ -212,7 +212,7 @@ def _iter_env_accounts(env: dict) -> list[tuple[str, str | None, bool]]:
     return out
 
 
-def list_linkedin_accounts(env: dict | None = None) -> list[dict]:
+def list_linkedin_accounts(env: dict | None = None, user_id: str = DEFAULT_USER) -> list[dict]:
     """Return all configured LinkedIn accounts from BOTH the DB ``secrets``
     category and the process environment (``LINKEDIN_USERNAME`` /
     ``LINKEDIN_USERNAME_<n>`` style variables loaded from ``.env``).
@@ -224,9 +224,9 @@ def list_linkedin_accounts(env: dict | None = None) -> list[dict]:
     collapsed to a single entry preferring the DB-side metadata.
     """
     if env is None:
-        env = preview_env_with_dashboard_credentials()
+        env = preview_env_with_dashboard_credentials(user_id=user_id)
 
-    secrets_cfg = _load_secrets()
+    secrets_cfg = _load_secrets(user_id=user_id)
     out: list[dict] = []
     seen_lc: set[str] = set()
 
@@ -282,7 +282,7 @@ def get_active_linkedin_account(env: dict | None = None) -> str | None:
     return u.strip() if isinstance(u, str) and u.strip() else None
 
 
-def apply_linkedin_account(env: dict, account: str | None) -> str | None:
+def apply_linkedin_account(env: dict, account: str | None, user_id: str = DEFAULT_USER) -> str | None:
     """Override ``LINKEDIN_USERNAME`` / ``LINKEDIN_PASSWORD`` in ``env`` with the
     chosen account's credentials.
 
@@ -300,7 +300,7 @@ def apply_linkedin_account(env: dict, account: str | None) -> str | None:
         return get_active_linkedin_account(env)
 
     needle = str(account).strip().lower()
-    secrets_cfg = _load_secrets()
+    secrets_cfg = _load_secrets(user_id=user_id)
 
     primary = (secrets_cfg.get("username") or "").strip()
     if primary and primary.lower() == needle:

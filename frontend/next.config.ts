@@ -32,10 +32,24 @@ const cspHeader = isDev
     connect-src 'self' http://127.0.0.1:8000 https://accounts.google.com;
   `;
 
+// The browser always calls relative /api/... URLs. In production nginx routes
+// /api/ to the FastAPI backend before Next.js sees it; this rewrite covers
+// local dev (and any deployment without a reverse proxy) by forwarding to the
+// backend directly. Next's own routes (e.g. /api/auth/*) take precedence.
+const backendUrl = process.env.BACKEND_URL || "http://127.0.0.1:8000";
+
 const nextConfig: NextConfig = {
   // Turbopack can mis-detect the project root on Windows in nested repos.
   turbopack: {
     root: path.join(__dirname),
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${backendUrl}/api/:path*`,
+      },
+    ];
   },
   async headers() {
     return [

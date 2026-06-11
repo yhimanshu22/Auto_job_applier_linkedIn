@@ -100,18 +100,18 @@ export default function BillingPage() {
       try {
         const [subRes, statsRes, accountsRes, activeRes] = await Promise.all([
           fetch(
-            `http://127.0.0.1:8000/api/billing/subscription?user_id=${encodeURIComponent(userId)}`
+            `/api/billing/subscription?user_id=${encodeURIComponent(userId)}`
           ),
           fetch(
-            `http://127.0.0.1:8000/api/applications/stats?user_id=${encodeURIComponent(userId)}`
+            `/api/applications/stats?user_id=${encodeURIComponent(userId)}`
           ),
           // Reuse the automation endpoint so the LinkedIn Accounts tile
           // shows the real DB-backed count instead of a hardcoded 1.
-          fetch(`http://127.0.0.1:8000/api/linkedin-automation/accounts`),
+          fetch(`/api/linkedin-automation/accounts`),
           // Live concurrency for the Active Bots tile (supervisor +
           // automation task subprocesses for this user).
           fetch(
-            `http://127.0.0.1:8000/api/bot/active?user_id=${encodeURIComponent(userId)}`
+            `/api/bot/active?user_id=${encodeURIComponent(userId)}`
           ),
         ]);
         if (cancelled) return;
@@ -136,7 +136,7 @@ export default function BillingPage() {
     const interval = window.setInterval(async () => {
       try {
         const res = await fetch(
-          `http://127.0.0.1:8000/api/bot/active?user_id=${encodeURIComponent(userId)}`
+          `/api/bot/active?user_id=${encodeURIComponent(userId)}`
         );
         if (!cancelled && res.ok) setActiveBots(await res.json());
       } catch {
@@ -153,7 +153,7 @@ export default function BillingPage() {
   const handleManageBilling = async () => {
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/api/billing/create-portal-session`,
+        `/api/billing/create-portal-session`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

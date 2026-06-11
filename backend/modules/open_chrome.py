@@ -72,7 +72,14 @@ try:
     # Set up WebDriver with Chrome Profile
     options = uc.ChromeOptions() if stealth_mode else Options()
     if run_in_background:
-        options.add_argument("--headless")
+        options.add_argument("--headless=new")
+        options.add_argument("--window-size=1920,1080")
+    if os.name != "nt":
+        # Required on Linux servers: root-less sandbox and tiny /dev/shm
+        # otherwise crash Chrome at startup or mid-session.
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
     if disable_extensions:
         options.add_argument("--disable-extensions")
 
@@ -120,7 +127,10 @@ try:
         driver = webdriver.Chrome(
             options=options
         )  # , service=Service(executable_path="C:\\Program Files\\Google\\Chrome\\chromedriver-win64\\chromedriver.exe"))
-    driver.maximize_window()
+    try:
+        driver.maximize_window()
+    except Exception:
+        pass  # headless / no window manager
     wait = WebDriverWait(driver, 5)
     actions = ActionChains(driver)
 except Exception as e:
@@ -132,7 +142,7 @@ except Exception as e:
 
     print_lg(msg)
     critical_error_log("In Opening Chrome", e)
-    from pyautogui import alert
+    from modules.gui_safe import alert
 
     alert(msg, "Error in opening chrome")
     try:

@@ -8,7 +8,7 @@ import pathlib
 from time import sleep
 from random import randint
 from datetime import datetime, timedelta
-from pyautogui import alert
+from modules.gui_safe import alert
 from pprint import pprint
 
 from app_paths import get_logs_dir
@@ -230,7 +230,7 @@ def manual_login_retry(is_logged_in: callable, limit: int = 2) -> None:
     """
     count = 0
     while not is_logged_in():
-        from pyautogui import alert
+        from modules.gui_safe import alert
 
         print_lg("Seems like you're not logged in!")
         button = "Confirm Login"

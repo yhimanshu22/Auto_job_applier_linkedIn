@@ -244,6 +244,9 @@ class LoginMixin:
                 "input#username",
                 "input[name='session_key']",
                 "input[autocomplete='username']",
+                # Newer login layout: random ids, no name attribute.
+                "input[autocomplete^='username']",
+                "input[type='email']",
             ]
             username_field = self._find_element_from_selectors(username_selectors, By.CSS_SELECTOR)
             if not username_field:
@@ -263,6 +266,9 @@ class LoginMixin:
                 "input#password",
                 "input[name='session_password']",
                 "input[autocomplete='current-password']",
+                # Newer login layout: random ids, no name attribute.
+                "input[autocomplete^='current-password']",
+                "input[type='password']",
             ]
             password_field = self._find_element_from_selectors(password_selectors, By.CSS_SELECTOR)
             if not password_field:

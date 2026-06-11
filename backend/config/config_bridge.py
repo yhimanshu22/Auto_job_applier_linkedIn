@@ -13,6 +13,11 @@ def _apply_config_normalizations(config_dict: dict) -> dict:
     return config_dict
 
 
+def _bot_user_id() -> str:
+    """The bot subprocess is launched with USER_ID in its env (see routes/bot.py)."""
+    return os.getenv("USER_ID", "").strip() or "local-user"
+
+
 def load_config_to_module(module_name):
     # Default values to prevent crashes if DB keys are missing
     config_dict = {
@@ -26,7 +31,7 @@ def load_config_to_module(module_name):
     
     categories = ["personals", "search", "settings", "questions", "secrets"]
     for cat in categories:
-        config_dict.update(db.get_all_by_category(cat))
+        config_dict.update(db.get_all_by_category(cat, user_id=_bot_user_id()))
         
     if os.getenv("LINKEDIN_USERNAME"):
         config_dict["username"] = os.getenv("LINKEDIN_USERNAME")
@@ -51,7 +56,7 @@ config_data = {
 }
 categories = ["personals", "search", "settings", "questions", "secrets"]
 for cat in categories:
-    config_data.update(db.get_all_by_category(cat))
+    config_data.update(db.get_all_by_category(cat, user_id=_bot_user_id()))
 
 if os.getenv("LINKEDIN_USERNAME"):
     config_data["username"] = os.getenv("LINKEDIN_USERNAME")

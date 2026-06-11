@@ -1,9 +1,10 @@
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from db_manager import db
+from utils.user_resolution import resolve_user_id
 
 router = APIRouter(prefix="/api", tags=["config"])
 
@@ -13,14 +14,15 @@ class ConfigData(BaseModel):
 
 
 @router.get("/config/{category}")
-async def read_config(category: str):
+async def read_config(category: str, request: Request, user_id: str | None = None):
     if category.endswith(".py"):
         category = category[:-3]
 
     if category not in ["personals", "search", "settings", "questions", "secrets"]:
         raise HTTPException(status_code=400, detail="Invalid config category")
 
-    config_data = db.get_all_by_category(category)
+    uid = await resolve_user_id(request, user_id)
+    config_data = db.get_all_by_category(category, user_id=uid)
 
     content = f"################ {category.upper()} CONFIGURATION ################\n\n"
     for key, value in config_data.items():
@@ -33,12 +35,16 @@ async def read_config(category: str):
 
 
 @router.post("/config/{category}")
-async def write_config(category: str, data: ConfigData):
+async def write_config(
+    category: str, data: ConfigData, request: Request, user_id: str | None = None
+):
     if category.endswith(".py"):
         category = category[:-3]
 
     if category not in ["personals", "search", "settings", "questions", "secrets"]:
         raise HTTPException(status_code=400, detail="Invalid config category")
+
+    uid = await resolve_user_id(request, user_id)
 
     lines = data.content.split("\n")
     for line in lines:
@@ -69,7 +75,7 @@ async def write_config(category: str, data: ConfigData):
                     except Exception:
                         value = value_str
 
-                db.set_config(key, value, category)
+                db.set_config(key, value, category, user_id=uid)
             except Exception as e:
                 print(f"Error parsing line: {line} - {e}")
 

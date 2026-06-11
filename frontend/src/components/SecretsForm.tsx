@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 
 interface SecretsFormProps {
   data: Record<string, any>;
@@ -16,10 +17,14 @@ interface SecretsFormProps {
 export default function SecretsForm({ data, onChange, onAccountsSaved, isActive = true }: SecretsFormProps) {
   const patch = (key: string, value: any) => onChange({ ...data, [key]: value });
 
+  const { data: session } = useSession();
+  const userId = session?.user?.email || "local-user";
+
   const [primaryUser, setPrimaryUser] = useState("");
   const [primaryPass, setPrimaryPass] = useState("");
   const [primaryPassWasSet, setPrimaryPassWasSet] = useState(false);
-  const [extras, setExtras] = useState<Array<{ username: string; password: string }>>([]);
+  const [extras, setExtras] = useState<Array<{ username: string; password: string; saved?: boolean }>>([]);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -27,7 +32,7 @@ export default function SecretsForm({ data, onChange, onAccountsSaved, isActive 
   const loadLinkedIn = async () => {
     setLoading(true);
     try {
-      const r = await fetch("http://127.0.0.1:8000/api/linkedin-accounts");
+      const r = await fetch(`/api/linkedin-accounts?user_id=${encodeURIComponent(userId)}`);
       if (!r.ok) throw new Error("Failed to load accounts");
       const d = await r.json();
       setPrimaryUser(d.primary_username || data.username || "");
@@ -37,6 +42,7 @@ export default function SecretsForm({ data, onChange, onAccountsSaved, isActive 
         (d.extras || []).map((e: { username: string }) => ({
           username: e.username || "",
           password: "",
+          saved: true,
         }))
       );
     } catch {
@@ -59,7 +65,46 @@ export default function SecretsForm({ data, onChange, onAccountsSaved, isActive 
   }, [data.username]);
 
   const addExtra = () => setExtras([...extras, { username: "", password: "" }]);
-  const removeExtra = (i: number) => setExtras(extras.filter((_, j) => j !== i));
+
+  const deleteAccount = async (username: string) => {
+    const u = username.trim();
+    if (!u) return false;
+    if (!window.confirm(`Delete LinkedIn account ${u}? Its saved password will be removed.`)) return false;
+    setDeleting(u);
+    setMsg(null);
+    try {
+      const r = await fetch(
+        `/api/linkedin-accounts?username=${encodeURIComponent(u)}&user_id=${encodeURIComponent(userId)}`,
+        { method: "DELETE" }
+      );
+      const raw = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(typeof raw.detail === "string" ? raw.detail : r.statusText);
+      setMsg({ type: "ok", text: `Deleted ${u} (${raw.account_count ?? "?"} account(s) left).` });
+      onAccountsSaved?.();
+      return true;
+    } catch (e: unknown) {
+      setMsg({ type: "err", text: e instanceof Error ? e.message : "Delete failed" });
+      return false;
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const deletePrimary = async () => {
+    if (await deleteAccount(primaryUser)) {
+      setPrimaryUser("");
+      setPrimaryPass("");
+      setPrimaryPassWasSet(false);
+    }
+  };
+
+  const removeExtra = async (i: number) => {
+    const row = extras[i];
+    if (row?.saved && row.username.trim()) {
+      if (!(await deleteAccount(row.username))) return;
+    }
+    setExtras(extras.filter((_, j) => j !== i));
+  };
   const patchExtra = (i: number, field: "username" | "password", v: string) => {
     const next = [...extras];
     next[i] = { ...next[i], [field]: v };
@@ -70,13 +115,13 @@ export default function SecretsForm({ data, onChange, onAccountsSaved, isActive 
     setSaving(true);
     setMsg(null);
     try {
-      const r = await fetch("http://127.0.0.1:8000/api/linkedin-accounts", {
+      const r = await fetch(`/api/linkedin-accounts?user_id=${encodeURIComponent(userId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           primary_username: primaryUser,
           primary_password: primaryPass,
-          extras,
+          extras: extras.map(({ username, password }) => ({ username, password })),
         }),
       });
       const raw = await r.json().catch(() => ({}));
@@ -155,6 +200,16 @@ export default function SecretsForm({ data, onChange, onAccountsSaved, isActive 
                   className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-600"
                 />
               </div>
+              {primaryUser.trim() !== "" && primaryPassWasSet && (
+                <button
+                  type="button"
+                  onClick={deletePrimary}
+                  disabled={deleting !== null}
+                  className="text-[10px] font-bold text-red-500/80 hover:text-red-400 uppercase tracking-widest disabled:opacity-50"
+                >
+                  {deleting === primaryUser.trim() ? "Deleting…" : "Delete primary account"}
+                </button>
+              )}
             </div>
 
             <div className="space-y-3 mb-4">
@@ -197,9 +252,10 @@ export default function SecretsForm({ data, onChange, onAccountsSaved, isActive 
                   <button
                     type="button"
                     onClick={() => removeExtra(i)}
-                    className="text-[10px] font-bold text-red-500/80 hover:text-red-400 uppercase py-2"
+                    disabled={deleting !== null}
+                    className="text-[10px] font-bold text-red-500/80 hover:text-red-400 uppercase py-2 disabled:opacity-50"
                   >
-                    Remove
+                    {deleting === row.username.trim() ? "Deleting…" : row.saved ? "Delete" : "Remove"}
                   </button>
                 </div>
               ))}

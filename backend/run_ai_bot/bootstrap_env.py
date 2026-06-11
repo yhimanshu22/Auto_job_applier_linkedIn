@@ -12,9 +12,9 @@ import tempfile
 
 csv.field_size_limit(1000000)
 
-import pyautogui
-
-pyautogui.FAILSAFE = False
+# Display-safe pyautogui shim: real dialogs on desktop, logged no-ops on
+# headless servers (raw `import pyautogui` crashes without a display).
+from modules import gui_safe as pyautogui
 
 from random import choice, shuffle, randint
 from datetime import datetime

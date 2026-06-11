@@ -132,7 +132,7 @@ def _now_iso() -> str:
 # ---------------------------------------------------------------------------
 
 
-def _build_env(account: str | None = None) -> dict[str, str]:
+def _build_env(account: str | None = None, user_id: str = "local-user") -> dict[str, str]:
     """Build the subprocess env: shell env + dashboard creds + framework settings + cookie path + PYTHONPATH.
 
     When ``account`` is set, the credentials injected by
@@ -146,13 +146,13 @@ def _build_env(account: str | None = None) -> dict[str, str]:
     compatibility — non-primary accounts use ``cookies/<slug>.pkl``.
     """
     env = os.environ.copy()
-    apply_dashboard_linkedin_credentials(env)
+    apply_dashboard_linkedin_credentials(env, user_id=user_id)
     # Capture the primary username *before* any explicit-account override so
     # we can decide whether to keep using the legacy single-cookie file.
     primary_username = (env.get("LINKEDIN_USERNAME") or "").strip() or None
     if account:
-        apply_linkedin_account(env, account)
-    apply_dashboard_automation_settings(env)
+        apply_linkedin_account(env, account, user_id=user_id)
+    apply_dashboard_automation_settings(env, user_id=user_id)
     resolved_username = (env.get("LINKEDIN_USERNAME") or "").strip() or None
     env["LINKEDIN_COOKIE_PATH"] = get_cookie_path_for_account(
         resolved_username, primary_username
@@ -264,7 +264,7 @@ def start_task(
     os.makedirs(logs_dir, exist_ok=True)
     log_path = os.path.join(logs_dir, f"linkedin_automation_{task_id}.log")
 
-    env = _build_env(account=account)
+    env = _build_env(account=account, user_id=user_id)
     # Resolve the account that will *actually* authenticate, after dashboard
     # credentials + optional override are applied. This is what we persist on
     # the task / show in the dashboard. ``None`` is possible when no account

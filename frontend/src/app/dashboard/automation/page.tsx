@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
-const API = "http://127.0.0.1:8000/api/linkedin-automation";
-const BILLING_API = "http://127.0.0.1:8000/api/billing";
+const API = "/api/linkedin-automation";
+const BILLING_API = "/api/billing";
 const TABS = ["post", "engage", "pursue", "calendar", "settings"] as const;
 type Tab = (typeof TABS)[number];
 
@@ -814,18 +814,20 @@ function SettingsForm({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [s, setS] = useState<FrameworkSettings>({});
+  const { data: session } = useSession();
+  const userId = session?.user?.email || "local-user";
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/config`);
+      const res = await fetch(`${API}/config?user_id=${encodeURIComponent(userId)}`);
       if (res.ok) setS(await res.json());
     } catch {
       flash({ type: "error", text: "Could not load framework settings." });
     } finally {
       setLoading(false);
     }
-  }, [flash]);
+  }, [flash, userId]);
 
   useEffect(() => {
     load();
@@ -841,7 +843,7 @@ function SettingsForm({
       // Don't overwrite a masked key value on the server.
       if (payload.openai_api_key === "set") delete payload.openai_api_key;
       if (payload.gemini_api_key === "set") delete payload.gemini_api_key;
-      const res = await fetch(`${API}/config`, {
+      const res = await fetch(`${API}/config?user_id=${encodeURIComponent(userId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -1153,7 +1155,7 @@ export default function AutomationPage() {
     if (serialized === lastSavedDefaultsRef.current) return;
     const timer = setTimeout(() => {
       lastSavedDefaultsRef.current = serialized;
-      fetch(`${API}/form-defaults`, {
+      fetch(`${API}/form-defaults?user_id=${encodeURIComponent(userId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: serialized,
@@ -1164,14 +1166,14 @@ export default function AutomationPage() {
       });
     }, 500);
     return () => clearTimeout(timer);
-  }, [formDefaults, defaultsLoaded]);
+  }, [formDefaults, defaultsLoaded, userId]);
 
   const clearDefaults = useCallback(
     async (prefix: string) => {
       try {
         const url = prefix
-          ? `${API}/form-defaults?prefix=${encodeURIComponent(prefix)}`
-          : `${API}/form-defaults`;
+          ? `${API}/form-defaults?prefix=${encodeURIComponent(prefix)}&user_id=${encodeURIComponent(userId)}`
+          : `${API}/form-defaults?user_id=${encodeURIComponent(userId)}`;
         const res = await fetch(url, { method: "DELETE" });
         if (!res.ok) {
           flash({ type: "error", text: await parseErr(res) });
@@ -1192,7 +1194,7 @@ export default function AutomationPage() {
         flash({ type: "error", text: "Network error clearing defaults." });
       }
     },
-    [flash]
+    [flash, userId]
   );
 
   const refresh = useCallback(async () => {
