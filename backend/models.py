@@ -26,6 +26,8 @@ class Subscription(Base):
     status = Column(String, default="inactive")
     current_period_end = Column(String)
     cancel_at_period_end = Column(Integer, default=0)
+    payment_provider = Column(String)  # stripe | payu
+    payu_txnid = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

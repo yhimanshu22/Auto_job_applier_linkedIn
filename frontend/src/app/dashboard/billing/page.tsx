@@ -10,6 +10,7 @@ type Subscription = {
   current_period_end?: number | string | null;
   billing_cycle?: string;
   limit?: number;
+  payment_provider?: string;
 };
 
 type Stats = {
@@ -152,6 +153,10 @@ export default function BillingPage() {
   }, [status, userId]);
 
   const handleManageBilling = async () => {
+    if (subscription?.payment_provider === "payu") {
+      window.location.href = "/pricing";
+      return;
+    }
     try {
       const res = await fetch(
         `/api/billing/create-portal-session`,

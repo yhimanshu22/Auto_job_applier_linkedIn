@@ -101,6 +101,22 @@ class DatabaseManager:
                 "ALTER TABLE automation_tasks ADD COLUMN account_username TEXT"
             )
 
+        sub_cols = {
+            row[1]
+            for row in conn.exec_driver_sql(
+                "PRAGMA table_info(subscriptions)"
+            ).fetchall()
+        }
+        if sub_cols:
+            if "payment_provider" not in sub_cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE subscriptions ADD COLUMN payment_provider TEXT"
+                )
+            if "payu_txnid" not in sub_cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE subscriptions ADD COLUMN payu_txnid TEXT"
+                )
+
         # configs.user_id — SQLite can't alter a PK, so rebuild the table.
         cols = {
             row[1]
@@ -123,6 +139,23 @@ class DatabaseManager:
 
     @staticmethod
     def _postgres_migrations(conn):
+        sub_cols = {
+            r[0]
+            for r in conn.exec_driver_sql(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'subscriptions'"
+            ).fetchall()
+        }
+        if sub_cols:
+            if "payment_provider" not in sub_cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE subscriptions ADD COLUMN payment_provider VARCHAR"
+                )
+            if "payu_txnid" not in sub_cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE subscriptions ADD COLUMN payu_txnid VARCHAR"
+                )
+
         cols = {
             r[0]
             for r in conn.exec_driver_sql(

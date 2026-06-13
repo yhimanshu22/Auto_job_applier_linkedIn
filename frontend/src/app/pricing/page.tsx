@@ -174,6 +174,57 @@ function PricingPageContent() {
     void startFreeTrial();
   }, [status, searchParams, startFreeTrial, session?.user?.email, redirectToLogin]);
 
+  async function startPayUCheckout(plan: Exclude<PlanType, "free_trial">) {
+    if (status === "loading") return;
+
+    if (status !== "authenticated" || !session?.user?.email) {
+      redirectToLogin(PRICING_LOGIN_URL);
+      return;
+    }
+
+    const email = session.user.email;
+    setLoading(plan);
+    try {
+      const res = await fetch("/api/billing/payu/initiate", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan,
+          billing_cycle: billingCycle,
+          user_id: email,
+          email,
+          firstname: session.user.name || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.status === 401 || res.status === 403) {
+        redirectToLogin(PRICING_LOGIN_URL);
+        return;
+      }
+      if (!res.ok) throw new Error(data.detail || "Failed to start PayU checkout");
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = data.action;
+      for (const [key, value] of Object.entries(data.params as Record<string, string>)) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = key;
+        input.value = value;
+        form.appendChild(input);
+      }
+      document.body.appendChild(form);
+      form.submit();
+    } catch (error: unknown) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "Failed to initiate PayU checkout. Is the backend running?";
+      alert(message);
+      setLoading(null);
+    }
+  }
+
   async function startStripeCheckout(plan: Exclude<PlanType, "free_trial">) {
     if (status === "loading") return;
 
@@ -227,6 +278,10 @@ function PricingPageContent() {
 
     if (status !== "authenticated" || !session?.user?.email) {
       redirectToLogin(PRICING_LOGIN_URL);
+      return;
+    }
+    if (currency === "inr") {
+      void startPayUCheckout(plan as Exclude<PlanType, "free_trial">);
       return;
     }
     void startStripeCheckout(plan as Exclude<PlanType, "free_trial">);
@@ -325,7 +380,8 @@ function PricingPageContent() {
 
           <p className="text-center text-sm text-zinc-500 max-w-3xl mx-auto mb-24">
             All prices for Indian customers are listed in Indian Rupees (INR) and are inclusive of applicable
-            taxes. International payments are processed securely in USD via Stripe.
+            taxes. Indian payments are processed securely via PayU (UPI, cards, net banking). International
+            payments are processed securely in USD via Stripe.
           </p>
         </div>
       </main>

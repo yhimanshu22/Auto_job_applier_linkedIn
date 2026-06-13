@@ -16,6 +16,8 @@ from utils.secrets import load_all_secrets
 load_all_secrets([
     "STRIPE_SECRET_KEY",
     "STRIPE_WEBHOOK_SECRET",
+    "PAYU_MERCHANT_KEY",
+    "PAYU_MERCHANT_SALT",
     "NEXTAUTH_SECRET",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
