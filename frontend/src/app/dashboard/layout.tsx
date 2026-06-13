@@ -4,6 +4,19 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
+/** Ask the backend to stop the job bot (tab close, navigate away, or layout unmount). */
+function requestStopJobBot() {
+  try {
+    fetch("/api/bot/stop", {
+      method: "POST",
+      credentials: "include",
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* page may already be tearing down */
+  }
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -17,6 +30,15 @@ export default function DashboardLayout({
       router.replace("/");
     }
   }, [status, router]);
+
+  useEffect(() => {
+    const onPageHide = () => requestStopJobBot();
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      requestStopJobBot();
+    };
+  }, []);
 
   if (status !== "authenticated") {
     return (

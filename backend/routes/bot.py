@@ -12,6 +12,7 @@ from db_manager import db
 from services.linkedin_env import apply_dashboard_linkedin_credentials
 from services.plan_limits import PLAN_LIMITS, assert_can_start_bot
 from services import supervisor_state as sv
+from services.bot_supervisor import stop_supervisor, supervisor_popen_kwargs
 from utils.user_resolution import resolve_user_id
 
 router = APIRouter(prefix="/api/bot", tags=["bot"])
@@ -52,14 +53,13 @@ async def start_bot(request: Request, payload: dict = None):
         )
         sv.supervisor_log_handle.flush()
 
-        _sup_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
         sv.supervisor_process = subprocess.Popen(
             cmd,
             cwd=cwd,
             env=env,
             stdout=sv.supervisor_log_handle,
             stderr=subprocess.STDOUT,
-            creationflags=_sup_flags,
+            **supervisor_popen_kwargs(),
         )
 
         sv.current_run_id = db.start_bot_run(user_id)
@@ -74,24 +74,10 @@ async def start_bot(request: Request, payload: dict = None):
 async def stop_bot(request: Request):
     await resolve_user_id(request)
     try:
-        was_running = sv.supervisor_process is not None and sv.supervisor_process.poll() is None
-
-        if was_running:
-            if os.name == "nt":
-                subprocess.run(
-                    ["taskkill", "/F", "/PID", str(sv.supervisor_process.pid), "/T"],
-                    capture_output=True,
-                )
-            else:
-                sv.supervisor_process.terminate()
-
-        sv.supervisor_process = None
-        sv.close_supervisor_log()
-
+        was_running = stop_supervisor(reason="dashboard")
         if sv.current_run_id:
             db.end_bot_run(sv.current_run_id, 0)
             sv.current_run_id = None
-
         return {"status": "stopped" if was_running else "not_running"}
     except Exception as e:
         print(f"Error in stop_bot: {e}")

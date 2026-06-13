@@ -1,6 +1,11 @@
 import sys
 import os
 
+from dotenv import load_dotenv
+
+# Bot subprocesses and early imports need env-backed secrets before DB is read.
+load_dotenv()
+
 # Ensure we can import db_manager from parent dir if needed
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db_manager import db
@@ -43,7 +48,24 @@ def _base_config_defaults() -> dict:
         "llm_api_url": "https://api.groq.com/openai/v1/",
         "llm_model": "llama-3.3-70b-versatile",
         "llm_spec": "openai",
+        "llm_api_key": "",
     }
+
+
+def _apply_env_secret_fallbacks(config_dict: dict) -> None:
+    """Use backend/.env LLM_* vars when the dashboard DB has no key yet."""
+    env_map = {
+        "llm_api_key": "LLM_API_KEY",
+        "llm_api_url": "LLM_API_URL",
+        "llm_model": "LLM_MODEL",
+        "llm_spec": "LLM_SPEC",
+        "ai_provider": "AI_PROVIDER",
+    }
+    for config_key, env_key in env_map.items():
+        if config_dict.get(config_key) in (None, ""):
+            env_val = (os.getenv(env_key) or "").strip()
+            if env_val:
+                config_dict[config_key] = env_val
 
 
 def _fill_missing_secrets_from_template(config_dict: dict, user_id: str) -> None:
@@ -76,6 +98,7 @@ def _load_bot_config() -> dict:
         config_dict.update(db.get_all_by_category(cat, user_id=user_id))
 
     _fill_missing_secrets_from_template(config_dict, user_id)
+    _apply_env_secret_fallbacks(config_dict)
 
     if os.getenv("LINKEDIN_USERNAME"):
         config_dict["username"] = os.getenv("LINKEDIN_USERNAME")

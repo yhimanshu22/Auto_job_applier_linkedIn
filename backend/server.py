@@ -40,6 +40,7 @@ from routes.linkedin_automation import router as linkedin_automation_router
 from routes.uploads import router as uploads_router
 
 from db_manager import db
+from services.bot_supervisor import stop_supervisor
 
 
 @asynccontextmanager
@@ -57,6 +58,16 @@ async def _app_lifespan(app: FastAPI):
     except Exception:
         log.exception("Stale automation task reconcile failed")
     yield
+    if stop_supervisor(reason="backend_shutdown"):
+        log.info("Stopped job-applier supervisor on backend shutdown")
+        try:
+            from services import supervisor_state as sv
+
+            if sv.current_run_id:
+                db.end_bot_run(sv.current_run_id, 0)
+                sv.current_run_id = None
+        except Exception:
+            log.exception("Failed to finalize bot run on shutdown")
 
 
 app = FastAPI(title="LinkedIn Bot API", lifespan=_app_lifespan)

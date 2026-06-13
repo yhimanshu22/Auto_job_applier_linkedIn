@@ -146,26 +146,26 @@ class BotSupervisor:
                 if process is None or process.poll() is not None:
                     if process:
                         exit_code = process.poll()
-                        # 0: Standard normal exit
-                        # 3221225786 (0xC000013A): User closed console or Ctrl+C on Windows
-                        if exit_code in [0, 3221225786, -1073741510]:
-                            logging.info(f"Bot {bot_id} was terminated by user (code {exit_code}). Not restarting.")
-                            # Remove from active processes so we don't keep checking it
-                            del self.bot_processes[bot_id]
-                            self._close_bot_stdio(bot_id)
-                            # Remove from accounts so it doesn't get picked up again in next iteration
-                            self.accounts = [a for a in self.accounts if a["id"] != bot_id]
-                            continue
-                        
-                        logging.warning(f"Bot {bot_id} exited with code {exit_code}. Restarting in 30 seconds...")
-                        time.sleep(30)
-                    
+                        logging.info(
+                            f"Bot {bot_id} exited (code {exit_code}). Not restarting."
+                        )
+                        del self.bot_processes[bot_id]
+                        self._close_bot_stdio(bot_id)
+                        self.accounts = [
+                            a for a in self.accounts if a["id"] != bot_id
+                        ]
+                        continue
+
                     self.start_bot(account)
                     
                     # Stagger startup to avoid Chrome initialization conflicts
                     if len(self.accounts) > 1:
                         logging.info("Waiting 15 seconds before checking next account for staggered startup...")
                         time.sleep(15)
+
+            if not self.accounts:
+                logging.info("All bot workers have exited. Supervisor stopping.")
+                break
 
             time.sleep(10)
 
