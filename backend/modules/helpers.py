@@ -228,10 +228,17 @@ def manual_login_retry(is_logged_in: callable, limit: int = 2) -> None:
     """
     Function to ask and validate manual login
     """
+    from modules.gui_safe import HAS_DISPLAY, alert
+
+    if not HAS_DISPLAY:
+        print_lg(
+            "Headless server cannot complete interactive login. "
+            "Save LinkedIn session cookies or verify credentials."
+        )
+        return
+
     count = 0
     while not is_logged_in():
-        from modules.gui_safe import alert
-
         print_lg("Seems like you're not logged in!")
         button = "Confirm Login"
         message = (
@@ -360,7 +367,7 @@ def truncate_for_csv(
 
 def get_chrome_version() -> int | None:
     """
-    Detects the installed Google Chrome version on Windows.
+    Detects the installed Google Chrome major version.
     Returns the major version number (e.g., 131) or None if not found.
     """
     if sys.platform.startswith("win"):
@@ -383,6 +390,23 @@ def get_chrome_version() -> int | None:
                 return int(version.split(".")[0])
             except Exception:
                 pass
+    else:
+        for cmd in (
+            "google-chrome --version",
+            "google-chrome-stable --version",
+            "chromium --version",
+            "chromium-browser --version",
+        ):
+            try:
+                out = subprocess.check_output(
+                    cmd, shell=True, stderr=subprocess.STDOUT, text=True
+                ).strip()
+                # e.g. "Google Chrome 149.0.7827.102"
+                for token in out.split():
+                    if token[0].isdigit() and "." in token:
+                        return int(token.split(".")[0])
+            except Exception:
+                continue
     return None
 
 

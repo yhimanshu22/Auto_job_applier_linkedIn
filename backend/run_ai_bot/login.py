@@ -103,6 +103,7 @@ def login_LN() -> None:
         if sign_in_btn is None:
             raise NoSuchElementException("Sign in button not found")
         human_move_and_click(driver, sign_in_btn)
+        buffer(3)
     except Exception:
         try:
             profile_button = find_by_class(driver, "profile__details")
@@ -116,6 +117,13 @@ def login_LN() -> None:
         print_lg("Login successful!")
         return
     except Exception:
+        try:
+            wait.until(EC.url_contains("/feed"))
+            save_cookies()
+            print_lg("Login successful!")
+            return
+        except Exception:
+            pass
         print_lg(
             "Seems like login attempt failed! Possibly due to wrong credentials or already logged in! Try logging in manually!"
         )

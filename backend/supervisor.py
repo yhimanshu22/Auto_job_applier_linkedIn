@@ -88,6 +88,8 @@ class BotSupervisor:
             env["LINKEDIN_USERNAME"] = account["username"]
             env["LINKEDIN_PASSWORD"] = account["password"]
             env["BOT_ID"] = bot_id
+            if os.getenv("USER_ID"):
+                env["USER_ID"] = os.getenv("USER_ID")
             
             # When running as an EXE, sys.executable is the EXE itself.
             # We use the --bot flag to trigger the bot logic in server.py

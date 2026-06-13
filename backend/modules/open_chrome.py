@@ -25,11 +25,26 @@ import os
 
 def is_chrome_running():
     try:
-        # Check if chrome.exe is running using tasklist
-        output = subprocess.check_output("tasklist", shell=True).decode()
-        return "chrome.exe" in output.lower()
+        if os.name == "nt":
+            output = subprocess.check_output("tasklist", shell=True).decode()
+            return "chrome.exe" in output.lower()
+        output = subprocess.check_output(
+            ["pgrep", "-f", "chrome|chromium"], stderr=subprocess.DEVNULL
+        ).decode()
+        return bool(output.strip())
     except Exception:
         return False
+
+
+def _clear_chrome_profile_locks(profile_dir: str) -> None:
+    """Remove stale singleton locks left by crashed Chrome sessions."""
+    for name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+        path = os.path.join(profile_dir, name)
+        if os.path.lexists(path):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
 
 
 def log_versions():
@@ -103,6 +118,7 @@ try:
         os.path.join(get_runtime_writable_root(), "chrome_profiles", _safe)
     )
     os.makedirs(profile_dir, exist_ok=True)
+    _clear_chrome_profile_locks(profile_dir)
     options.add_argument(f"--user-data-dir={profile_dir}")
     _port = 9222 + (int(hashlib.md5(_safe.encode("utf-8")).hexdigest(), 16) % 800)
     options.add_argument(f"--remote-debugging-port={_port}")

@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, select, update, insert, func, case, literal, union_all
 from sqlalchemy.orm import sessionmaker, Session
@@ -28,7 +29,7 @@ DEFAULT_USER = "local-user"
 # linkedin_automation) are deliberately excluded — one user must never see
 # another's name, credentials, or API keys. Encrypted rows are never inherited
 # regardless of category.
-INHERIT_CATEGORIES = {"settings", "search", "questions"}
+INHERIT_CATEGORIES = {"personals", "settings", "search", "questions"}
 
 
 def _ts_to_utc_iso(dt: datetime | None) -> str | None:
@@ -220,9 +221,30 @@ class DatabaseManager:
     @staticmethod
     def _decode_config(config):
         val_str = config.value
+        if val_str is None or (isinstance(val_str, str) and not val_str.strip()):
+            return None
         if config.is_encrypted:
             val_str = decrypt_data(val_str)
-        return json.loads(val_str)
+            if val_str is None or (isinstance(val_str, str) and not val_str.strip()):
+                return None
+        try:
+            return json.loads(val_str)
+        except json.JSONDecodeError:
+            if config.is_encrypted:
+                logging.warning(
+                    "Could not decode encrypted config for %s/%s (%s)",
+                    config.user_id,
+                    config.key,
+                    config.category,
+                )
+                return None
+            logging.warning(
+                "Skipping invalid config JSON for %s/%s (%s)",
+                config.user_id,
+                config.key,
+                config.category,
+            )
+            return None
 
     def get_config(self, key, default=None, user_id=DEFAULT_USER):
         with self.get_session() as session:
@@ -253,13 +275,17 @@ class DatabaseManager:
                     Config.is_encrypted == 0,
                 ).all()
                 for config in defaults:
-                    result[config.key] = self._decode_config(config)
+                    decoded = self._decode_config(config)
+                    if decoded is not None:
+                        result[config.key] = decoded
 
             configs = session.query(Config).filter(
                 Config.category == category, Config.user_id == user_id
             ).all()
             for config in configs:
-                result[config.key] = self._decode_config(config)
+                decoded = self._decode_config(config)
+                if decoded is not None:
+                    result[config.key] = decoded
             return result
 
     def upsert_subscription(self, user_id, **kwargs):
@@ -402,10 +428,16 @@ class DatabaseManager:
     def get_user_session(self, user_id):
         with self.get_session() as session:
             sess = session.get(UserSession, user_id)
-            if sess:
+            if not sess or not sess.cookies_blob:
+                return None
+            try:
                 decrypted_json = decrypt_data(sess.cookies_blob)
+                if not decrypted_json or not str(decrypted_json).strip():
+                    return None
                 return json.loads(decrypted_json)
-            return None
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                logging.warning("Could not decode session cookies for %s: %s", user_id, exc)
+                return None
 
     def upsert_resume_metadata(self, user_id, file_name, storage_path, is_default=False):
         """Stores resume metadata in the database."""

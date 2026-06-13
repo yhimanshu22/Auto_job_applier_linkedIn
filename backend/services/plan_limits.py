@@ -81,7 +81,7 @@ def assert_can_start_bot(user_id: str) -> None:
     plan = subscription.get("plan", "free_trial")
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
 
-    probe_env = preview_env_with_dashboard_credentials()
+    probe_env = preview_env_with_dashboard_credentials(user_id=user_id)
     account_total = count_linkedin_accounts(probe_env)
 
     if account_total > limits["max_accounts"]:

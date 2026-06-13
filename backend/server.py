@@ -5,6 +5,11 @@ FastAPI entrypoint: middleware, router registration, and CLI modes (--bot / --su
 import os
 import sys
 
+from dotenv import load_dotenv
+
+# Load backend/.env so subprocess env copies include LINKEDIN_* and other vars.
+load_dotenv()
+
 from contextlib import asynccontextmanager
 
 import uvicorn

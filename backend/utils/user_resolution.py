@@ -74,4 +74,7 @@ async def resolve_user_id(request: Request, claimed_user_id: str | None = None) 
     if _require_auth():
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    if claimed:
+        return claimed
+
     return DEFAULT_USER
