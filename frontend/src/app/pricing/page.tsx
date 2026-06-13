@@ -184,45 +184,17 @@ function PricingPageContent() {
 
     const email = session.user.email;
     setLoading(plan);
-    try {
-      const res = await fetch("/api/billing/payu/initiate", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          plan,
-          billing_cycle: billingCycle,
-          user_id: email,
-          email,
-          firstname: session.user.name || undefined,
-        }),
-      });
+    const qs = new URLSearchParams({
+      plan,
+      billing_cycle: billingCycle,
+      user_id: email,
+      email,
+    });
+    const name = session.user.name?.trim();
+    if (name) qs.set("firstname", name);
 
-      const data = await res.json();
-      if (res.status === 401 || res.status === 403) {
-        redirectToLogin(PRICING_LOGIN_URL);
-        return;
-      }
-      if (!res.ok) throw new Error(data.detail || "Failed to start PayU checkout");
-
-      const form = document.createElement("form");
-      form.method = "POST";
-      form.action = data.action;
-      for (const [key, value] of Object.entries(data.params as Record<string, string>)) {
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = key;
-        input.value = value;
-        form.appendChild(input);
-      }
-      document.body.appendChild(form);
-      form.submit();
-    } catch (error: unknown) {
-      console.error(error);
-      const message = error instanceof Error ? error.message : "Failed to initiate PayU checkout. Is the backend running?";
-      alert(message);
-      setLoading(null);
-    }
+    // PayU docs Step 1.3a: server-rendered HTML form auto-POSTs to PayU.
+    window.location.href = `/api/billing/payu/checkout-page?${qs.toString()}`;
   }
 
   async function startStripeCheckout(plan: Exclude<PlanType, "free_trial">) {

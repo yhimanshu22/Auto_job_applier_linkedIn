@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import os
 import secrets
 import time
@@ -35,8 +36,16 @@ PLAN_LABELS: dict[Plan, str] = {
 }
 
 
+def _payu_key() -> str:
+    return (os.getenv("PAYU_MERCHANT_KEY") or "").strip()
+
+
+def _payu_salt() -> str:
+    return (os.getenv("PAYU_MERCHANT_SALT") or "").strip()
+
+
 def is_payu_configured() -> bool:
-    return bool(os.getenv("PAYU_MERCHANT_KEY") and os.getenv("PAYU_MERCHANT_SALT"))
+    return bool(_payu_key() and _payu_salt())
 
 
 def payu_payment_url() -> str:
@@ -62,11 +71,12 @@ def get_inr_amount(plan: Plan, billing_cycle: BillingCycle) -> str:
 
 def product_info(plan: Plan, billing_cycle: BillingCycle) -> str:
     cycle_label = "Annual" if billing_cycle == "yearly" else "Monthly"
-    return f"{PLAN_LABELS[plan]} ({cycle_label})"
+    return f"{PLAN_LABELS[plan]} {cycle_label}"
 
 
 def generate_txnid() -> str:
-    return f"LA{int(time.time())}{secrets.token_hex(4)}"
+    # PayU: txnid must be unique, <= 25 chars, no special characters.
+    return f"LA{int(time.time())}{secrets.token_hex(3)}"
 
 
 def generate_request_hash(params: dict[str, str], salt: str) -> str:
@@ -141,8 +151,8 @@ def build_payment_params(
     firstname: str | None = None,
     phone: str | None = None,
 ) -> dict[str, str]:
-    key = os.getenv("PAYU_MERCHANT_KEY", "")
-    salt = os.getenv("PAYU_MERCHANT_SALT", "")
+    key = _payu_key()
+    salt = _payu_salt()
     if not key or not salt:
         raise ValueError("PayU merchant credentials are not configured")
 
@@ -166,10 +176,41 @@ def build_payment_params(
     return params
 
 
+def render_checkout_html(action: str, params: dict[str, str]) -> str:
+    """PayU Hosted Checkout Step 1.3a — server-rendered auto-submit form."""
+    fields = "\n".join(
+        f'    <input type="hidden" name="{html.escape(k)}" value="{html.escape(v)}">'
+        for k, v in params.items()
+    )
+    action_escaped = html.escape(action)
+    return f"""<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Redirecting to PayU…</title>
+    <style>
+      body {{ font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; background: #fafafa; color: #333; }}
+      .box {{ text-align: center; padding: 2rem; }}
+    </style>
+  </head>
+  <body onload="document.forms.payu.submit()">
+    <div class="box">
+      <p>Redirecting to secure PayU checkout…</p>
+      <p><small>If you are not redirected, click Continue.</small></p>
+    </div>
+    <form name="payu" method="post" action="{action_escaped}">
+{fields}
+      <noscript><input type="submit" value="Continue to PayU"></noscript>
+    </form>
+  </body>
+</html>"""
+
+
 def verify_payment_with_payu(txnid: str) -> dict[str, Any] | None:
     """Optional server-side confirmation via PayU Verify Payment API."""
-    key = os.getenv("PAYU_MERCHANT_KEY")
-    salt = os.getenv("PAYU_MERCHANT_SALT")
+    key = _payu_key()
+    salt = _payu_salt()
     if not key or not salt:
         return None
 

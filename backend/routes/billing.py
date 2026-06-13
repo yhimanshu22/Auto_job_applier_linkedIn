@@ -1,7 +1,7 @@
 import os
 import stripe
-from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Request, HTTPException, Query
+from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -51,33 +51,89 @@ class PayUInitiateRequest(BaseModel):
     phone: str | None = None
 
 
-@router.post("/payu/initiate")
-async def initiate_payu_payment(payload: PayUInitiateRequest, request: Request):
+def _payu_callback_urls() -> tuple[str, str]:
+    return (
+        f"{BACKEND_PUBLIC_URL}/api/billing/payu/callback/success",
+        f"{BACKEND_PUBLIC_URL}/api/billing/payu/callback/failure",
+    )
+
+
+async def _build_payu_checkout_params(
+    *,
+    request: Request,
+    plan: Literal["starter", "pro", "agency"],
+    billing_cycle: Literal["monthly", "yearly"],
+    user_id: str,
+    email: str,
+    firstname: str | None = None,
+    phone: str | None = None,
+) -> dict[str, str]:
     if not payu_service.is_payu_configured():
         raise HTTPException(
             status_code=503,
             detail="PayU is not configured. Set PAYU_MERCHANT_KEY and PAYU_MERCHANT_SALT.",
         )
 
-    user_id = await resolve_user_id(request, payload.user_id)
-
+    resolved_user_id = await resolve_user_id(request, user_id)
+    surl, furl = _payu_callback_urls()
     try:
-        params = payu_service.build_payment_params(
-            user_id=user_id,
-            email=payload.email,
-            plan=payload.plan,
-            billing_cycle=payload.billing_cycle,
-            success_url=f"{BACKEND_PUBLIC_URL}/api/billing/payu/callback/success",
-            failure_url=f"{BACKEND_PUBLIC_URL}/api/billing/payu/callback/failure",
-            firstname=payload.firstname,
-            phone=payload.phone,
+        return payu_service.build_payment_params(
+            user_id=resolved_user_id,
+            email=email,
+            plan=plan,
+            billing_cycle=billing_cycle,
+            success_url=surl,
+            failure_url=furl,
+            firstname=firstname,
+            phone=phone,
         )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
+
+@router.get("/payu/checkout-page", response_class=HTMLResponse)
+async def payu_checkout_page(
+    request: Request,
+    plan: Literal["starter", "pro", "agency"] = Query(...),
+    billing_cycle: Literal["monthly", "yearly"] = Query("monthly"),
+    user_id: str = Query(...),
+    email: str = Query(...),
+    firstname: str | None = Query(None),
+    phone: str | None = Query(None),
+):
+    """PayU Hosted Checkout — server-rendered form that auto-POSTs to PayU."""
+    params = await _build_payu_checkout_params(
+        request=request,
+        plan=plan,
+        billing_cycle=billing_cycle,
+        user_id=user_id,
+        email=email,
+        firstname=firstname,
+        phone=phone,
+    )
+    print(f"DEBUG: PayU checkout-page txnid={params.get('txnid')} user={params.get('udf1')}")
+    return payu_service.render_checkout_html(payu_service.payu_payment_url(), params)
+
+
+@router.post("/payu/initiate")
+async def initiate_payu_payment(payload: PayUInitiateRequest, request: Request):
+    params = await _build_payu_checkout_params(
+        request=request,
+        plan=payload.plan,
+        billing_cycle=payload.billing_cycle,
+        user_id=payload.user_id,
+        email=payload.email,
+        firstname=payload.firstname,
+        phone=payload.phone,
+    )
     return {
         "action": payu_service.payu_payment_url(),
         "params": params,
+        "checkout_page": (
+            f"{BACKEND_PUBLIC_URL}/api/billing/payu/checkout-page"
+            f"?plan={payload.plan}&billing_cycle={payload.billing_cycle}"
+            f"&user_id={payload.user_id}&email={payload.email}"
+        ),
     }
 
 
@@ -116,7 +172,7 @@ def _activate_payu_subscription(params: dict[str, str]) -> bool:
 async def _handle_payu_callback(request: Request, *, success: bool):
     form = await request.form()
     params = {k: str(v) for k, v in form.items()}
-    salt = os.getenv("PAYU_MERCHANT_SALT", "")
+    salt = (os.getenv("PAYU_MERCHANT_SALT") or "").strip()
 
     if not payu_service.verify_response_hash(params, salt):
         print(f"WARNING: PayU hash verification failed for txnid={params.get('txnid')}")
@@ -127,6 +183,7 @@ async def _handle_payu_callback(request: Request, *, success: bool):
 
     status = (params.get("status") or "").lower()
     txnid = params.get("txnid", "")
+    print(f"DEBUG: PayU callback success={success} status={status} txnid={txnid}")
 
     if success and status == "success":
         verified = payu_service.verify_payment_with_payu(txnid)

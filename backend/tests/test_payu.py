@@ -29,7 +29,7 @@ def test_generate_request_hash_is_deterministic():
         "key": "gtKFFx",
         "txnid": "LA123",
         "amount": "1599.00",
-        "productinfo": "LinkdApply Starter (Monthly)",
+        "productinfo": "LinkdApply Starter Monthly",
         "firstname": "Test",
         "email": "test@example.com",
         "udf1": "user@example.com",
@@ -48,7 +48,7 @@ def test_verify_response_hash_roundtrip():
         "key": "gtKFFx",
         "txnid": "LA123",
         "amount": "1599.00",
-        "productinfo": "LinkdApply Starter (Monthly)",
+        "productinfo": "LinkdApply Starter Monthly",
         "firstname": "Test",
         "email": "test@example.com",
         "udf1": "user@example.com",
@@ -66,6 +66,26 @@ def test_verify_response_hash_roundtrip():
     )
     params["hash"] = hashlib.sha512(reverse_string.encode("utf-8")).hexdigest().lower()
     assert payu_service.verify_response_hash(params, salt)
+
+
+def test_payu_checkout_page_returns_auto_submit_form():
+    response = client.get(
+        "/api/billing/payu/checkout-page",
+        params={
+            "plan": "starter",
+            "billing_cycle": "monthly",
+            "user_id": "test-user",
+            "email": "test@example.com",
+            "firstname": "Test",
+        },
+    )
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("content-type", "")
+    body = response.text
+    assert 'action="https://test.payu.in/_payment"' in body
+    assert 'name="hash"' in body
+    assert 'document.forms.payu.submit()' in body
+    assert "1599.00" in body
 
 
 def test_payu_initiate_returns_checkout_payload():
@@ -105,7 +125,7 @@ def test_payu_success_callback_activates_subscription(test_db):
         "key": os.environ["PAYU_MERCHANT_KEY"],
         "txnid": "LA999",
         "amount": "1599.00",
-        "productinfo": "LinkdApply Starter (Monthly)",
+        "productinfo": "LinkdApply Starter Monthly",
         "firstname": "Test",
         "email": "test@example.com",
         "udf1": "payu-callback-user",
