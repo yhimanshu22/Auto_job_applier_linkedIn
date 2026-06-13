@@ -106,3 +106,25 @@ def test_stripe_webhook_invalid_signature():
         headers={"stripe-signature": "invalid"}
     )
     assert response.status_code == 400
+
+
+def test_subscription_internal_requires_key(test_db):
+    test_db.upsert_subscription(user_id="sub@test.com", plan="pro", status="active")
+    os.environ["LINKDAPPLY_INTERNAL_KEY"] = "test-secret"
+
+    bad = client.get(
+        "/api/billing/subscription-internal",
+        params={"user_id": "sub@test.com"},
+        headers={"X-LinkdApply-Key": "wrong"},
+    )
+    assert bad.status_code == 403
+
+    ok = client.get(
+        "/api/billing/subscription-internal",
+        params={"user_id": "sub@test.com"},
+        headers={"X-LinkdApply-Key": "test-secret"},
+    )
+    assert ok.status_code == 200
+    body = ok.json()
+    assert body["plan"] == "pro"
+    assert body["status"] == "active"

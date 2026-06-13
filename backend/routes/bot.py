@@ -1,18 +1,17 @@
-import glob
 import logging
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 
-from app_paths import get_base_path, get_logs_dir, get_runtime_writable_root
+from app_paths import get_base_path, get_runtime_writable_root
 from db_manager import db
 from services.linkedin_env import apply_dashboard_linkedin_credentials
 from services.plan_limits import PLAN_LIMITS, assert_can_start_bot
 from services import supervisor_state as sv
 from services.bot_supervisor import stop_supervisor, supervisor_popen_kwargs
+from utils.debug_logs import SUPERVISOR_CONSOLE_LOG, append_session_marker, collect_bot_logs_payload, log_file_path
 from utils.user_resolution import resolve_user_id
 
 router = APIRouter(prefix="/api/bot", tags=["bot"])
@@ -43,15 +42,9 @@ async def start_bot(request: Request, payload: dict = None):
         env["USER_ID"] = user_id
 
         sv.close_supervisor_log()
-        logs_dir = get_logs_dir()
-        os.makedirs(logs_dir, exist_ok=True)
-        console_log = os.path.join(logs_dir, "supervisor-console.log")
+        console_log = log_file_path(SUPERVISOR_CONSOLE_LOG)
         sv.supervisor_log_handle = open(console_log, "a", encoding="utf-8", buffering=1)
-        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        sv.supervisor_log_handle.write(
-            f"\n{'=' * 60}\n[{ts}] Supervisor session started (API / dashboard)\n{'=' * 60}\n"
-        )
-        sv.supervisor_log_handle.flush()
+        append_session_marker(console_log, "Supervisor session started (API / dashboard)")
 
         sv.supervisor_process = subprocess.Popen(
             cmd,
@@ -118,55 +111,7 @@ async def get_bot_status(request: Request, user_id: str | None = None):
 @router.get("/logs")
 async def get_bot_logs(request: Request, lines: int = 120):
     await resolve_user_id(request)
-    lines = max(20, min(int(lines), 500))
-    log_dir = get_logs_dir()
-    os.makedirs(log_dir, exist_ok=True)
-
-    def tail_file(path: str) -> str:
-        if not os.path.isfile(path):
-            return ""
-        try:
-            with open(path, "r", encoding="utf-8", errors="replace") as f:
-                buf = f.readlines()
-            return "".join(buf[-lines:])
-        except Exception as ex:
-            return f"(read error: {ex})"
-
-    infra = []
-    infra_text_parts = []
-    for title, filename in (
-        ("Supervisor console (stdout/stderr)", "supervisor-console.log"),
-        ("Supervisor", "supervisor.log"),
-    ):
-        path = os.path.join(log_dir, filename)
-        chunk = tail_file(path).strip()
-        if chunk:
-            infra.append({"title": title, "filename": filename, "content": chunk})
-            infra_text_parts.append(f"--- {title} ({filename}) ---\n{chunk}")
-
-    profiles = []
-    profile_text_parts = []
-    for path in sorted(glob.glob(os.path.join(log_dir, "bot-*.txt"))):
-        basename = os.path.basename(path)
-        inner = basename[len("bot-") : -len(".txt")]
-        chunk = tail_file(path).strip()
-        profiles.append({"id": inner, "filename": basename, "content": chunk})
-        if chunk:
-            profile_text_parts.append(f"--- Bot profile {inner} ({basename}) ---\n{chunk}")
-
-    legacy_parts = infra_text_parts + profile_text_parts
-    if not legacy_parts:
-        msg = (
-            "No log files yet. Start the bot from the dashboard to capture supervisor output "
-            f"under {log_dir}/."
-        )
-        return {"logs": msg, "infra": [], "profiles": []}
-
-    return {
-        "logs": "\n".join(legacy_parts),
-        "infra": infra,
-        "profiles": profiles,
-    }
+    return collect_bot_logs_payload(lines=lines)
 
 
 @router.get("/runs")

@@ -81,6 +81,16 @@ cd frontend && npm run dev
 
 Open **http://localhost:3000** for the dashboard and **http://127.0.0.1:8000** for the API.
 
+### Desktop app (Tauri thin launcher)
+
+For end users who should not clone the repo: the `desktop/` app starts the **local bot sidecar** and opens your **hosted dashboard** (Vercel) for login and billing. See [desktop/README.md](desktop/README.md).
+
+```bash
+cd desktop && npm install && npm run icon
+cp .env.example .env   # set LINKDAPPLY_FRONTEND_URL to your Vercel URL
+npm run dev            # requires Rust: https://rustup.rs/
+```
+
 ---
 
 ## ⚙️ Configuration

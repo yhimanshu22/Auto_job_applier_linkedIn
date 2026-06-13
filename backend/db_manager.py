@@ -49,10 +49,15 @@ def _ts_to_utc_iso(dt: datetime | None) -> str | None:
 
 class DatabaseManager:
     def __init__(self):
-        # Database URL from environment variable, default to local SQLite
-        # For GCP Cloud SQL, this would be: postgresql://user:pass@host:port/dbname
-        self.db_url = os.getenv("DATABASE_URL")
-        
+        # Desktop sidecar: configs, secrets, applications, and bot history stay on
+        # local SQLite under LINKDAPPLY_USER_DATA even if DATABASE_URL is set.
+        force_local = os.getenv("LINKDAPPLY_LOCAL_DATA", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        self.db_url = None if force_local else os.getenv("DATABASE_URL")
+
         if not self.db_url:
             db_path = os.path.join(get_runtime_writable_root(), "data.db")
             self.db_url = f"sqlite:///{db_path}"

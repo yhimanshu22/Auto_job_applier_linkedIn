@@ -13,6 +13,7 @@ from pprint import pprint
 
 from app_paths import get_logs_dir
 from config.config_bridge import *
+from utils.debug_logs import LEGACY_BOT_LOG, bot_log_path, log_file_path
 from utils.logger import logger as cloud_logger
 
 
@@ -108,18 +109,16 @@ def get_log_path():
     When BOT_ID is set (supervisor-spawned worker), logs go to bot-<id>.txt per profile.
     """
     try:
-        base = get_logs_dir()
         bid = os.getenv("BOT_ID", "").strip()
         if bid:
-            safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in bid)
-            return os.path.join(base, f"bot-{safe}.txt")
-        return os.path.join(base, "log.txt")
+            return bot_log_path(bid)
+        return log_file_path(LEGACY_BOT_LOG)
     except Exception as e:
         critical_error_log(
             "Failed getting log path! So assigning fallback under app logs dir.",
             e,
         )
-        return os.path.join(get_logs_dir(), "log.txt")
+        return log_file_path(LEGACY_BOT_LOG)
 
 
 __logs_file_path = get_log_path()

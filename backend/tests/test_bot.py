@@ -31,7 +31,10 @@ def test_bot_stop_when_not_running(client, monkeypatch):
 def test_bot_logs_availability(client):
     response = client.get("/api/bot/logs")
     assert response.status_code == 200
-    assert "logs" in response.json()
+    body = response.json()
+    assert "logs" in body
+    assert "log_dir" in body
+    assert "files" in body
 
 
 def test_bot_active_zero_when_idle(client):

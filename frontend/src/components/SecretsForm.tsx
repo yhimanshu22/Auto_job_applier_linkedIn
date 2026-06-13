@@ -3,51 +3,131 @@
 import React, { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 
+import { apiFetch } from "@/lib/desktop-api";
+
+interface ApiLinkedInAccount {
+  username: string;
+  primary: boolean;
+  has_password: boolean;
+  deletable?: boolean;
+}
+
+interface AccountRow {
+  username: string;
+  password: string;
+  passwordSet: boolean;
+  saved: boolean;
+  deletable: boolean;
+}
+
 interface SecretsFormProps {
   data: Record<string, any>;
   onChange: (newData: Record<string, any>) => void;
   onAccountsSaved?: () => void;
+  onNotify?: (message: { type: "success" | "error" | "warning"; text: string }) => void;
   /** When true (secrets tab visible), reload LinkedIn snapshot from API */
   isActive?: boolean;
+}
+
+function apiAccountsToRows(accounts: ApiLinkedInAccount[]): AccountRow[] {
+  if (accounts.length === 0) return [];
+
+  const primary = accounts.find((a) => a.primary);
+  const ordered = primary
+    ? [primary, ...accounts.filter((a) => a.username !== primary.username)]
+    : accounts;
+
+  return ordered.map((a) => ({
+    username: a.username || "",
+    password: "",
+    passwordSet: a.has_password,
+    saved: true,
+    deletable: a.deletable !== false,
+  }));
+}
+
+function emptyPrimaryRow(): AccountRow {
+  return {
+    username: "",
+    password: "",
+    passwordSet: false,
+    saved: false,
+    deletable: true,
+  };
 }
 
 /**
  * LinkedIn accounts (API) + AI/API keys from same secrets category as validator validate_secrets.
  */
-export default function SecretsForm({ data, onChange, onAccountsSaved, isActive = true }: SecretsFormProps) {
+export default function SecretsForm({
+  data,
+  onChange,
+  onAccountsSaved,
+  onNotify,
+  isActive = true,
+}: SecretsFormProps) {
   const patch = (key: string, value: any) => onChange({ ...data, [key]: value });
 
   const { data: session } = useSession();
   const userId = session?.user?.email || "local-user";
 
-  const [primaryUser, setPrimaryUser] = useState("");
-  const [primaryPass, setPrimaryPass] = useState("");
-  const [primaryPassWasSet, setPrimaryPassWasSet] = useState(false);
-  const [extras, setExtras] = useState<Array<{ username: string; password: string; saved?: boolean }>>([]);
+  const [accountRows, setAccountRows] = useState<AccountRow[]>([emptyPrimaryRow()]);
+  const [accountCount, setAccountCount] = useState(0);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
+  const notify = (type: "success" | "error", text: string) => {
+    if (onNotify) {
+      onNotify({ type, text });
+      return;
+    }
+    setMsg({ type: type === "success" ? "ok" : "err", text });
+  };
+
   const loadLinkedIn = async () => {
     setLoading(true);
     try {
-      const r = await fetch(`/api/linkedin-accounts?user_id=${encodeURIComponent(userId)}`);
+      const r = await apiFetch(`/api/linkedin-accounts?user_id=${encodeURIComponent(userId)}`);
       if (!r.ok) throw new Error("Failed to load accounts");
       const d = await r.json();
-      setPrimaryUser(d.primary_username || data.username || "");
-      setPrimaryPassWasSet(!!d.primary_password_set);
-      setPrimaryPass("");
-      setExtras(
-        (d.extras || []).map((e: { username: string }) => ({
-          username: e.username || "",
-          password: "",
-          saved: true,
-        }))
-      );
+      const accounts: ApiLinkedInAccount[] = Array.isArray(d.accounts) ? d.accounts : [];
+
+      let rows = apiAccountsToRows(accounts);
+      if (rows.length === 0 && d.primary_username) {
+        rows = [
+          {
+            username: String(d.primary_username),
+            password: "",
+            passwordSet: !!d.primary_password_set,
+            saved: true,
+            deletable: true,
+          },
+        ];
+      }
+      if (rows.length === 0) {
+        rows = [emptyPrimaryRow()];
+      }
+
+      setAccountRows(rows);
+      const visibleCount = rows.filter((row) => row.username.trim()).length;
+      setAccountCount(visibleCount);
     } catch {
-      setPrimaryUser(data.username ?? "");
-      setExtras([]);
+      setAccountRows(
+        data.username
+          ? [
+              {
+                username: String(data.username),
+                password: "",
+                passwordSet: false,
+                saved: false,
+                deletable: true,
+              },
+            ]
+          : [emptyPrimaryRow()]
+      );
+      setAccountCount(0);
     } finally {
       setLoading(false);
     }
@@ -58,69 +138,69 @@ export default function SecretsForm({ data, onChange, onAccountsSaved, isActive 
     loadLinkedIn();
   }, [isActive]);
 
-  useEffect(() => {
-    if (data.username != null && data.username !== "") {
-      setPrimaryUser((u) => (u === "" ? String(data.username) : u));
-    }
-  }, [data.username]);
+  const patchRow = (i: number, field: "username" | "password", value: string) => {
+    setAccountRows((rows) => {
+      const next = [...rows];
+      next[i] = { ...next[i], [field]: value };
+      return next;
+    });
+  };
 
-  const addExtra = () => setExtras([...extras, { username: "", password: "" }]);
+  const addAccount = () => {
+    setAccountRows((rows) => [
+      ...rows,
+      { username: "", password: "", passwordSet: false, saved: false, deletable: true },
+    ]);
+  };
 
   const deleteAccount = async (username: string) => {
     const u = username.trim();
     if (!u) return false;
-    if (!window.confirm(`Delete LinkedIn account ${u}? Its saved password will be removed.`)) return false;
     setDeleting(u);
     setMsg(null);
     try {
-      const r = await fetch(
+      const r = await apiFetch(
         `/api/linkedin-accounts?username=${encodeURIComponent(u)}&user_id=${encodeURIComponent(userId)}`,
         { method: "DELETE" }
       );
       const raw = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(typeof raw.detail === "string" ? raw.detail : r.statusText);
-      setMsg({ type: "ok", text: `Deleted ${u} (${raw.account_count ?? "?"} account(s) left).` });
+      notify("success", `Deleted ${u} (${raw.account_count ?? "?"} account(s) left).`);
       onAccountsSaved?.();
+      await loadLinkedIn();
       return true;
     } catch (e: unknown) {
-      setMsg({ type: "err", text: e instanceof Error ? e.message : "Delete failed" });
+      notify("error", e instanceof Error ? e.message : "Delete failed");
       return false;
     } finally {
       setDeleting(null);
     }
   };
 
-  const deletePrimary = async () => {
-    if (await deleteAccount(primaryUser)) {
-      setPrimaryUser("");
-      setPrimaryPass("");
-      setPrimaryPassWasSet(false);
-    }
-  };
-
-  const removeExtra = async (i: number) => {
-    const row = extras[i];
+  const removeRow = async (i: number) => {
+    const row = accountRows[i];
     if (row?.saved && row.username.trim()) {
       if (!(await deleteAccount(row.username))) return;
+      return;
     }
-    setExtras(extras.filter((_, j) => j !== i));
-  };
-  const patchExtra = (i: number, field: "username" | "password", v: string) => {
-    const next = [...extras];
-    next[i] = { ...next[i], [field]: v };
-    setExtras(next);
+    const next = accountRows.filter((_, j) => j !== i);
+    setAccountRows(next.length > 0 ? next : [emptyPrimaryRow()]);
   };
 
   const saveLinkedIn = async () => {
     setSaving(true);
     setMsg(null);
     try {
-      const r = await fetch(`/api/linkedin-accounts?user_id=${encodeURIComponent(userId)}`, {
+      const filled = accountRows.filter((row) => row.username.trim());
+      const primary = filled[0];
+      const extras = filled.slice(1);
+
+      const r = await apiFetch(`/api/linkedin-accounts?user_id=${encodeURIComponent(userId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          primary_username: primaryUser,
-          primary_password: primaryPass,
+          primary_username: primary?.username.trim() || "",
+          primary_password: primary?.password || "",
           extras: extras.map(({ username, password }) => ({ username, password })),
         }),
       });
@@ -135,34 +215,40 @@ export default function SecretsForm({ data, onChange, onAccountsSaved, isActive 
               : r.statusText;
         throw new Error(text);
       }
-      setMsg({ type: "ok", text: `LinkedIn saved (${raw.account_count ?? "?"} account(s)).` });
-      setPrimaryPass("");
-      setPrimaryPassWasSet(true);
+      notify("success", `LinkedIn saved (${raw.account_count ?? "?"} account(s)).`);
       onAccountsSaved?.();
+      await loadLinkedIn();
     } catch (e: unknown) {
-      setMsg({ type: "err", text: e instanceof Error ? e.message : "Save failed" });
+      notify("error", e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
     }
   };
 
   const aiProviders = ["openai", "deepseek", "gemini"];
+  const savedRowCount = accountRows.filter((r) => r.saved && r.username.trim()).length;
 
   return (
     <div className="space-y-10 p-1 overflow-y-auto max-h-[550px] scrollbar-thin scrollbar-thumb-zinc-900">
       <div>
-        <h3 className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest border-b border-zinc-900 pb-1.5 mb-3">
-          LinkedIn accounts
-        </h3>
+        <div className="flex items-center justify-between border-b border-zinc-900 pb-1.5 mb-3">
+          <h3 className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">LinkedIn accounts</h3>
+          {!loading && (
+            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">
+              {accountCount} configured
+            </span>
+          )}
+        </div>
+
         <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 mb-3">
           <p className="text-[10px] text-amber-200/90 leading-relaxed">
-            Primary → <span className="font-mono">LINKEDIN_USERNAME</span>. Additional rows →{" "}
-            <span className="font-mono">LINKEDIN_USERNAME_1</span>, <span className="font-mono">_2</span>, … Save here
-            before starting the bot. Password blank keeps the previous value for that email.
+            Save LinkedIn email and password here before starting the bot. Leave password blank to keep
+            the saved value for that email. On first run the bot logs in in your browser (disable
+            headless in Settings if you need to complete 2FA).
           </p>
         </div>
 
-        {msg && (
+        {msg && !onNotify && (
           <div
             className={`text-[11px] px-3 py-2 rounded-lg border mb-3 ${
               msg.type === "ok"
@@ -178,64 +264,32 @@ export default function SecretsForm({ data, onChange, onAccountsSaved, isActive 
           <p className="text-xs text-zinc-500">Loading LinkedIn accounts…</p>
         ) : (
           <>
-            <div className="space-y-4 max-w-lg mb-6">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Email or phone</label>
-                <input
-                  type="text"
-                  autoComplete="username"
-                  value={primaryUser}
-                  onChange={(e) => setPrimaryUser(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-600"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Password</label>
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  value={primaryPass}
-                  onChange={(e) => setPrimaryPass(e.target.value)}
-                  placeholder={primaryPassWasSet ? "(unchanged if left blank)" : ""}
-                  className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-600"
-                />
-              </div>
-              {primaryUser.trim() !== "" && primaryPassWasSet && (
-                <button
-                  type="button"
-                  onClick={deletePrimary}
-                  disabled={deleting !== null}
-                  className="text-[10px] font-bold text-red-500/80 hover:text-red-400 uppercase tracking-widest disabled:opacity-50"
-                >
-                  {deleting === primaryUser.trim() ? "Deleting…" : "Delete primary account"}
-                </button>
-              )}
+            <div className="flex justify-between items-center border-b border-zinc-900 pb-1.5 mb-3">
+              <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">
+                {savedRowCount > 0 ? `${savedRowCount} saved` : "Add your accounts"}
+              </p>
+              <button
+                type="button"
+                onClick={addAccount}
+                className="text-[9px] font-bold text-blue-500 uppercase tracking-widest hover:text-blue-400"
+              >
+                + Add account
+              </button>
             </div>
 
             <div className="space-y-3 mb-4">
-              <div className="flex justify-between items-center border-b border-zinc-900 pb-1.5">
-                <h4 className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Additional accounts</h4>
-                <button
-                  type="button"
-                  onClick={addExtra}
-                  className="text-[9px] font-bold text-blue-500 uppercase tracking-widest hover:text-blue-400"
-                >
-                  + Add account
-                </button>
-              </div>
-              {extras.map((row, i) => (
+              {accountRows.map((row, i) => (
                 <div
-                  key={i}
+                  key={`${row.username}-${i}`}
                   className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end p-3 rounded-lg border border-zinc-900 bg-zinc-950/50"
                 >
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">
-                      Account {i + 1} email
-                    </label>
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Email</label>
                     <input
                       type="text"
+                      autoComplete="username"
                       value={row.username}
-                      onChange={(e) => patchExtra(i, "username", e.target.value)}
+                      onChange={(e) => patchRow(i, "username", e.target.value)}
                       className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-600"
                     />
                   </div>
@@ -243,20 +297,25 @@ export default function SecretsForm({ data, onChange, onAccountsSaved, isActive 
                     <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Password</label>
                     <input
                       type="password"
+                      autoComplete="current-password"
                       value={row.password}
-                      onChange={(e) => patchExtra(i, "password", e.target.value)}
-                      placeholder="blank = keep saved"
+                      onChange={(e) => patchRow(i, "password", e.target.value)}
+                      placeholder={row.passwordSet ? "blank = keep saved" : "required for new account"}
                       className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-600"
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeExtra(i)}
-                    disabled={deleting !== null}
-                    className="text-[10px] font-bold text-red-500/80 hover:text-red-400 uppercase py-2 disabled:opacity-50"
-                  >
-                    {deleting === row.username.trim() ? "Deleting…" : row.saved ? "Delete" : "Remove"}
-                  </button>
+                  {row.deletable ? (
+                    <button
+                      type="button"
+                      onClick={() => removeRow(i)}
+                      disabled={deleting !== null || saving}
+                      className="text-[10px] font-bold text-red-500/80 hover:text-red-400 uppercase py-2 disabled:opacity-50"
+                    >
+                      {deleting === row.username.trim() ? "Deleting…" : row.saved ? "Delete" : "Remove"}
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-zinc-600 uppercase py-2">—</span>
+                  )}
                 </div>
               ))}
             </div>

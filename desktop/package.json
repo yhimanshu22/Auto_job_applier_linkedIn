@@ -1,0 +1,14 @@
+{
+  "name": "linkdapply-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:backend": "node scripts/build-backend.js",
+    "icon": "node scripts/make-icon.js && tauri icon assets/source-icon.png"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.4.0"
+  }
+}

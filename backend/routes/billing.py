@@ -1,6 +1,6 @@
 import os
 import stripe
-from fastapi import APIRouter, Request, HTTPException, Query
+from fastapi import APIRouter, Request, HTTPException, Query, Header
 from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -430,6 +430,34 @@ def _enrich_subscription(sub: dict) -> dict:
     out["max_accounts"] = limits["max_accounts"]
     out["max_active_bots"] = limits["max_active_bots"]
     return out
+
+
+@router.get("/subscription-internal")
+async def get_subscription_internal(
+    user_id: str = Query(...),
+    x_linkdapply_key: str | None = Header(None, alias="X-LinkdApply-Key"),
+):
+    """Trusted lookup for the desktop sidecar (local data + cloud billing)."""
+    expected = os.getenv("LINKDAPPLY_INTERNAL_KEY", "").strip()
+    if not expected or x_linkdapply_key != expected:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    uid = user_id.strip()
+    if uid in ADMIN_EMAILS:
+        return {
+            "plan": "agency",
+            "status": "active",
+            "current_period_end": 4102444800,
+            "billing_cycle": "yearly",
+            "limit": 3000,
+            "max_accounts": 10,
+            "max_active_bots": 5,
+        }
+
+    sub = db.get_user_subscription(uid)
+    if not sub:
+        return {"plan": "free", "status": "inactive", "limit": 0}
+    return _enrich_subscription(sub)
 
 
 @router.get("/subscription")

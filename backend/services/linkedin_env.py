@@ -142,21 +142,6 @@ def get_automation_settings(mask_sensitive: bool = True, user_id: str = DEFAULT_
     return out
 
 
-def count_linkedin_accounts(env: dict) -> int:
-    """Match supervisor.BotSupervisor._get_accounts — count distinct runnable accounts."""
-    n = 0
-    du = env.get("LINKEDIN_USERNAME")
-    dp = env.get("LINKEDIN_PASSWORD")
-    if du and dp:
-        n += 1
-    for key, value in env.items():
-        if key.startswith("LINKEDIN_USERNAME_") and key[18:] and value:
-            suffix = key[18:]
-            if env.get(f"LINKEDIN_PASSWORD_{suffix}"):
-                n += 1
-    return n
-
-
 # ---------------------------------------------------------------------------
 # Account discovery + selection (used by the automation dashboard)
 # ---------------------------------------------------------------------------
@@ -210,6 +195,30 @@ def _iter_env_accounts(env: dict) -> list[tuple[str, str | None, bool]]:
         out.append((u, pw, False))
 
     return out
+
+
+def get_linkedin_password_for_email(user_id: str, linkedin_email: str) -> str:
+    """Resolve password from dashboard DB secrets or process env (LINKEDIN_*)."""
+    target = (linkedin_email or "").strip().lower()
+    if not target:
+        return ""
+    secrets = _load_secrets(user_id)
+    primary = (secrets.get("username") or "").strip()
+    if primary.lower() == target:
+        return str(secrets.get("password") or "")
+    extras = secrets.get("linkedin_extra_accounts")
+    if isinstance(extras, list):
+        for row in extras:
+            if not isinstance(row, dict):
+                continue
+            u = (row.get("username") or "").strip()
+            if u.lower() == target:
+                return str(row.get("password") or "")
+    env = preview_env_with_dashboard_credentials(user_id=user_id)
+    for username, password, _ in _iter_env_accounts(env):
+        if username.lower() == target:
+            return str(password or "")
+    return ""
 
 
 def list_linkedin_accounts(env: dict | None = None, user_id: str = DEFAULT_USER) -> list[dict]:
@@ -268,6 +277,11 @@ def list_linkedin_accounts(env: dict | None = None, user_id: str = DEFAULT_USER)
         if is_env_primary:
             db_primary_set = True
     return out
+
+
+def count_linkedin_accounts(env: dict | None = None, user_id: str = DEFAULT_USER) -> int:
+    """Count distinct configured LinkedIn accounts (DB + env), deduplicated by email."""
+    return len(list_linkedin_accounts(env=env, user_id=user_id))
 
 
 def get_active_linkedin_account(env: dict | None = None) -> str | None:

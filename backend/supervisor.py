@@ -3,11 +3,15 @@ import time
 import sys
 import os
 import signal
-import logging
-from datetime import datetime
 from dotenv import load_dotenv
 
-from app_paths import get_logs_dir, get_runtime_writable_root
+from app_paths import get_runtime_writable_root
+from utils.debug_logs import (
+    SUPERVISOR_LOG,
+    append_session_marker,
+    bot_console_path,
+    configure_file_logger,
+)
 
 # Load environment variables
 load_dotenv()
@@ -22,16 +26,7 @@ def _nt_background_creationflags():
 
 
 # Configure logging (canonical app logs dir, not cwd-relative)
-_LOG_DIR = get_logs_dir()
-os.makedirs(_LOG_DIR, exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler(os.path.join(_LOG_DIR, "supervisor.log")),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+logger = configure_file_logger("linkdapply.supervisor", SUPERVISOR_LOG)
 
 class BotSupervisor:
     def __init__(self):
@@ -74,14 +69,14 @@ class BotSupervisor:
                         "password": password
                     })
         
-        logging.info(f"Identified {len(accounts)} accounts: {[a['id'] for a in accounts]}")
+        logger.info(f"Identified {len(accounts)} accounts: {[a['id'] for a in accounts]}")
         return accounts
 
     def start_bot(self, account):
         """Starts the runAiBot.py process for a specific account."""
         bot_id = account["id"]
         try:
-            logging.info(f"Preparing to start runAiBot.py for account {bot_id} ({account['username']})...")
+            logger.info(f"Preparing to start runAiBot.py for account {bot_id} ({account['username']})...")
             
             # Create a specific environment for this bot
             env = os.environ.copy()
@@ -100,11 +95,13 @@ class BotSupervisor:
                 server_script = os.path.join(os.path.dirname(os.path.abspath(server.__file__)), "server.py")
                 cmd = [sys.executable, server_script, "--bot"]
 
-            logging.info(f"[Supervisor] Starting bot with command: {cmd}")
+            logger.info(f"[Supervisor] Starting bot with command: {cmd}")
 
-            safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in bot_id)
             self._close_bot_stdio(bot_id)
-            bot_stdio_log = os.path.join(_LOG_DIR, f"bot-{safe_id}-stdout.log")
+            bot_stdio_log = bot_console_path(bot_id)
+            append_session_marker(
+                bot_stdio_log, f"Bot worker started (account={bot_id})"
+            )
             log_f = open(bot_stdio_log, "a", encoding="utf-8", buffering=1)
             self._bot_log_handles[bot_id] = log_f
 
@@ -116,14 +113,14 @@ class BotSupervisor:
                 stderr=subprocess.STDOUT,
                 creationflags=_nt_background_creationflags(),
             )
-            logging.info(f"Bot {bot_id} started (PID: {self.bot_processes[bot_id].pid})")
+            logger.info(f"Bot {bot_id} started (PID: {self.bot_processes[bot_id].pid})")
         except Exception as e:
-            logging.error(f"Failed to start Bot {bot_id}: {e}")
+            logger.error(f"Failed to start Bot {bot_id}: {e}")
 
     def stop_all(self):
         """Stops all managed processes."""
         self.is_running = False
-        logging.info("Stopping all processes...")
+        logger.info("Stopping all processes...")
         
         for bot_id, process in self.bot_processes.items():
             try:
@@ -131,9 +128,9 @@ class BotSupervisor:
                     subprocess.run(["taskkill", "/F", "/PID", str(process.pid), "/T"], capture_output=True)
                 else:
                     process.terminate()
-                logging.info(f"Bot process {bot_id} stopped.")
+                logger.info(f"Bot process {bot_id} stopped.")
             except Exception as e:
-                logging.error(f"Error stopping bot {bot_id}: {e}")
+                logger.error(f"Error stopping bot {bot_id}: {e}")
             self._close_bot_stdio(bot_id)
 
     def run(self):
@@ -146,7 +143,7 @@ class BotSupervisor:
                 if process is None or process.poll() is not None:
                     if process:
                         exit_code = process.poll()
-                        logging.info(
+                        logger.info(
                             f"Bot {bot_id} exited (code {exit_code}). Not restarting."
                         )
                         del self.bot_processes[bot_id]
@@ -160,11 +157,11 @@ class BotSupervisor:
                     
                     # Stagger startup to avoid Chrome initialization conflicts
                     if len(self.accounts) > 1:
-                        logging.info("Waiting 15 seconds before checking next account for staggered startup...")
+                        logger.info("Waiting 15 seconds before checking next account for staggered startup...")
                         time.sleep(15)
 
             if not self.accounts:
-                logging.info("All bot workers have exited. Supervisor stopping.")
+                logger.info("All bot workers have exited. Supervisor stopping.")
                 break
 
             time.sleep(10)
@@ -179,7 +176,7 @@ def main():
     signal.signal(signal.SIGINT, handle_exit)
     signal.signal(signal.SIGTERM, handle_exit)
 
-    logging.info("--- Supervisor Started ---")
+    logger.info("--- Supervisor Started ---")
     supervisor.run()
 
 if __name__ == "__main__":

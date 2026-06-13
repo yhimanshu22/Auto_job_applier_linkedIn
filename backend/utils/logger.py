@@ -1,15 +1,7 @@
 import os
 import logging
 
-from app_paths import get_logs_dir
-
-
-def _bot_file_log_path() -> str | None:
-    bid = os.getenv("BOT_ID", "").strip()
-    if not bid:
-        return None
-    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in bid)
-    return os.path.join(get_logs_dir(), f"bot-{safe}.txt")
+from utils.debug_logs import bot_log_path
 
 
 def setup_logging():
@@ -27,7 +19,8 @@ def setup_logging():
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
-    file_path = _bot_file_log_path()
+    bid = os.getenv("BOT_ID", "").strip()
+    file_path = bot_log_path(bid) if bid else None
     if file_path:
         os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
         fh = logging.FileHandler(file_path, encoding="utf-8")

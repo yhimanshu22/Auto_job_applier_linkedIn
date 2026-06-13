@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
+import { apiFetch } from "@/lib/desktop-api";
+
 type Subscription = {
   plan?: string;
   status?: string;
@@ -109,10 +111,10 @@ export default function BillingPage() {
           ),
           // Reuse the automation endpoint so the LinkedIn Accounts tile
           // shows the real DB-backed count instead of a hardcoded 1.
-          fetch(`/api/linkedin-automation/accounts`),
+          apiFetch(`/api/linkedin-automation/accounts`),
           // Live concurrency for the Active Bots tile (supervisor +
           // automation task subprocesses for this user).
-          fetch(
+          apiFetch(
             `/api/bot/active?user_id=${encodeURIComponent(userId)}`
           ),
         ]);

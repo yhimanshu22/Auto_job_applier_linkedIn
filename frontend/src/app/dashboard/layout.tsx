@@ -4,10 +4,12 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
+import { apiFetch } from "@/lib/desktop-api";
+
 /** Ask the backend to stop the job bot (tab close, navigate away, or layout unmount). */
 function requestStopJobBot() {
   try {
-    fetch("/api/bot/stop", {
+    apiFetch("/api/bot/stop", {
       method: "POST",
       credentials: "include",
       keepalive: true,

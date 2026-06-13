@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
+import { apiFetch } from "@/lib/desktop-api";
+
 const API = "/api/linkedin-automation";
 const BILLING_API = "/api/billing";
 const TABS = ["post", "engage", "pursue", "calendar", "settings"] as const;
@@ -637,7 +639,7 @@ function CalendarForm({
     setCalendarError(null);
     try {
       const target = (output || "content_calendar.txt").trim();
-      const res = await fetch(
+      const res = await apiFetch(
         `${API}/calendar?file=${encodeURIComponent(target)}`
       );
       if (res.ok) {
@@ -820,7 +822,7 @@ function SettingsForm({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/config?user_id=${encodeURIComponent(userId)}`);
+      const res = await apiFetch(`${API}/config?user_id=${encodeURIComponent(userId)}`);
       if (res.ok) setS(await res.json());
     } catch {
       flash({ type: "error", text: "Could not load framework settings." });
@@ -843,7 +845,7 @@ function SettingsForm({
       // Don't overwrite a masked key value on the server.
       if (payload.openai_api_key === "set") delete payload.openai_api_key;
       if (payload.gemini_api_key === "set") delete payload.gemini_api_key;
-      const res = await fetch(`${API}/config?user_id=${encodeURIComponent(userId)}`, {
+      const res = await apiFetch(`${API}/config?user_id=${encodeURIComponent(userId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -1155,7 +1157,7 @@ export default function AutomationPage() {
     if (serialized === lastSavedDefaultsRef.current) return;
     const timer = setTimeout(() => {
       lastSavedDefaultsRef.current = serialized;
-      fetch(`${API}/form-defaults?user_id=${encodeURIComponent(userId)}`, {
+      apiFetch(`${API}/form-defaults?user_id=${encodeURIComponent(userId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: serialized,
@@ -1174,7 +1176,7 @@ export default function AutomationPage() {
         const url = prefix
           ? `${API}/form-defaults?prefix=${encodeURIComponent(prefix)}&user_id=${encodeURIComponent(userId)}`
           : `${API}/form-defaults?user_id=${encodeURIComponent(userId)}`;
-        const res = await fetch(url, { method: "DELETE" });
+        const res = await apiFetch(url, { method: "DELETE" });
         if (!res.ok) {
           flash({ type: "error", text: await parseErr(res) });
           return;
@@ -1202,7 +1204,7 @@ export default function AutomationPage() {
     try {
       const headers: Record<string, string> = {};
       if (etagRef.current) headers["If-None-Match"] = etagRef.current;
-      const res = await fetch(
+      const res = await apiFetch(
         `${API}/dashboard?limit=25&user_id=${encodeURIComponent(userId)}`,
         { headers }
       );
@@ -1265,7 +1267,7 @@ export default function AutomationPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${BILLING_API}/subscription?user_id=${encodeURIComponent(userId)}`
         );
         if (!cancelled && res.ok) {
@@ -1332,7 +1334,7 @@ export default function AutomationPage() {
       });
       setBusy(true);
       try {
-        const res = await fetch(`${API}${endpoint[tab]}`, {
+        const res = await apiFetch(`${API}${endpoint[tab]}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(cleaned),
@@ -1358,7 +1360,7 @@ export default function AutomationPage() {
 
   const stopTask = async (id: string) => {
     try {
-      const res = await fetch(`${API}/tasks/${id}/stop`, { method: "POST" });
+      const res = await apiFetch(`${API}/tasks/${id}/stop`, { method: "POST" });
       if (res.ok) {
         flash({ type: "success", text: `Task ${id} stopped.` });
         etagRef.current = null;
@@ -1373,7 +1375,7 @@ export default function AutomationPage() {
 
   const viewTask = async (id: string) => {
     try {
-      const res = await fetch(`${API}/tasks/${id}?log_lines=500`);
+      const res = await apiFetch(`${API}/tasks/${id}?log_lines=500`);
       if (res.ok) setOpenTask(await res.json());
       else flash({ type: "error", text: await parseErr(res) });
     } catch {
@@ -1393,7 +1395,7 @@ export default function AutomationPage() {
     setArtifactLoading(true);
     (async () => {
       try {
-        const res = await fetch(`${API}/tasks/${openTask.id}/artifact`);
+        const res = await apiFetch(`${API}/tasks/${openTask.id}/artifact`);
         if (cancelled) return;
         if (res.ok) {
           setArtifact((await res.json()) as Artifact);

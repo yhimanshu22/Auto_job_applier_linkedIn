@@ -9,6 +9,7 @@ import SearchForm from "@/components/SearchForm";
 import SettingsForm from "@/components/SettingsForm";
 import QuestionsForm from "@/components/QuestionsForm";
 import SecretsForm from "@/components/SecretsForm";
+import { apiFetch } from "@/lib/desktop-api";
 
 const CONFIG_FILES = ["personals.py", "search.py", "settings.py", "questions.py", "secrets.py"];
 
@@ -97,7 +98,13 @@ export default function Dashboard() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [logsCopied, setLogsCopied] = useState(false);
-  const [logsPayload, setLogsPayload] = useState<{ logs: string; infra?: { title: string; filename: string; content: string }[]; profiles?: { id: string; filename: string; content: string }[] } | null>(null);
+  const [logsPayload, setLogsPayload] = useState<{
+    logs: string;
+    log_dir?: string;
+    files?: { filename: string; path: string; size_bytes: number; modified_utc: string }[];
+    infra?: { title: string; filename: string; content: string }[];
+    profiles?: { id: string; filename: string; content: string }[];
+  } | null>(null);
   const [logsLoading, setLogsLoading] = useState(false);
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -113,7 +120,7 @@ export default function Dashboard() {
     setLogsLoading(true);
     setLogsPayload(null);
     try {
-      const res = await fetch("/api/bot/logs?lines=200");
+      const res = await apiFetch("/api/bot/logs?lines=200");
       if (res.ok) {
         setLogsPayload(await res.json());
       } else {
@@ -129,7 +136,7 @@ export default function Dashboard() {
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const res = await fetch(`/api/bot/status?user_id=${userId}`);
+        const res = await apiFetch(`/api/bot/status?user_id=${userId}`);
         if (res.ok) {
           const data = await res.json();
           setBotStatus(data.status);
@@ -149,7 +156,7 @@ export default function Dashboard() {
 
     const fetchResumeInfo = async () => {
         try {
-            const res = await fetch(`/api/config/questions?user_id=${encodeURIComponent(userId)}`);
+            const res = await apiFetch(`/api/config/questions?user_id=${encodeURIComponent(userId)}`);
             const data = await res.json();
             const match = data.content.match(/default_resume_path = "(.*)"/);
             if (match) setResumeName(match[1]);
@@ -173,7 +180,7 @@ export default function Dashboard() {
 
     const fetchBotSpeed = async () => {
       try {
-        const res = await fetch(`/api/config/settings?user_id=${encodeURIComponent(userId)}`);
+        const res = await apiFetch(`/api/config/settings?user_id=${encodeURIComponent(userId)}`);
         const data = await res.json();
         const match = data.content.match(/bot_speed = (\d+)/);
         if (match) setBotSpeed(parseInt(match[1]));
@@ -182,14 +189,14 @@ export default function Dashboard() {
 
     const fetchStats = async () => {
       try {
-        const res = await fetch(`/api/applications/stats?user_id=${userId}`);
+        const res = await apiFetch(`/api/applications/stats?user_id=${userId}`);
         if (res.ok) setStats(await res.json());
       } catch {}
     };
 
     const fetchHistory = async () => {
       try {
-        const res = await fetch(`/api/applications/history?user_id=${userId}&limit=10`);
+        const res = await apiFetch(`/api/applications/history?user_id=${userId}&limit=10`);
         if (res.ok) {
             const data = await res.json();
             setHistory(data.history);
@@ -323,7 +330,7 @@ export default function Dashboard() {
     setMessage(null);
     try {
       const cleanName = filename.split('.')[0];
-      const res = await fetch(`/api/config/${cleanName}?user_id=${encodeURIComponent(userId)}`);
+      const res = await apiFetch(`/api/config/${cleanName}?user_id=${encodeURIComponent(userId)}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setContent(data.content || "");
@@ -383,7 +390,7 @@ export default function Dashboard() {
 
     try {
       const cleanName = activeTab.split('.')[0];
-      const res = await fetch(`/api/config/${cleanName}?user_id=${encodeURIComponent(userId)}`, {
+      const res = await apiFetch(`/api/config/${cleanName}?user_id=${encodeURIComponent(userId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: finalContent }),
@@ -409,7 +416,7 @@ export default function Dashboard() {
     setConnectionError(null);
     setMessage(null);
     try {
-      const res = await fetch(`/api/bot/start`, {
+      const res = await apiFetch(`/api/bot/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId }),
@@ -429,7 +436,7 @@ export default function Dashboard() {
       for (let i = 0; i < 24; i++) {
         await wait(650);
         try {
-          const st = await fetch(`/api/bot/status?user_id=${userId}`);
+          const st = await apiFetch(`/api/bot/status?user_id=${userId}`);
           if (st.ok) {
             const j = await st.json();
             setLastApplied(j.last_applied ?? null);
@@ -463,7 +470,7 @@ export default function Dashboard() {
     setConnectionError(null);
     setMessage(null);
     try {
-      const res = await fetch(`/api/bot/stop`, { method: "POST" });
+      const res = await apiFetch(`/api/bot/stop`, { method: "POST" });
       if (!res.ok) {
         setConnectionError(await parseApiError(res));
         return;
@@ -501,7 +508,7 @@ export default function Dashboard() {
   const updateBotSpeed = async (speed: number) => {
     setBotSpeed(speed);
     try {
-        const res = await fetch(`/api/config/settings?user_id=${encodeURIComponent(userId)}`);
+        const res = await apiFetch(`/api/config/settings?user_id=${encodeURIComponent(userId)}`);
         const data = await res.json();
         let newContent = data.content;
         
@@ -511,7 +518,7 @@ export default function Dashboard() {
             newContent += `\nbot_speed = ${speed}`;
         }
 
-        await fetch(`/api/config/settings?user_id=${encodeURIComponent(userId)}`, {
+        await apiFetch(`/api/config/settings?user_id=${encodeURIComponent(userId)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ content: newContent }),
@@ -536,7 +543,7 @@ export default function Dashboard() {
     formData.append("file", file);
 
     try {
-        const res = await fetch(`/api/upload/resume?user_id=${encodeURIComponent(userId)}`, {
+        const res = await apiFetch(`/api/upload/resume?user_id=${encodeURIComponent(userId)}`, {
             method: "POST",
             body: formData,
         });
@@ -978,6 +985,15 @@ export default function Dashboard() {
                 <pre className="whitespace-pre-wrap break-words text-zinc-400">{logsPayload.logs}</pre>
               )}
             </div>
+            {!logsLoading && logsPayload?.log_dir && (
+              <div className="px-4 py-2 border-t border-zinc-800 text-[10px] text-zinc-500 font-mono">
+                <span className="text-zinc-600 uppercase tracking-wider font-bold mr-2">Log dir</span>
+                {logsPayload.log_dir}
+                {logsPayload.files && logsPayload.files.length > 0 && (
+                  <span className="ml-2">({logsPayload.files.map((f) => f.filename).join(", ")})</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1104,6 +1120,10 @@ export default function Dashboard() {
                         onChange={setFormData}
                         isActive={activeTab === "secrets.py"}
                         onAccountsSaved={() => fetchConfig("secrets.py")}
+                        onNotify={(n) => {
+                          setMessage(n);
+                          setTimeout(() => setMessage(null), 3000);
+                        }}
                       />
                     )}
                   </>

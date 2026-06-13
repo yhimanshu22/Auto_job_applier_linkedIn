@@ -137,8 +137,8 @@ export default function LandingPage() {
               {[
                 {
                   step: "01",
-                  title: "Connect LinkedIn",
-                  description: "Securely link your account using your existing session cookies. No passwords required."
+                  title: "Add credentials",
+                  description: "Enter your LinkedIn email and password in the dashboard secrets tab."
                 },
                 {
                   step: "02",

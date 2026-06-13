@@ -4,11 +4,36 @@ from pydantic import BaseModel, Field
 from db_manager import db
 from services.linkedin_env import (
     count_linkedin_accounts,
+    list_linkedin_accounts,
     preview_env_with_dashboard_credentials,
 )
 from utils.user_resolution import resolve_user_id
 
 router = APIRouter(prefix="/api", tags=["linkedin-accounts"])
+
+
+def _dashboard_stored_usernames(secrets: dict) -> set[str]:
+    """Usernames saved in DB secrets (deletable via dashboard)."""
+    out: set[str] = set()
+    primary = (secrets.get("username") or "").strip().lower()
+    if primary:
+        out.add(primary)
+    extras = secrets.get("linkedin_extra_accounts")
+    if isinstance(extras, list):
+        for row in extras:
+            if isinstance(row, dict) and row.get("username"):
+                out.add(str(row["username"]).strip().lower())
+    return out
+
+
+def _accounts_with_deletable(accounts: list[dict], secrets: dict) -> list[dict]:
+    stored = _dashboard_stored_usernames(secrets)
+    enriched = []
+    for acc in accounts:
+        row = dict(acc)
+        row["deletable"] = str(acc.get("username", "")).strip().lower() in stored
+        enriched.append(row)
+    return enriched
 
 
 class LinkedInExtraRow(BaseModel):
@@ -31,6 +56,11 @@ async def get_linkedin_accounts(request: Request, user_id: str | None = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+    env = preview_env_with_dashboard_credentials(user_id=uid)
+    accounts = _accounts_with_deletable(
+        list_linkedin_accounts(env=env, user_id=uid), s
+    )
+
     extras_raw = s.get("linkedin_extra_accounts")
     if not isinstance(extras_raw, list):
         extras_raw = []
@@ -46,6 +76,8 @@ async def get_linkedin_accounts(request: Request, user_id: str | None = None):
             )
 
     return {
+        "account_count": len(accounts),
+        "accounts": accounts,
         "primary_username": (s.get("username") or ""),
         "primary_password_set": bool(s.get("password")),
         "extras": extras_out,
@@ -98,7 +130,7 @@ async def save_linkedin_accounts(
     return {
         "status": "saved",
         "account_count": count_linkedin_accounts(
-            preview_env_with_dashboard_credentials(user_id=uid)
+            preview_env_with_dashboard_credentials(user_id=uid), user_id=uid
         ),
     }
 
@@ -125,6 +157,25 @@ async def delete_linkedin_account(
         db.delete_config("password", "secrets", user_id=uid)
         deleted = True
 
+        extras = s.get("linkedin_extra_accounts")
+        if isinstance(extras, list) and extras:
+            first = extras[0]
+            if isinstance(first, dict) and (first.get("username") or "").strip():
+                db.set_config(
+                    "username",
+                    str(first["username"]).strip(),
+                    "secrets",
+                    user_id=uid,
+                )
+                if first.get("password"):
+                    db.set_config("password", first["password"], "secrets", user_id=uid)
+                db.set_config(
+                    "linkedin_extra_accounts",
+                    [row for row in extras[1:] if isinstance(row, dict)],
+                    "secrets",
+                    user_id=uid,
+                )
+
     extras = s.get("linkedin_extra_accounts")
     if isinstance(extras, list):
         kept = [
@@ -145,6 +196,6 @@ async def delete_linkedin_account(
     return {
         "status": "deleted",
         "account_count": count_linkedin_accounts(
-            preview_env_with_dashboard_credentials(user_id=uid)
+            preview_env_with_dashboard_credentials(user_id=uid), user_id=uid
         ),
     }
