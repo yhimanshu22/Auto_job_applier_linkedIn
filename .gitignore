@@ -47,6 +47,7 @@ backend/cookies/*.pkl
 backend/bot_pid.txt
 backend/test_output.txt
 backend/old/
+backend/scratch/
 
 # Environment and Secrets
 .env
