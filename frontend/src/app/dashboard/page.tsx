@@ -9,7 +9,7 @@ import SearchForm from "@/components/SearchForm";
 import SettingsForm from "@/components/SettingsForm";
 import QuestionsForm from "@/components/QuestionsForm";
 import SecretsForm from "@/components/SecretsForm";
-import { apiFetch } from "@/lib/desktop-api";
+import { apiFetch, encodeUserId } from "@/lib/desktop-api";
 
 const CONFIG_FILES = ["personals.py", "search.py", "settings.py", "questions.py", "secrets.py"];
 
@@ -136,7 +136,7 @@ export default function Dashboard() {
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const res = await apiFetch(`/api/bot/status?user_id=${userId}`);
+        const res = await apiFetch(`/api/bot/status?user_id=${encodeUserId(userId)}`);
         if (res.ok) {
           const data = await res.json();
           setBotStatus(data.status);
@@ -156,7 +156,7 @@ export default function Dashboard() {
 
     const fetchResumeInfo = async () => {
         try {
-            const res = await apiFetch(`/api/config/questions?user_id=${encodeURIComponent(userId)}`);
+            const res = await apiFetch(`/api/config/questions?user_id=${encodeUserId(userId)}`);
             const data = await res.json();
             const match = data.content.match(/default_resume_path = "(.*)"/);
             if (match) setResumeName(match[1]);
@@ -166,7 +166,7 @@ export default function Dashboard() {
     const fetchSubscription = async () => {
       try {
         const res = await fetch(
-          `/api/billing/subscription?user_id=${encodeURIComponent(userId)}`,
+          `/api/billing/subscription?user_id=${encodeUserId(userId)}`,
           { credentials: "include" }
         );
         if (res.ok) {
@@ -180,7 +180,7 @@ export default function Dashboard() {
 
     const fetchBotSpeed = async () => {
       try {
-        const res = await apiFetch(`/api/config/settings?user_id=${encodeURIComponent(userId)}`);
+        const res = await apiFetch(`/api/config/settings?user_id=${encodeUserId(userId)}`);
         const data = await res.json();
         const match = data.content.match(/bot_speed = (\d+)/);
         if (match) setBotSpeed(parseInt(match[1]));
@@ -189,14 +189,14 @@ export default function Dashboard() {
 
     const fetchStats = async () => {
       try {
-        const res = await apiFetch(`/api/applications/stats?user_id=${userId}`);
+        const res = await apiFetch(`/api/applications/stats?user_id=${encodeUserId(userId)}`);
         if (res.ok) setStats(await res.json());
       } catch {}
     };
 
     const fetchHistory = async () => {
       try {
-        const res = await apiFetch(`/api/applications/history?user_id=${userId}&limit=10`);
+        const res = await apiFetch(`/api/applications/history?user_id=${encodeUserId(userId)}&limit=10`);
         if (res.ok) {
             const data = await res.json();
             setHistory(data.history);
@@ -330,7 +330,7 @@ export default function Dashboard() {
     setMessage(null);
     try {
       const cleanName = filename.split('.')[0];
-      const res = await apiFetch(`/api/config/${cleanName}?user_id=${encodeURIComponent(userId)}`);
+      const res = await apiFetch(`/api/config/${cleanName}?user_id=${encodeUserId(userId)}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setContent(data.content || "");
@@ -390,7 +390,7 @@ export default function Dashboard() {
 
     try {
       const cleanName = activeTab.split('.')[0];
-      const res = await apiFetch(`/api/config/${cleanName}?user_id=${encodeURIComponent(userId)}`, {
+      const res = await apiFetch(`/api/config/${cleanName}?user_id=${encodeUserId(userId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: finalContent }),
@@ -436,7 +436,7 @@ export default function Dashboard() {
       for (let i = 0; i < 24; i++) {
         await wait(650);
         try {
-          const st = await apiFetch(`/api/bot/status?user_id=${userId}`);
+          const st = await apiFetch(`/api/bot/status?user_id=${encodeUserId(userId)}`);
           if (st.ok) {
             const j = await st.json();
             setLastApplied(j.last_applied ?? null);
@@ -508,7 +508,7 @@ export default function Dashboard() {
   const updateBotSpeed = async (speed: number) => {
     setBotSpeed(speed);
     try {
-        const res = await apiFetch(`/api/config/settings?user_id=${encodeURIComponent(userId)}`);
+        const res = await apiFetch(`/api/config/settings?user_id=${encodeUserId(userId)}`);
         const data = await res.json();
         let newContent = data.content;
         
@@ -518,7 +518,7 @@ export default function Dashboard() {
             newContent += `\nbot_speed = ${speed}`;
         }
 
-        await apiFetch(`/api/config/settings?user_id=${encodeURIComponent(userId)}`, {
+        await apiFetch(`/api/config/settings?user_id=${encodeUserId(userId)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ content: newContent }),
@@ -543,7 +543,7 @@ export default function Dashboard() {
     formData.append("file", file);
 
     try {
-        const res = await apiFetch(`/api/upload/resume?user_id=${encodeURIComponent(userId)}`, {
+        const res = await apiFetch(`/api/upload/resume?user_id=${encodeUserId(userId)}`, {
             method: "POST",
             body: formData,
         });

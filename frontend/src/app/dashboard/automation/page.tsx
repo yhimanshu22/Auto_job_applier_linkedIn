@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
-import { apiFetch } from "@/lib/desktop-api";
+import { apiFetch, encodeUserId } from "@/lib/desktop-api";
 
 const API = "/api/linkedin-automation";
 const BILLING_API = "/api/billing";
@@ -822,7 +822,7 @@ function SettingsForm({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await apiFetch(`${API}/config?user_id=${encodeURIComponent(userId)}`);
+      const res = await apiFetch(`${API}/config?user_id=${encodeUserId(userId)}`);
       if (res.ok) setS(await res.json());
     } catch {
       flash({ type: "error", text: "Could not load framework settings." });
@@ -845,7 +845,7 @@ function SettingsForm({
       // Don't overwrite a masked key value on the server.
       if (payload.openai_api_key === "set") delete payload.openai_api_key;
       if (payload.gemini_api_key === "set") delete payload.gemini_api_key;
-      const res = await apiFetch(`${API}/config?user_id=${encodeURIComponent(userId)}`, {
+      const res = await apiFetch(`${API}/config?user_id=${encodeUserId(userId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -1158,7 +1158,7 @@ export default function AutomationPage() {
     if (serialized === lastSavedDefaultsRef.current) return;
     const timer = setTimeout(() => {
       lastSavedDefaultsRef.current = serialized;
-      apiFetch(`${API}/form-defaults?user_id=${encodeURIComponent(userId)}`, {
+      apiFetch(`${API}/form-defaults?user_id=${encodeUserId(userId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: serialized,
@@ -1175,8 +1175,8 @@ export default function AutomationPage() {
     async (prefix: string) => {
       try {
         const url = prefix
-          ? `${API}/form-defaults?prefix=${encodeURIComponent(prefix)}&user_id=${encodeURIComponent(userId)}`
-          : `${API}/form-defaults?user_id=${encodeURIComponent(userId)}`;
+          ? `${API}/form-defaults?prefix=${encodeURIComponent(prefix)}&user_id=${encodeUserId(userId)}`
+          : `${API}/form-defaults?user_id=${encodeUserId(userId)}`;
         const res = await apiFetch(url, { method: "DELETE" });
         if (!res.ok) {
           flash({ type: "error", text: await parseErr(res) });
@@ -1206,7 +1206,7 @@ export default function AutomationPage() {
       const headers: Record<string, string> = {};
       if (etagRef.current) headers["If-None-Match"] = etagRef.current;
       const res = await apiFetch(
-        `${API}/dashboard?limit=25&user_id=${encodeURIComponent(userId)}`,
+        `${API}/dashboard?limit=25&user_id=${encodeUserId(userId)}`,
         { headers }
       );
       if (res.status === 304) {
@@ -1269,7 +1269,7 @@ export default function AutomationPage() {
     (async () => {
       try {
         const res = await apiFetch(
-          `${BILLING_API}/subscription?user_id=${encodeURIComponent(userId)}`
+          `${BILLING_API}/subscription?user_id=${encodeUserId(userId)}`
         );
         if (!cancelled && res.ok) {
           setSubscription((await res.json()) as Subscription);

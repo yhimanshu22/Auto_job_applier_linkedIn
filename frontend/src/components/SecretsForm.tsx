@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 
-import { apiFetch } from "@/lib/desktop-api";
+import { apiFetch, encodeUserId } from "@/lib/desktop-api";
 
 interface ApiLinkedInAccount {
   username: string;
@@ -89,7 +89,7 @@ export default function SecretsForm({
   const loadLinkedIn = async () => {
     setLoading(true);
     try {
-      const r = await apiFetch(`/api/linkedin-accounts?user_id=${encodeURIComponent(userId)}`);
+      const r = await apiFetch(`/api/linkedin-accounts?user_id=${encodeUserId(userId)}`);
       if (!r.ok) throw new Error("Failed to load accounts");
       const d = await r.json();
       const accounts: ApiLinkedInAccount[] = Array.isArray(d.accounts) ? d.accounts : [];
@@ -160,7 +160,7 @@ export default function SecretsForm({
     setMsg(null);
     try {
       const r = await apiFetch(
-        `/api/linkedin-accounts?username=${encodeURIComponent(u)}&user_id=${encodeURIComponent(userId)}`,
+        `/api/linkedin-accounts?username=${encodeURIComponent(u)}&user_id=${encodeUserId(userId)}`,
         { method: "DELETE" }
       );
       const raw = await r.json().catch(() => ({}));
@@ -195,7 +195,7 @@ export default function SecretsForm({
       const primary = filled[0];
       const extras = filled.slice(1);
 
-      const r = await apiFetch(`/api/linkedin-accounts?user_id=${encodeURIComponent(userId)}`, {
+      const r = await apiFetch(`/api/linkedin-accounts?user_id=${encodeUserId(userId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

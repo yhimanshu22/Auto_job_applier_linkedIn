@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
-import { apiFetch } from "@/lib/desktop-api";
+import { apiFetch, encodeUserId } from "@/lib/desktop-api";
 
 type Subscription = {
   plan?: string;
@@ -101,11 +101,11 @@ export default function BillingPage() {
       try {
         const [subRes, statsRes, accountsRes, activeRes] = await Promise.all([
           fetch(
-            `/api/billing/subscription?user_id=${encodeURIComponent(userId)}`,
+            `/api/billing/subscription?user_id=${encodeUserId(userId)}`,
             { credentials: "include" }
           ),
           fetch(
-            `/api/applications/stats?user_id=${encodeURIComponent(userId)}`
+            `/api/applications/stats?user_id=${encodeUserId(userId)}`
           ),
           // Reuse the automation endpoint so the LinkedIn Accounts tile
           // shows the real DB-backed count instead of a hardcoded 1.
@@ -113,7 +113,7 @@ export default function BillingPage() {
           // Live concurrency for the Active Bots tile (supervisor +
           // automation task subprocesses for this user).
           apiFetch(
-            `/api/bot/active?user_id=${encodeURIComponent(userId)}`
+            `/api/bot/active?user_id=${encodeUserId(userId)}`
           ),
         ]);
         if (cancelled) return;
@@ -138,7 +138,7 @@ export default function BillingPage() {
     const interval = window.setInterval(async () => {
       try {
         const res = await fetch(
-          `/api/bot/active?user_id=${encodeURIComponent(userId)}`
+          `/api/bot/active?user_id=${encodeUserId(userId)}`
         );
         if (!cancelled && res.ok) setActiveBots(await res.json());
       } catch {

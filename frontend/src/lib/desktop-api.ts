@@ -49,6 +49,11 @@ export function localApiBase(): string {
   return LOCAL_API_DEFAULT;
 }
 
+/** Session email for API query params (undefined while NextAuth is loading). */
+export function encodeUserId(userId: string | null | undefined): string {
+  return encodeURIComponent(userId ?? "");
+}
+
 function usesLocalSidecar(path: string): boolean {
   if (!isDesktopApp()) return false;
   if (CLOUD_API_PREFIXES.some((prefix) => path.startsWith(prefix))) {
