@@ -21,6 +21,7 @@ fn user_data_dir() -> PathBuf {
     path
 }
 
+#[cfg(debug_assertions)]
 fn backend_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../backend")
 }
@@ -37,8 +38,19 @@ fn local_api_url(port: u16) -> String {
 }
 
 fn dashboard_url() -> String {
-    let mut url = std::env::var("LINKDAPPLY_FRONTEND_URL")
-        .unwrap_or_else(|_| "https://frontend-pink-phi-37.vercel.app/dashboard?desktop=1".to_string());
+    let mut url = std::env::var("LINKDAPPLY_FRONTEND_URL").unwrap_or_else(|_| {
+        "https://frontend-pink-phi-37.vercel.app/login?desktop=1&callbackUrl=%2Fdashboard%3Fdesktop%3D1"
+            .to_string()
+    });
+
+    // Legacy installs that still point at /dashboard get sent to login first.
+    if url.contains("/dashboard") && !url.contains("/login") {
+        let origin = frontend_origin_from_dashboard_url(&url)
+            .unwrap_or_else(|| "https://frontend-pink-phi-37.vercel.app".to_string());
+        url = format!(
+            "{origin}/login?desktop=1&callbackUrl=%2Fdashboard%3Fdesktop%3D1"
+        );
+    }
 
     if !url.contains("desktop=1") {
         let sep = if url.contains('?') { '&' } else { '?' };
