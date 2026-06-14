@@ -5,6 +5,11 @@ import Link from "next/link";
 import { getProviders, signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import {
+  desktopGoogleSignInUrl,
+  shouldUseExternalDesktopAuth,
+} from "@/lib/desktop-auth";
+
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -42,6 +47,13 @@ function LoginContent() {
   const handleGoogleSignIn = () => {
     if (isLoading || authError) return;
     setIsLoading(true);
+
+    if (shouldUseExternalDesktopAuth()) {
+      // Tauri intercepts this navigation and opens the system browser for Google OAuth.
+      window.location.href = desktopGoogleSignInUrl();
+      return;
+    }
+
     signIn("google", { callbackUrl });
   };
 
@@ -55,6 +67,11 @@ function LoginContent() {
             </p>
             <h1 className="font-serif text-3xl font-medium tracking-tight text-white">Welcome</h1>
             <p className="mt-2 text-zinc-500">The most powerful AI job application tool.</p>
+            {shouldUseExternalDesktopAuth() ? (
+              <p className="mt-3 text-xs text-zinc-500">
+                Sign-in opens in your default browser, then returns to the desktop app.
+              </p>
+            ) : null}
           </div>
 
           <div className="glass-card rounded-3xl p-8 border border-zinc-800/50 shadow-2xl space-y-6">

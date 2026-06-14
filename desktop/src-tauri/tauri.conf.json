@@ -28,5 +28,11 @@
     ],
     "externalBin": ["binaries/linkdapply-backend"]
   },
-  "plugins": {}
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["linkdapply"]
+      }
+    }
+  }
 }

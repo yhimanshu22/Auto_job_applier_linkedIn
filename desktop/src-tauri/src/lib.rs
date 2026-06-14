@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 
@@ -72,6 +74,66 @@ fn frontend_origin_from_dashboard_url(dashboard: &str) -> Option<String> {
         return None;
     }
     Some(format!("{scheme}://{host}"))
+}
+
+fn pct_encode_component(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+/// Google OAuth and NextAuth sign-in must run in the system browser, not the WebView.
+fn should_open_auth_externally(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    lower.contains("accounts.google.com")
+        || lower.contains("oauth2.googleapis.com")
+        || lower.contains("/api/auth/signin")
+}
+
+fn token_from_deep_link(url: &str) -> Option<String> {
+    let trimmed = url.trim();
+    if !trimmed.to_ascii_lowercase().starts_with("linkdapply://") {
+        return None;
+    }
+    let query = trimmed.split('?').nth(1)?;
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=')?;
+        if key == "token" && !value.is_empty() {
+            return Some(value.to_string());
+        }
+    }
+    None
+}
+
+fn complete_auth_url(origin: &str, token: &str) -> String {
+    format!(
+        "{}/api/auth/desktop/complete?token={}",
+        origin.trim_end_matches('/'),
+        pct_encode_component(token)
+    )
+}
+
+fn navigate_main_to_auth_complete(window: &WebviewWindow, token: &str) {
+    let origin = frontend_origin_from_dashboard_url(&dashboard_url())
+        .unwrap_or_else(|| "https://frontend-pink-phi-37.vercel.app".to_string());
+    let target = complete_auth_url(&origin, token);
+    if let Ok(parsed) = target.parse() {
+        let _ = window.navigate(parsed);
+    }
+}
+
+fn handle_deep_link_urls(window: &WebviewWindow, urls: &[tauri::Url]) {
+    for url in urls {
+        if let Some(token) = token_from_deep_link(url.as_str()) {
+            navigate_main_to_auth_complete(window, &token);
+            return;
+        }
+    }
 }
 
 fn wait_for_health(port: u16, timeout: Duration) -> bool {
@@ -230,6 +292,8 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_deep_link::init())
         .manage(BackendProcess(Mutex::new(None)))
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -261,11 +325,34 @@ pub fn run() {
                  try {{ localStorage.setItem('linkdapply_desktop', '1'); }} catch (e) {{}}"
             );
 
+            let app_handle = app.handle().clone();
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url.parse().unwrap()))
                 .title("LinkdApply")
                 .inner_size(1280.0, 860.0)
                 .initialization_script(&inject)
+                .on_navigation(move |nav_url| {
+                    let href = nav_url.as_str();
+                    if should_open_auth_externally(href) {
+                        let _ = app_handle.opener().open_url(href, None::<&str>);
+                        return false;
+                    }
+                    true
+                })
                 .build()?;
+
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            {
+                let _ = app.deep_link().register_all();
+            }
+
+            let main_window = window.clone();
+            app.deep_link().on_open_url(move |event| {
+                handle_deep_link_urls(&main_window, &event.urls());
+            });
+
+            if let Ok(Some(start_urls)) = app.deep_link().get_current() {
+                handle_deep_link_urls(&window, &start_urls);
+            }
 
             let _ = window;
 
