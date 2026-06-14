@@ -164,8 +164,9 @@ def _build_env(account: str | None = None, user_id: str = "local-user") -> dict[
     # framework originally expected), which means PYTHONPATH must do the work
     # of pointing Python at the backend root one level above.
     backend_root = get_base_path()
+    config_dir = os.path.join(backend_root, "config")
     existing_pp = env.get("PYTHONPATH", "")
-    parts = [backend_root] + ([existing_pp] if existing_pp else [])
+    parts = [backend_root, config_dir] + ([existing_pp] if existing_pp else [])
     env["PYTHONPATH"] = os.pathsep.join(parts)
     return env
 

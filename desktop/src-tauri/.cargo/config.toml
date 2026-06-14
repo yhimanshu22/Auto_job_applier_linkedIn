@@ -1,0 +1,9 @@
+# Windows: schannel TLS errors (SEC_E_DECRYPT_FAILURE) when fetching crates.io
+# are often fixed by disabling HTTP/2 multiplexing and certificate revocation checks.
+[http]
+multiplexing = false
+check-revoke = false
+timeout = 120
+
+[registries.crates-io]
+protocol = "sparse"

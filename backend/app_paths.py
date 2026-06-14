@@ -43,3 +43,33 @@ def get_logs_dir() -> str:
 def get_config_path(filename: str) -> str:
     """Bundled config templates (read-only in production installs)."""
     return os.path.join(get_base_path(), "config", filename)
+
+
+def load_env_files() -> None:
+    """Load backend/.env then optional ``LINKDAPPLY_USER_DATA/.env`` override."""
+    from dotenv import load_dotenv
+
+    backend = get_base_path()
+    load_dotenv(os.path.join(backend, ".env"))
+    user_data = os.getenv("LINKDAPPLY_USER_DATA", "").strip()
+    if user_data:
+        load_dotenv(os.path.join(user_data, ".env"), override=True)
+
+
+def subprocess_env(base: dict | None = None) -> dict[str, str]:
+    """Env for supervisor/bot child processes (PYTHONPATH + dotenv secrets)."""
+    load_env_files()
+    env = dict(base or os.environ)
+    for key, value in os.environ.items():
+        env[key] = value
+
+    backend = get_base_path()
+    config_dir = os.path.join(backend, "config")
+    parts: list[str] = [backend, config_dir]
+    existing = env.get("PYTHONPATH", "")
+    if existing:
+        for part in existing.split(os.pathsep):
+            if part and part not in parts:
+                parts.append(part)
+    env["PYTHONPATH"] = os.pathsep.join(parts)
+    return env

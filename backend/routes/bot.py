@@ -5,7 +5,7 @@ import sys
 
 from fastapi import APIRouter, HTTPException, Request
 
-from app_paths import get_base_path, get_runtime_writable_root
+from app_paths import get_runtime_writable_root, subprocess_env
 from db_manager import db
 from services.linkedin_env import apply_dashboard_linkedin_credentials
 from services.plan_limits import PLAN_LIMITS, assert_can_start_bot
@@ -31,13 +31,15 @@ async def start_bot(request: Request, payload: dict = None):
         if getattr(sys, "frozen", False):
             cmd = [sys.executable, "--supervisor"]
         else:
+            from app_paths import get_base_path
+
             server_script = os.path.join(get_base_path(), "server.py")
             cmd = [sys.executable, server_script, "--supervisor"]
 
         cwd = get_runtime_writable_root()
         logging.info(f"Starting supervisor with {cmd} in {cwd}")
 
-        env = os.environ.copy()
+        env = subprocess_env()
         apply_dashboard_linkedin_credentials(env, user_id=user_id)
         env["USER_ID"] = user_id
 

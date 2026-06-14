@@ -3,9 +3,8 @@ import time
 import sys
 import os
 import signal
-from dotenv import load_dotenv
 
-from app_paths import get_runtime_writable_root
+from app_paths import get_runtime_writable_root, load_env_files, subprocess_env
 from utils.debug_logs import (
     SUPERVISOR_LOG,
     append_session_marker,
@@ -13,8 +12,8 @@ from utils.debug_logs import (
     configure_file_logger,
 )
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (backend/.env, not cwd-relative)
+load_env_files()
 
 
 def _nt_background_creationflags():
@@ -46,29 +45,44 @@ class BotSupervisor:
     def _get_accounts(self):
         """Identifies all LinkedIn accounts from environment variables."""
         accounts = []
-        # Support both the original format and the new multi-account format
-        default_user = os.getenv("LINKEDIN_USERNAME")
-        default_pass = os.getenv("LINKEDIN_PASSWORD")
-        
-        if default_user and default_pass:
+        seen_usernames: set[str] = set()
+
+        def _add(account_id: str, username: str, password: str) -> None:
+            key = username.strip().lower()
+            if not key or key in seen_usernames:
+                return
+            seen_usernames.add(key)
             accounts.append({
-                "id": "main",
-                "username": default_user,
-                "password": default_pass
+                "id": account_id,
+                "username": username.strip(),
+                "password": password,
             })
 
-        # Look for LINKEDIN_USERNAME_N patterns
+        default_user = os.getenv("LINKEDIN_USERNAME")
+        default_pass = os.getenv("LINKEDIN_PASSWORD")
+
+        if default_user and default_pass:
+            _add("main", default_user, default_pass)
+
+        indexed: list[tuple[str, str, str]] = []
         for key, value in os.environ.items():
             if key.startswith("LINKEDIN_USERNAME_") and key[18:]:
                 suffix = key[18:]
                 password = os.getenv(f"LINKEDIN_PASSWORD_{suffix}")
-                if password:
-                    accounts.append({
-                        "id": suffix,
-                        "username": value,
-                        "password": password
-                    })
-        
+                if password and value:
+                    indexed.append((suffix, value, password))
+
+        def _suffix_sort(item: tuple[str, str, str]) -> tuple[int, object]:
+            s = item[0]
+            try:
+                return (0, int(s))
+            except ValueError:
+                return (1, s)
+
+        indexed.sort(key=_suffix_sort)
+        for suffix, username, password in indexed:
+            _add(suffix, username, password)
+
         logger.info(f"Identified {len(accounts)} accounts: {[a['id'] for a in accounts]}")
         return accounts
 
@@ -79,7 +93,7 @@ class BotSupervisor:
             logger.info(f"Preparing to start runAiBot.py for account {bot_id} ({account['username']})...")
             
             # Create a specific environment for this bot
-            env = os.environ.copy()
+            env = subprocess_env()
             env["LINKEDIN_USERNAME"] = account["username"]
             env["LINKEDIN_PASSWORD"] = account["password"]
             env["BOT_ID"] = bot_id

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "identifier": "com.linkdapply.desktop",
+  "identifier": "default",
   "description": "LinkdApply desktop permissions",
   "windows": ["main"],
   "permissions": [
@@ -19,6 +19,8 @@
           "cmd": "uv",
           "args": [
             "run",
+            "python",
+            "-m",
             "uvicorn",
             "server:app",
             { "validator": "Any" }

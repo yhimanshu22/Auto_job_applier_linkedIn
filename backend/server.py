@@ -5,10 +5,17 @@ FastAPI entrypoint: middleware, router registration, and CLI modes (--bot / --su
 import os
 import sys
 
+# ``utils`` lives under ``config/utils/``; subprocess cwd may be user-data, not backend.
+_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+_CONFIG_DIR = os.path.join(_BACKEND_DIR, "config")
+for _path in (_CONFIG_DIR, _BACKEND_DIR):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
 from dotenv import load_dotenv
 
-# Load backend/.env first, then optional user-data override (desktop sidecar).
-load_dotenv()
+# Always load backend/.env (not cwd-relative), then optional desktop user-data override.
+load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
 _user_data = os.getenv("LINKDAPPLY_USER_DATA", "").strip()
 if _user_data:
     load_dotenv(os.path.join(_user_data, ".env"), override=True)

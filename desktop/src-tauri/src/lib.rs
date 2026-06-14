@@ -75,8 +75,15 @@ fn sidecar_env(
     host: &str,
     port_str: &str,
 ) -> tauri_plugin_shell::process::Command {
+    // Drop inherited VIRTUAL_ENV (wrong project venv breaks `uv run`).
+    let envs: Vec<(String, String)> = std::env::vars()
+        .filter(|(key, _)| key != "VIRTUAL_ENV")
+        .collect();
+
     let mut cmd = cmd
-        .env("LINKDAPPLY_USER_DATA", user_data)
+        .env_clear()
+        .envs(envs)
+        .env("LINKDAPPLY_USER_DATA", user_data.as_os_str())
         .env("LINKDAPPLY_LOCAL_DATA", "true")
         .env("LINKDAPPLY_API_HOST", host)
         .env("LINKDAPPLY_API_PORT", port_str);
@@ -94,6 +101,12 @@ fn sidecar_env(
     cmd
 }
 
+fn spawn_child(cmd: tauri_plugin_shell::process::Command) -> Result<CommandChild, String> {
+    cmd.spawn()
+        .map(|(_events, child)| child)
+        .map_err(|e| e.to_string())
+}
+
 fn spawn_backend(app: &tauri::AppHandle, user_data: &PathBuf, port: u16) -> Result<CommandChild, String> {
     let shell = app.shell();
     let host = "127.0.0.1";
@@ -108,6 +121,8 @@ fn spawn_backend(app: &tauri::AppHandle, user_data: &PathBuf, port: u16) -> Resu
                     .command("uv")
                     .args([
                         "run",
+                        "python",
+                        "-m",
                         "uvicorn",
                         "server:app",
                         "--host",
@@ -121,11 +136,11 @@ fn spawn_backend(app: &tauri::AppHandle, user_data: &PathBuf, port: u16) -> Resu
                 &port_str,
             );
 
-            if let Ok(child) = uv.spawn() {
+            if let Ok(child) = spawn_child(uv) {
                 return Ok(child);
             }
 
-            return sidecar_env(
+            return spawn_child(sidecar_env(
                 shell
                     .command("python")
                     .args([
@@ -141,20 +156,16 @@ fn spawn_backend(app: &tauri::AppHandle, user_data: &PathBuf, port: u16) -> Resu
                 user_data,
                 host,
                 &port_str,
-            )
-            .spawn()
-            .map_err(|e| e.to_string());
+            ));
         }
     }
 
-    sidecar_env(
+    spawn_child(sidecar_env(
         shell.sidecar("linkdapply-backend").map_err(|e| e.to_string())?,
         user_data,
         host,
         &port_str,
-    )
-    .spawn()
-    .map_err(|e| e.to_string())
+    ))
 }
 
 fn stop_backend(state: &State<'_, BackendProcess>) {
