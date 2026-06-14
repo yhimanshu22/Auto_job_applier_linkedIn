@@ -3,30 +3,46 @@ import Link from "next/link";
 export default function Footer() {
   return (
     <footer className="py-12 border-t border-zinc-100 bg-white">
-      <div className="mx-auto max-w-7xl px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-8">
-        <Link
-          href="/"
-          className="font-serif text-2xl font-bold tracking-tight bg-gradient-to-r from-indigo-800 via-blue-800 to-violet-700 bg-clip-text text-transparent"
-        >
-          LinkdApply
-        </Link>
-        <div className="flex gap-10 text-sm font-medium text-zinc-500">
-          <Link href="/about" className="hover:text-zinc-900 transition-colors" title="Learn more about LinkdApply">
-            About
+      <div className="mx-auto max-w-7xl px-6 lg:px-8 flex flex-col gap-10">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+          <Link
+            href="/"
+            className="font-serif text-2xl font-bold tracking-tight bg-gradient-to-r from-indigo-800 via-blue-800 to-violet-700 bg-clip-text text-transparent"
+          >
+            LinkdApply
           </Link>
-          <Link href="/terms" className="hover:text-zinc-900 transition-colors" title="Terms of Service">
-            Terms
-          </Link>
-          <Link href="/privacy" className="hover:text-zinc-900 transition-colors" title="Privacy Policy">
-            Privacy
-          </Link>
-          <Link href="/support" className="hover:text-zinc-900 transition-colors" title="Contact our support team">
-            Support
-          </Link>
+          <nav className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm font-medium text-zinc-500">
+            <Link href="/about" className="hover:text-zinc-900 transition-colors" title="Learn more about LinkdApply">
+              About Us
+            </Link>
+            <Link href="/contact" className="hover:text-zinc-900 transition-colors" title="Contact Us">
+              Contact Us
+            </Link>
+            <Link href="/pricing" className="hover:text-zinc-900 transition-colors" title="Plans and pricing">
+              Pricing
+            </Link>
+            <Link href="/terms" className="hover:text-zinc-900 transition-colors" title="Terms of Service">
+              Terms
+            </Link>
+            <Link href="/privacy" className="hover:text-zinc-900 transition-colors" title="Privacy Policy">
+              Privacy Policy
+            </Link>
+            <Link href="/refund-policy" className="hover:text-zinc-900 transition-colors" title="Return & Refund Policy">
+              Return &amp; Refund Policy
+            </Link>
+            <Link href="/cancellation-policy" className="hover:text-zinc-900 transition-colors" title="Cancellation Policy">
+              Cancellation Policy
+            </Link>
+            <Link href="/shipping-policy" className="hover:text-zinc-900 transition-colors" title="Shipping & Delivery Policy">
+              Shipping Policy
+            </Link>
+          </nav>
         </div>
-        <p className="text-xs font-bold text-zinc-400 tracking-[0.2em] uppercase">
-          © 2026 LinkdApply v1.1.0. All Rights Reserved.
-        </p>
+        <div className="flex justify-center border-t border-zinc-100 pt-8">
+          <p className="text-xs font-bold text-zinc-400 tracking-[0.2em] uppercase whitespace-nowrap">
+            © 2026 LinkdApply v1.1.0. All Rights Reserved.
+          </p>
+        </div>
       </div>
     </footer>
   );

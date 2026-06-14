@@ -2,8 +2,7 @@
 name = "auto-job-applier-backend"
 version = "0.1.0"
 description = "FastAPI + Selenium backend for the LinkedIn job applier"
-readme = "../README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 dependencies = [
     "undetected-chromedriver",
     "selenium",
@@ -28,6 +27,7 @@ dependencies = [
     "requests",
     "sumy>=0.11.0",
     "nltk>=3.8.1",
+    "psycopg2-binary>=2.9.12",
 ]
 
 # Application project: lock deps with uv, but do not install this tree as an importable package.

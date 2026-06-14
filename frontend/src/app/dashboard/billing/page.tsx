@@ -4,12 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
+import { apiFetch } from "@/lib/desktop-api";
+
 type Subscription = {
   plan?: string;
   status?: string;
   current_period_end?: number | string | null;
   billing_cycle?: string;
   limit?: number;
+  payment_provider?: string;
 };
 
 type Stats = {
@@ -87,31 +90,30 @@ export default function BillingPage() {
   const [isBackendHealthy, setIsBackendHealthy] = useState(true);
   const [loaded, setLoaded] = useState(false);
 
-  const userId = session?.user?.email || "local-user";
+  const userId = session?.user?.email;
 
-  // Note: We don't bounce on ``status === "unauthenticated"``. Local installs
-  // may run without a NextAuth session cookie; other dashboard pages fall back
-  // to ``userId = "local-user"``.
+  // Requires a signed-in Google session; API calls use the session email as user_id.
   useEffect(() => {
-    if (status === "loading") return;
+    if (status === "loading" || !userId) return;
     let cancelled = false;
 
     const load = async () => {
       try {
         const [subRes, statsRes, accountsRes, activeRes] = await Promise.all([
           fetch(
-            `http://127.0.0.1:8000/api/billing/subscription?user_id=${encodeURIComponent(userId)}`
+            `/api/billing/subscription?user_id=${encodeURIComponent(userId)}`,
+            { credentials: "include" }
           ),
           fetch(
-            `http://127.0.0.1:8000/api/applications/stats?user_id=${encodeURIComponent(userId)}`
+            `/api/applications/stats?user_id=${encodeURIComponent(userId)}`
           ),
           // Reuse the automation endpoint so the LinkedIn Accounts tile
           // shows the real DB-backed count instead of a hardcoded 1.
-          fetch(`http://127.0.0.1:8000/api/linkedin-automation/accounts`),
+          apiFetch(`/api/linkedin-automation/accounts`),
           // Live concurrency for the Active Bots tile (supervisor +
           // automation task subprocesses for this user).
-          fetch(
-            `http://127.0.0.1:8000/api/bot/active?user_id=${encodeURIComponent(userId)}`
+          apiFetch(
+            `/api/bot/active?user_id=${encodeURIComponent(userId)}`
           ),
         ]);
         if (cancelled) return;
@@ -136,7 +138,7 @@ export default function BillingPage() {
     const interval = window.setInterval(async () => {
       try {
         const res = await fetch(
-          `http://127.0.0.1:8000/api/bot/active?user_id=${encodeURIComponent(userId)}`
+          `/api/bot/active?user_id=${encodeURIComponent(userId)}`
         );
         if (!cancelled && res.ok) setActiveBots(await res.json());
       } catch {
@@ -151,9 +153,13 @@ export default function BillingPage() {
   }, [status, userId]);
 
   const handleManageBilling = async () => {
+    if (subscription?.payment_provider === "payu") {
+      window.location.href = "/pricing";
+      return;
+    }
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/api/billing/create-portal-session`,
+        `/api/billing/create-portal-session`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

@@ -2,11 +2,39 @@ import { Metadata } from 'next';
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Link from "next/link";
+import { COMPANY } from "@/lib/company";
 
 export const metadata: Metadata = {
-  title: "About Us | Our Mission to Fix Job Hunting",
-  description: "Learn about the story behind LinkdApply and our mission to help job seekers automate the repetitive parts of job hunting.",
+  title: "About Us | LinkdApply",
+  description: "Learn about LinkdApply — an AI-powered LinkedIn job application automation service operated by Himanshu Yadav from Uttar Pradesh, India.",
 };
+
+const SERVICES = [
+  {
+    name: "Free Trial",
+    price: "₹0",
+    period: "24 hours",
+    description: "Try LinkdApply with 1 LinkedIn account, 1 active bot, and up to 10 applications. No payment required.",
+  },
+  {
+    name: "Starter",
+    price: "₹1,599",
+    period: "per month",
+    description: "For individual job seekers — 1 LinkedIn account, 100 applications/month, job filters, and email support.",
+  },
+  {
+    name: "Pro",
+    price: "₹3,999",
+    period: "per month",
+    description: "For serious job seekers — 3 LinkedIn accounts, 500 applications/month, AI dynamic answers, and priority support.",
+  },
+  {
+    name: "Agency",
+    price: "₹11,999",
+    period: "per month",
+    description: "For agencies and power users — 10 LinkedIn accounts, 3,000 applications/month, multi-account dashboard, and reporting.",
+  },
+];
 
 export default function AboutPage() {
   return (
@@ -14,119 +42,185 @@ export default function AboutPage() {
       <Header />
 
       <main className="relative flex flex-col pt-32 pb-24 overflow-hidden">
-        {/* Background Layers */}
         <div className="absolute top-0 left-0 w-full h-full grid-pattern pointer-events-none z-0 opacity-40"></div>
         <div className="absolute top-0 left-0 w-full h-full noise-texture pointer-events-none z-0"></div>
         <div className="absolute top-0 left-0 w-full h-[800px] natural-glow pointer-events-none z-0"></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 w-full h-[800px] hero-gradient opacity-10 pointer-events-none z-0"></div>
 
         <div className="relative z-10 mx-auto max-w-4xl px-6">
-          {/* Mission Hero */}
-          <section className="mb-20 text-center">
-            <h1 className="font-serif text-[40px] md:text-[56px] leading-[1.1] font-medium tracking-tight text-zinc-900 mb-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
-              We're on a Mission to <br />
-              <span className="text-accent italic">Fix Job Hunting</span>
+          {/* Hero */}
+          <section className="mb-16 text-center">
+            <h1 className="font-serif text-[40px] md:text-[56px] leading-[1.1] font-medium tracking-tight text-zinc-900 mb-6">
+              About <span className="text-accent italic">LinkdApply</span>
             </h1>
-            <p className="text-xl md:text-2xl text-zinc-600 leading-relaxed max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
-              LinkdApply was born from a simple frustration: why do job seekers spend more time filling out forms than actually preparing for interviews?
+            <p className="text-xl text-zinc-600 leading-relaxed max-w-3xl mx-auto">
+              {COMPANY.brandName} is an AI-powered software service that helps job seekers automate LinkedIn job
+              applications — saving hours of repetitive form-filling every day.
             </p>
           </section>
 
-          {/* Our Story */}
-          <section className="mb-20 space-y-6">
-            <h2 className="text-2xl font-bold text-zinc-900">Our Story</h2>
-            <div className="space-y-6 text-lg text-zinc-600 leading-relaxed">
+          {/* Business operator — PayU requirement */}
+          <section className="mb-16 p-10 rounded-3xl border border-zinc-100 bg-zinc-50/50 space-y-6">
+            <h2 className="text-2xl font-bold text-zinc-900">Who We Are</h2>
+            <p className="text-zinc-600 leading-relaxed">
+              This website ({COMPANY.websiteUrl}) is operated by{" "}
+              <span className="font-semibold text-zinc-900">{COMPANY.legalName}</span>, a sole proprietor based in
+              Uttar Pradesh, India.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-1">Legal Name</p>
+                <p className="font-medium text-zinc-900">{COMPANY.legalName}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-1">Registered Address</p>
+                <p className="text-zinc-700">{COMPANY.registeredAddress}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-1">Email</p>
+                <a href={`mailto:${COMPANY.email}`} className="text-accent font-semibold hover:underline">{COMPANY.email}</a>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-1">Mobile</p>
+                <a href={COMPANY.phoneHref} className="text-accent font-semibold hover:underline">{COMPANY.phone}</a>
+              </div>
+            </div>
+          </section>
+
+          {/* What we do */}
+          <section className="mb-16 space-y-6">
+            <h2 className="text-2xl font-bold text-zinc-900">What We Do</h2>
+            <div className="space-y-4 text-lg text-zinc-600 leading-relaxed">
               <p>
-                In 2026, our founder — a software developer — found himself spending 3+ hours every single day copying and pasting the same resume details, answering the same screening questions, and clicking the same buttons across dozens of job boards. The process was soul-crushingly repetitive.
+                {COMPANY.brandName} provides a subscription-based software platform (SaaS) that automates the
+                LinkedIn Easy Apply process. Our service reads your resume, matches you with relevant job listings,
+                fills in application forms, answers screening questions using AI, and tracks every application from
+                a central dashboard.
               </p>
               <p>
-                So he built a tool to automate it. What started as a personal script became a full platform: an AI-powered system that reads your resume, understands your career goals, matches you with relevant openings, and submits applications on your behalf — intelligently, not blindly.
-              </p>
-              <p>
-                Today, LinkdApply helps hundreds of job seekers reclaim their time and apply to more jobs without the burnout. We believe your time is better spent preparing for interviews, networking, and building skills — not filling repetitive forms.
+                The platform is delivered entirely online — there is no physical product. Once you subscribe, access
+                is activated on your account within minutes. You can install and run the automation locally on
+                Windows, macOS, or Linux with a single command.
               </p>
             </div>
           </section>
 
-          {/* What We Believe */}
-          <section className="mb-24">
-            <h2 className="text-2xl font-bold text-zinc-900 mb-12">What We Believe</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Products & Services with INR prices — PayU requirement */}
+          <section className="mb-16">
+            <h2 className="text-2xl font-bold text-zinc-900 mb-4">Our Products &amp; Services</h2>
+            <p className="text-zinc-600 mb-8">
+              All prices below are in Indian Rupees (INR) and inclusive of applicable taxes. Annual plans are
+              available at a discounted rate. International customers can pay in USD via Stripe — see our{" "}
+              <Link href="/pricing" className="text-accent font-semibold hover:underline">Pricing page</Link>.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {SERVICES.map((service) => (
+                <div
+                  key={service.name}
+                  className="p-6 rounded-2xl border border-zinc-100 bg-zinc-50/50 hover:border-accent/20 transition-all"
+                >
+                  <div className="flex items-baseline justify-between mb-3">
+                    <h3 className="text-lg font-bold text-zinc-900">{service.name}</h3>
+                    <div className="text-right">
+                      <span className="text-2xl font-extrabold text-zinc-900">{service.price}</span>
+                      <span className="text-xs text-zinc-400 ml-1">{service.period}</span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-zinc-600 leading-relaxed">{service.description}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-6 text-center">
+              <Link
+                href="/pricing"
+                className="inline-flex items-center justify-center rounded-full px-8 py-3 text-sm font-semibold text-white purple-gradient-button hover:scale-[1.02] transition-all shadow-lg"
+              >
+                View Full Pricing &amp; Subscribe
+              </Link>
+            </p>
+          </section>
+
+          {/* Our Story */}
+          <section className="mb-16 space-y-6">
+            <h2 className="text-2xl font-bold text-zinc-900">Our Story</h2>
+            <div className="space-y-4 text-zinc-600 leading-relaxed">
+              <p>
+                {COMPANY.brandName} was founded in 2026 by {COMPANY.legalName}, a software developer who spent
+                hours every day manually applying to jobs on LinkedIn — copying resume details, answering the same
+                screening questions, and clicking through dozens of forms.
+              </p>
+              <p>
+                What started as a personal automation script evolved into a full platform: an AI-powered system that
+                intelligently matches your profile to relevant openings and submits tailored applications on your
+                behalf. Today, {COMPANY.brandName} helps job seekers across India and internationally reclaim their
+                time and apply to more jobs without burnout.
+              </p>
+            </div>
+          </section>
+
+          {/* Values */}
+          <section className="mb-16">
+            <h2 className="text-2xl font-bold text-zinc-900 mb-8">What We Believe</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[
                 {
-                  icon: "🎯",
                   title: "Quality Over Quantity",
-                  text: "We don't spray-and-pray. Our AI matches your resume to jobs where you're genuinely qualified. Every application is tailored — not generic."
+                  text: "Our AI matches your resume to jobs where you are genuinely qualified. Every application is tailored, not generic.",
                 },
                 {
-                  icon: "🔒",
                   title: "Privacy First",
-                  text: "Your data is yours. We use AES-256 encryption for all stored credentials, and we never sell or share your personal information with anyone."
+                  text: "Your data is yours. We use AES-256 encryption for stored credentials and never sell or share your personal information.",
                 },
                 {
-                  icon: "⚡",
                   title: "Time is Everything",
-                  text: "Every hour spent filling forms is an hour you could spend learning, networking, or interview prepping. We give that time back to you."
+                  text: "Every hour spent filling forms is an hour you could spend learning, networking, or preparing for interviews.",
                 },
                 {
-                  icon: "🤝",
                   title: "Transparent & Fair",
-                  text: "No contracts, no lock-ins, no hidden fees. Our free trial requires zero credit card. Cancel anytime. We earn your trust, not trap you."
-                }
-              ].map((belief, idx) => (
-                <div key={idx} className="p-8 rounded-3xl border border-zinc-100 bg-zinc-50/50 hover:border-accent/20 transition-all hover:bg-white hover:shadow-xl group">
-                  <div className="text-3xl mb-4 group-hover:scale-110 transition-transform inline-block">{belief.icon}</div>
-                  <h3 className="text-xl font-bold text-zinc-900 mb-3">{belief.title}</h3>
-                  <p className="text-zinc-600 leading-relaxed text-sm">{belief.text}</p>
+                  text: "No contracts or hidden fees. Free trial with no credit card. Cancel anytime. Refunds within 7 days as per our policy.",
+                },
+              ].map((belief) => (
+                <div key={belief.title} className="p-6 rounded-2xl border border-zinc-100 bg-zinc-50/50">
+                  <h3 className="text-lg font-bold text-zinc-900 mb-2">{belief.title}</h3>
+                  <p className="text-sm text-zinc-600 leading-relaxed">{belief.text}</p>
                 </div>
               ))}
             </div>
           </section>
 
-          {/* Technology */}
-          <section className="mb-24 p-10 rounded-[32px] bg-zinc-950 text-white relative overflow-hidden group">
-             <div className="absolute top-0 left-0 w-full h-full hero-gradient opacity-30 pointer-events-none"></div>
-             <div className="relative z-10 space-y-8">
-                <div className="space-y-4">
-                  <h2 className="text-2xl font-bold">Our Technology</h2>
-                  <p className="text-zinc-400 leading-relaxed">
-                    LinkdApply is built on a high-performance, modern stack designed for reliability, speed, and undetectability. 
-                  </p>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-2">
-                    <h4 className="text-accent font-bold uppercase tracking-widest text-xs">Core Frameworks</h4>
-                    <p className="text-sm text-zinc-400">Next.js 15 for a lightning-fast frontend and FastAPI for a robust Python backend, installed locally with a single command.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <h4 className="text-accent font-bold uppercase tracking-widest text-xs">AI Engine</h4>
-                    <p className="text-sm text-zinc-400">Integrated with OpenAI, Google Gemini, and DeepSeek to intelligently parse job descriptions and generate human-like responses.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <h4 className="text-accent font-bold uppercase tracking-widest text-xs">Automation</h4>
-                    <p className="text-sm text-zinc-400">Powered by Selenium and Playwright with custom behavioral scripts to mimic human interaction and bypass anti-bot detections.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <h4 className="text-accent font-bold uppercase tracking-widest text-xs">Security & Billing</h4>
-                    <p className="text-sm text-zinc-400">Secure AES-256 data encryption with global payment support via Stripe for a seamless checkout experience.</p>
-                  </div>
-                </div>
-             </div>
+          {/* Policies */}
+          <section className="mb-16 p-8 rounded-3xl border border-zinc-100 bg-zinc-50/50 space-y-4">
+            <h2 className="text-2xl font-bold text-zinc-900">Policies</h2>
+            <p className="text-zinc-600 text-sm leading-relaxed">
+              We maintain clear policies for your peace of mind:
+            </p>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium">
+              <Link href="/privacy" className="text-accent hover:underline">Privacy Policy</Link>
+              <Link href="/terms" className="text-accent hover:underline">Terms of Service</Link>
+              <Link href="/refund-policy" className="text-accent hover:underline">Return &amp; Refund Policy</Link>
+              <Link href="/cancellation-policy" className="text-accent hover:underline">Cancellation Policy</Link>
+              <Link href="/shipping-policy" className="text-accent hover:underline">Shipping &amp; Delivery Policy</Link>
+            </div>
           </section>
 
-          {/* Get in Touch */}
+          {/* CTA */}
           <section className="text-center space-y-6">
             <h2 className="text-3xl font-serif font-medium text-zinc-900">Get in Touch</h2>
             <p className="text-lg text-zinc-600 max-w-2xl mx-auto">
-              Have questions, feedback, or partnership inquiries? We'd love to hear from you.
+              Questions about our service, billing, or partnerships? We are here to help.
             </p>
-            <div className="pt-4">
-              <Link 
-                href="/support"
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Link
+                href="/contact"
                 className="inline-flex items-center justify-center rounded-full px-10 py-4 text-base font-semibold text-white purple-gradient-button hover:scale-[1.02] transition-all shadow-xl"
               >
-                Contact Support
+                Contact Us
+              </Link>
+              <Link
+                href="/pricing"
+                className="inline-flex items-center justify-center rounded-full px-10 py-4 text-base font-semibold text-zinc-900 border border-zinc-200 bg-white hover:border-accent/20 transition-all shadow-sm"
+              >
+                View Pricing
               </Link>
             </div>
           </section>

@@ -1,16 +1,16 @@
 import pytest
 
 def test_get_bot_status(client):
-    response = client.get("/api/bot/status")
+    response = client.get("/api/bot/status?user_id=test@example.com")
     assert response.status_code == 200
     assert "status" in response.json()
     assert response.json()["status"] in ["stopped", "running", "error"]
 
-def test_bot_runs_history(client, test_db):
-    # Insert some mock runs
+def test_bot_runs_history(client, test_db, auth_as):
+    auth_as("test-user")
     test_db.start_bot_run("test-user")
     test_db.start_bot_run("test-user")
-    
+
     response = client.get("/api/bot/runs")
     assert response.status_code == 200
     runs = response.json()["runs"]
@@ -22,33 +22,36 @@ def test_bot_stop_when_not_running(client, monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: None)
     
     # Ensure bot is stopped
-    client.post("/api/bot/stop")
+    client.post("/api/bot/stop?user_id=test@example.com")
     
-    response = client.post("/api/bot/stop")
+    response = client.post("/api/bot/stop?user_id=test@example.com")
     assert response.status_code == 200
     assert response.json()["status"] == "not_running"
 
 def test_bot_logs_availability(client):
-    response = client.get("/api/bot/logs")
+    response = client.get("/api/bot/logs?user_id=test@example.com")
     assert response.status_code == 200
-    assert "logs" in response.json()
+    body = response.json()
+    assert "logs" in body
+    assert "log_dir" in body
+    assert "files" in body
 
 
 def test_bot_active_zero_when_idle(client):
     """No supervisor process and no running automation tasks → active == 0."""
-    res = client.get("/api/bot/active?user_id=local-user")
+    res = client.get("/api/bot/active?user_id=himu09854@gmail.com")
     assert res.status_code == 200
     body = res.json()
     assert body["active"] == 0
     assert body["supervisor"] == 0
     assert body["automation_tasks"] == 0
-    # local-user is force-promoted to the agency plan by the route.
     assert body["plan"] == "agency"
     assert body["limit"] >= 1
 
 
-def test_bot_active_counts_running_automation_tasks(client, test_db):
+def test_bot_active_counts_running_automation_tasks(client, test_db, auth_as):
     """Running automation tasks should bump the active count."""
+    auth_as("active-user")
     test_db.create_automation_task(
         "active-task-1", "post", ["arg"], "/log", user_id="active-user"
     )
@@ -61,7 +64,7 @@ def test_bot_active_counts_running_automation_tasks(client, test_db):
     )
     test_db.finalize_automation_task("done-task", exit_code=0)
 
-    res = client.get("/api/bot/active?user_id=active-user")
+    res = client.get("/api/bot/active")
     assert res.status_code == 200
     body = res.json()
     assert body["automation_tasks"] == 2
@@ -80,7 +83,7 @@ def test_bot_active_includes_supervisor(client, monkeypatch):
 
     monkeypatch.setattr(sv, "supervisor_process", _FakeProc())
     try:
-        res = client.get("/api/bot/active?user_id=local-user")
+        res = client.get("/api/bot/active?user_id=test@example.com")
         assert res.status_code == 200
         body = res.json()
         assert body["supervisor"] == 1

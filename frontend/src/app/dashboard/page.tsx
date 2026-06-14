@@ -9,6 +9,7 @@ import SearchForm from "@/components/SearchForm";
 import SettingsForm from "@/components/SettingsForm";
 import QuestionsForm from "@/components/QuestionsForm";
 import SecretsForm from "@/components/SecretsForm";
+import { apiFetch } from "@/lib/desktop-api";
 
 const CONFIG_FILES = ["personals.py", "search.py", "settings.py", "questions.py", "secrets.py"];
 
@@ -40,6 +41,37 @@ function formatShortTime(iso: string | null | undefined) {
   }
 }
 
+function formatPeriodEnd(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  try {
+    if (typeof value === "number") {
+      return new Date(value * 1000).toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    }
+    return new Date(String(value)).toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch {
+    return String(value);
+  }
+}
+
+function getSubAccess(sub: { plan?: string; status?: string } | null) {
+  if (!sub) {
+    return { canApply: false, isTrial: false, isExpiredTrial: false, needsUpgrade: true };
+  }
+  const status = String(sub.status || "").toLowerCase();
+  const plan = String(sub.plan || "").toLowerCase();
+  const canApply = status === "active" || status === "trialing";
+  const isTrial = plan === "free_trial" && status === "trialing";
+  const isExpiredTrial =
+    plan === "free_trial" && (status === "expired" || status === "inactive");
+  return { canApply, isTrial, isExpiredTrial, needsUpgrade: !canApply };
+}
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState(CONFIG_FILES[0]);
   const [content, setContent] = useState("");
@@ -65,12 +97,19 @@ export default function Dashboard() {
   const [isStopping, setIsStopping] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [showLogsModal, setShowLogsModal] = useState(false);
-  const [logsPayload, setLogsPayload] = useState<{ logs: string; infra?: { title: string; filename: string; content: string }[]; profiles?: { id: string; filename: string; content: string }[] } | null>(null);
+  const [logsCopied, setLogsCopied] = useState(false);
+  const [logsPayload, setLogsPayload] = useState<{
+    logs: string;
+    log_dir?: string;
+    files?: { filename: string; path: string; size_bytes: number; modified_utc: string }[];
+    infra?: { title: string; filename: string; content: string }[];
+    profiles?: { id: string; filename: string; content: string }[];
+  } | null>(null);
   const [logsLoading, setLogsLoading] = useState(false);
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const userId = session?.user?.email || "local-user";
+  const userId = session?.user?.email;
 
   useEffect(() => {
     fetchConfig(activeTab);
@@ -81,7 +120,7 @@ export default function Dashboard() {
     setLogsLoading(true);
     setLogsPayload(null);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/bot/logs?lines=200");
+      const res = await apiFetch("/api/bot/logs?lines=200");
       if (res.ok) {
         setLogsPayload(await res.json());
       } else {
@@ -97,7 +136,7 @@ export default function Dashboard() {
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/bot/status?user_id=${userId}`);
+        const res = await apiFetch(`/api/bot/status?user_id=${userId}`);
         if (res.ok) {
           const data = await res.json();
           setBotStatus(data.status);
@@ -117,7 +156,7 @@ export default function Dashboard() {
 
     const fetchResumeInfo = async () => {
         try {
-            const res = await fetch("http://127.0.0.1:8000/api/config/questions");
+            const res = await apiFetch(`/api/config/questions?user_id=${encodeURIComponent(userId)}`);
             const data = await res.json();
             const match = data.content.match(/default_resume_path = "(.*)"/);
             if (match) setResumeName(match[1]);
@@ -126,7 +165,10 @@ export default function Dashboard() {
 
     const fetchSubscription = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/billing/subscription?user_id=${userId}`);
+        const res = await fetch(
+          `/api/billing/subscription?user_id=${encodeURIComponent(userId)}`,
+          { credentials: "include" }
+        );
         if (res.ok) {
           const data = await res.json();
           setSubscription(data);
@@ -138,7 +180,7 @@ export default function Dashboard() {
 
     const fetchBotSpeed = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/config/settings");
+        const res = await apiFetch(`/api/config/settings?user_id=${encodeURIComponent(userId)}`);
         const data = await res.json();
         const match = data.content.match(/bot_speed = (\d+)/);
         if (match) setBotSpeed(parseInt(match[1]));
@@ -147,14 +189,14 @@ export default function Dashboard() {
 
     const fetchStats = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/applications/stats?user_id=${userId}`);
+        const res = await apiFetch(`/api/applications/stats?user_id=${userId}`);
         if (res.ok) setStats(await res.json());
       } catch {}
     };
 
     const fetchHistory = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/applications/history?user_id=${userId}&limit=10`);
+        const res = await apiFetch(`/api/applications/history?user_id=${userId}&limit=10`);
         if (res.ok) {
             const data = await res.json();
             setHistory(data.history);
@@ -288,7 +330,7 @@ export default function Dashboard() {
     setMessage(null);
     try {
       const cleanName = filename.split('.')[0];
-      const res = await fetch(`http://127.0.0.1:8000/api/config/${cleanName}`);
+      const res = await apiFetch(`/api/config/${cleanName}?user_id=${encodeURIComponent(userId)}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setContent(data.content || "");
@@ -348,7 +390,7 @@ export default function Dashboard() {
 
     try {
       const cleanName = activeTab.split('.')[0];
-      const res = await fetch(`http://127.0.0.1:8000/api/config/${cleanName}`, {
+      const res = await apiFetch(`/api/config/${cleanName}?user_id=${encodeURIComponent(userId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: finalContent }),
@@ -374,7 +416,7 @@ export default function Dashboard() {
     setConnectionError(null);
     setMessage(null);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/bot/start`, {
+      const res = await apiFetch(`/api/bot/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId }),
@@ -394,7 +436,7 @@ export default function Dashboard() {
       for (let i = 0; i < 24; i++) {
         await wait(650);
         try {
-          const st = await fetch(`http://127.0.0.1:8000/api/bot/status?user_id=${userId}`);
+          const st = await apiFetch(`/api/bot/status?user_id=${userId}`);
           if (st.ok) {
             const j = await st.json();
             setLastApplied(j.last_applied ?? null);
@@ -428,7 +470,7 @@ export default function Dashboard() {
     setConnectionError(null);
     setMessage(null);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/bot/stop`, { method: "POST" });
+      const res = await apiFetch(`/api/bot/stop`, { method: "POST" });
       if (!res.ok) {
         setConnectionError(await parseApiError(res));
         return;
@@ -451,9 +493,9 @@ export default function Dashboard() {
     document.getElementById("dashboard-configuration")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const subActive =
-    subscription &&
-    (subscription.status === "active" || subscription.status === "trialing");
+  const subAccess = getSubAccess(subscription);
+  const subActive = subAccess.canApply;
+  const usageLimit = subscription?.limit ?? (subAccess.isTrial ? 10 : 0);
   const startDisabled =
     isLoading ||
     isStarting ||
@@ -466,7 +508,7 @@ export default function Dashboard() {
   const updateBotSpeed = async (speed: number) => {
     setBotSpeed(speed);
     try {
-        const res = await fetch("http://127.0.0.1:8000/api/config/settings");
+        const res = await apiFetch(`/api/config/settings?user_id=${encodeURIComponent(userId)}`);
         const data = await res.json();
         let newContent = data.content;
         
@@ -476,7 +518,7 @@ export default function Dashboard() {
             newContent += `\nbot_speed = ${speed}`;
         }
 
-        await fetch("http://127.0.0.1:8000/api/config/settings", {
+        await apiFetch(`/api/config/settings?user_id=${encodeURIComponent(userId)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ content: newContent }),
@@ -501,7 +543,7 @@ export default function Dashboard() {
     formData.append("file", file);
 
     try {
-        const res = await fetch("http://127.0.0.1:8000/api/upload/resume", {
+        const res = await apiFetch(`/api/upload/resume?user_id=${encodeURIComponent(userId)}`, {
             method: "POST",
             body: formData,
         });
@@ -532,9 +574,10 @@ export default function Dashboard() {
                   <span className={`text-[9px] font-bold uppercase tracking-wider ${
                     subscription.plan === 'pro' ? 'text-indigo-400' :
                     subscription.plan === 'agency' ? 'text-amber-400' :
+                    subscription.plan === 'free_trial' ? 'text-amber-400' :
                     'text-zinc-500'
                   }`}>
-                    {subscription.plan}
+                    {subscription.plan === 'free_trial' ? 'Free Trial' : subscription.plan}
                   </span>
                 </div>
               )}
@@ -598,8 +641,36 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Subscription Banner */}
-      {subscription && subscription.status !== 'active' && subscription.status !== 'trialing' && (
+      {/* Free trial active banner */}
+      {subAccess.isTrial && subscription && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+          <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="size-10 bg-amber-500/20 rounded-full flex items-center justify-center text-amber-400">
+                <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="text-white font-bold">Free Trial Active</h4>
+                <p className="text-sm text-amber-200/80">
+                  24-hour trial · Up to {usageLimit} applications · 1 LinkedIn account · Expires{" "}
+                  {formatPeriodEnd(subscription.current_period_end)}
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/pricing"
+              className="px-6 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold rounded-xl transition-all shrink-0 text-sm"
+            >
+              Upgrade Anytime
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Upgrade banner — only when no active trial or paid plan */}
+      {subscription && subAccess.needsUpgrade && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
           <div className="bg-indigo-600/20 border border-indigo-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -609,15 +680,27 @@ export default function Dashboard() {
                 </svg>
               </div>
               <div>
-                <h4 className="text-white font-bold">Upgrade to {subscription.plan === 'free' ? 'Start Applying' : 'Reactivate'}</h4>
-                <p className="text-sm text-indigo-200/80">You need an active subscription to launch the bot and automate your applications.</p>
+                <h4 className="text-white font-bold">
+                  {subAccess.isExpiredTrial
+                    ? "Trial Expired"
+                    : subscription.plan === "free"
+                      ? "Start Your Free Trial"
+                      : "Reactivate Your Plan"}
+                </h4>
+                <p className="text-sm text-indigo-200/80">
+                  {subAccess.isExpiredTrial
+                    ? "Your 24-hour free trial has ended. Upgrade to keep applying automatically."
+                    : subscription.plan === "free"
+                      ? "Try LinkdApply free for 24 hours — 10 applications, no credit card required."
+                      : "You need an active subscription to launch the bot and automate your applications."}
+                </p>
               </div>
             </div>
-            <Link 
-              href="/pricing"
+            <Link
+              href={subscription.plan === "free" || subAccess.isExpiredTrial ? "/pricing?trial=1" : "/pricing"}
               className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shrink-0"
             >
-              View Plans
+              {subscription.plan === "free" || subAccess.isExpiredTrial ? "Start Free Trial" : "View Plans"}
             </Link>
           </div>
         </div>
@@ -715,7 +798,7 @@ export default function Dashboard() {
                 <div className="text-lg font-bold text-white tracking-tight">
                   {stats?.monthly_count ?? 0}
                   <span className="text-zinc-600 text-xs font-medium ml-1">
-                    / {applyLimit || subscription?.limit || "?"}
+                    / {applyLimit || usageLimit || "?"}
                   </span>
                 </div>
                 <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Monthly quota</div>
@@ -737,13 +820,24 @@ export default function Dashboard() {
                   type="button"
                   onClick={() => {
                     if (!subActive) {
-                      window.location.href = "/pricing";
+                      window.location.href =
+                        subscription?.plan === "free" || subAccess.isExpiredTrial
+                          ? "/pricing?trial=1"
+                          : "/pricing";
                       return;
                     }
                     setShowConfirm(true);
                   }}
                   disabled={startDisabled}
-                  title={!isBackendHealthy ? "Backend offline" : !subActive ? "Subscription required" : undefined}
+                  title={
+                    !isBackendHealthy
+                      ? "Backend offline"
+                      : !subActive
+                        ? subAccess.isExpiredTrial
+                          ? "Trial expired — upgrade to continue"
+                          : "Start a free trial or subscribe to apply"
+                        : undefined
+                  }
                   className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                     subActive ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"
                   }`}
@@ -805,16 +899,59 @@ export default function Dashboard() {
           <div className="bg-zinc-950 border border-zinc-800 rounded-xl max-w-4xl w-full max-h-[85vh] flex flex-col shadow-2xl">
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
               <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Bot logs</h3>
-              <button
-                type="button"
-                onClick={() => setShowLogsModal(false)}
-                className="text-zinc-500 hover:text-white p-1 rounded"
-                aria-label="Close"
-              >
-                <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={logsLoading || !logsPayload?.logs}
+                  onClick={async () => {
+                    const text = logsPayload?.logs || "";
+                    try {
+                      await navigator.clipboard.writeText(text);
+                    } catch {
+                      // Clipboard API can be unavailable (http / older browsers)
+                      const ta = document.createElement("textarea");
+                      ta.value = text;
+                      document.body.appendChild(ta);
+                      ta.select();
+                      document.execCommand("copy");
+                      document.body.removeChild(ta);
+                    }
+                    setLogsCopied(true);
+                    setTimeout(() => setLogsCopied(false), 2000);
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-widest transition-colors disabled:opacity-40 ${
+                    logsCopied
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      : "border-zinc-800 text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                  }`}
+                >
+                  {logsCopied ? (
+                    <>
+                      <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      Copy
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowLogsModal(false)}
+                  className="text-zinc-500 hover:text-white p-1 rounded"
+                  aria-label="Close"
+                >
+                  <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-auto p-4 text-xs font-mono text-zinc-300 space-y-4">
               {logsLoading && <p className="text-zinc-500">Loading…</p>}
@@ -848,6 +985,15 @@ export default function Dashboard() {
                 <pre className="whitespace-pre-wrap break-words text-zinc-400">{logsPayload.logs}</pre>
               )}
             </div>
+            {!logsLoading && logsPayload?.log_dir && (
+              <div className="px-4 py-2 border-t border-zinc-800 text-[10px] text-zinc-500 font-mono">
+                <span className="text-zinc-600 uppercase tracking-wider font-bold mr-2">Log dir</span>
+                {logsPayload.log_dir}
+                {logsPayload.files && logsPayload.files.length > 0 && (
+                  <span className="ml-2">({logsPayload.files.map((f) => f.filename).join(", ")})</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -936,7 +1082,7 @@ export default function Dashboard() {
             </div>
 
             <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={() => signOut({ callbackUrl: "/", redirect: true })}
               className="w-full py-2 text-[10px] font-bold text-zinc-600 uppercase tracking-widest hover:text-red-500 transition-colors"
             >
               Sign Out
@@ -974,6 +1120,10 @@ export default function Dashboard() {
                         onChange={setFormData}
                         isActive={activeTab === "secrets.py"}
                         onAccountsSaved={() => fetchConfig("secrets.py")}
+                        onNotify={(n) => {
+                          setMessage(n);
+                          setTimeout(() => setMessage(null), 3000);
+                        }}
                       />
                     )}
                   </>

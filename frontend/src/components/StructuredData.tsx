@@ -1,5 +1,5 @@
 import React from 'react';
-import { rawInstallScriptUrl } from '@/lib/install';
+import { GITHUB_RELEASES_URL } from '@/lib/install';
 
 export default function StructuredData() {
   const softwareSchema = {
@@ -7,8 +7,8 @@ export default function StructuredData() {
     "@type": "SoftwareApplication",
     "name": "LinkdApply",
     "operatingSystem": "Windows, MacOS, Linux",
-    "downloadUrl": rawInstallScriptUrl("install.sh"),
-    "installUrl": rawInstallScriptUrl("install.sh"),
+    "downloadUrl": GITHUB_RELEASES_URL,
+    "installUrl": GITHUB_RELEASES_URL,
     "applicationCategory": "BusinessApplication",
     "aggregateRating": {
       "@type": "AggregateRating",
@@ -26,7 +26,7 @@ export default function StructuredData() {
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "LinkdApply",
-    "url": "https://linkdapply.com",
+    "url": "https://linkdapply.duckdns.org",
     "sameAs": [
       "https://twitter.com/linkdapply",
       "https://linkedin.com/company/linkdapply"

@@ -8,11 +8,12 @@ import pathlib
 from time import sleep
 from random import randint
 from datetime import datetime, timedelta
-from pyautogui import alert
+from modules.gui_safe import alert
 from pprint import pprint
 
 from app_paths import get_logs_dir
 from config.config_bridge import *
+from utils.debug_logs import LEGACY_BOT_LOG, bot_log_path, log_file_path
 from utils.logger import logger as cloud_logger
 
 
@@ -108,18 +109,16 @@ def get_log_path():
     When BOT_ID is set (supervisor-spawned worker), logs go to bot-<id>.txt per profile.
     """
     try:
-        base = get_logs_dir()
         bid = os.getenv("BOT_ID", "").strip()
         if bid:
-            safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in bid)
-            return os.path.join(base, f"bot-{safe}.txt")
-        return os.path.join(base, "log.txt")
+            return bot_log_path(bid)
+        return log_file_path(LEGACY_BOT_LOG)
     except Exception as e:
         critical_error_log(
             "Failed getting log path! So assigning fallback under app logs dir.",
             e,
         )
-        return os.path.join(get_logs_dir(), "log.txt")
+        return log_file_path(LEGACY_BOT_LOG)
 
 
 __logs_file_path = get_log_path()
@@ -173,9 +172,11 @@ def buffer(speed: int = 0) -> None:
     except:
         speed_val = 5
         
-    user_id = os.getenv("USER_ID", "local-user")
-    is_admin = user_id == "local-user" or os.getenv("USER_EMAIL") == "himu09854@gmail.com"
-    if is_admin:
+    from services.admin import is_admin
+
+    user_id = (os.getenv("USER_ID") or "").strip()
+    privileged = is_admin(user_id) or is_admin(os.getenv("USER_EMAIL"))
+    if privileged:
         speed_val = max(speed_val, 9)
 
     multiplier = max(0.05, (11 - speed_val) / 5.0) # Speed 10 -> 0.2, Speed 5 -> 1.2, Speed 1 -> 2.0
@@ -193,21 +194,20 @@ def buffer(speed: int = 0) -> None:
 
 def random_sleep(min_time=1.0, max_time=None):
     """Sleeps for a random amount of time to simulate human processing."""
-    user_id = os.getenv("USER_ID", "local-user")
-    is_admin = user_id == "local-user" or os.getenv("USER_EMAIL") == "himu09854@gmail.com"
-    
-    if max_time is None:
-        max_time = min_time + 2.0  # Add 2 seconds jitter by default
-
-    # Load speed from config
+    from services.admin import is_admin
     from config.config_bridge import bot_speed
+
+    if max_time is None:
+        max_time = min_time + 2.0
+
     try:
         speed_val = int(bot_speed)
-    except:
+    except Exception:
         speed_val = 5
 
-    # Privileged users get a speed boost
-    if is_admin:
+    user_id = (os.getenv("USER_ID") or "").strip()
+    privileged = is_admin(user_id) or is_admin(os.getenv("USER_EMAIL"))
+    if privileged:
         speed_val = max(speed_val, 9)
 
     multiplier = max(0.05, (11 - speed_val) / 5.0)
@@ -228,10 +228,17 @@ def manual_login_retry(is_logged_in: callable, limit: int = 2) -> None:
     """
     Function to ask and validate manual login
     """
+    from modules.gui_safe import HAS_DISPLAY, alert
+
+    if not HAS_DISPLAY:
+        print_lg(
+            "Headless server cannot complete interactive login. "
+            "Save LinkedIn session cookies or verify credentials."
+        )
+        return
+
     count = 0
     while not is_logged_in():
-        from pyautogui import alert
-
         print_lg("Seems like you're not logged in!")
         button = "Confirm Login"
         message = (
@@ -360,7 +367,7 @@ def truncate_for_csv(
 
 def get_chrome_version() -> int | None:
     """
-    Detects the installed Google Chrome version on Windows.
+    Detects the installed Google Chrome major version.
     Returns the major version number (e.g., 131) or None if not found.
     """
     if sys.platform.startswith("win"):
@@ -383,6 +390,23 @@ def get_chrome_version() -> int | None:
                 return int(version.split(".")[0])
             except Exception:
                 pass
+    else:
+        for cmd in (
+            "google-chrome --version",
+            "google-chrome-stable --version",
+            "chromium --version",
+            "chromium-browser --version",
+        ):
+            try:
+                out = subprocess.check_output(
+                    cmd, shell=True, stderr=subprocess.STDOUT, text=True
+                ).strip()
+                # e.g. "Google Chrome 149.0.7827.102"
+                for token in out.split():
+                    if token[0].isdigit() and "." in token:
+                        return int(token.split(".")[0])
+            except Exception:
+                continue
     return None
 
 

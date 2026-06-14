@@ -6,6 +6,8 @@ from fastapi import HTTPException
 
 from db_manager import db
 
+from services.admin import is_admin
+from services.cloud_billing import get_subscription_for_gating, uses_cloud_subscription
 from services.linkedin_env import (
     count_linkedin_accounts,
     preview_env_with_dashboard_credentials,
@@ -49,11 +51,10 @@ PLAN_LIMITS = {
 
 
 def assert_can_start_bot(user_id: str) -> None:
-    # Administrative Bypass for Project Admin
-    if user_id in ["himu09854@gmail.com", "local-user"]:
+    if is_admin(user_id):
         return
 
-    subscription = db.get_user_subscription(user_id)
+    subscription = get_subscription_for_gating(user_id)
 
     if not subscription or subscription["status"] not in ["active", "trialing"]:
         raise HTTPException(
@@ -72,7 +73,8 @@ def assert_can_start_bot(user_id: str) -> None:
             print(f"Error checking trial expiry: {e}")
 
         if is_expired:
-            db.upsert_subscription(user_id=user_id, status="expired")
+            if not uses_cloud_subscription():
+                db.upsert_subscription(user_id=user_id, status="expired")
             raise HTTPException(
                 status_code=402,
                 detail="Your 24-hour free trial has expired. Please upgrade to a paid plan to continue.",
@@ -81,8 +83,8 @@ def assert_can_start_bot(user_id: str) -> None:
     plan = subscription.get("plan", "free_trial")
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
 
-    probe_env = preview_env_with_dashboard_credentials()
-    account_total = count_linkedin_accounts(probe_env)
+    probe_env = preview_env_with_dashboard_credentials(user_id=user_id)
+    account_total = count_linkedin_accounts(probe_env, user_id=user_id)
 
     if account_total > limits["max_accounts"]:
         raise HTTPException(
@@ -133,10 +135,10 @@ def assert_can_run_automation(user_id: str) -> None:
       * Enforce a per-day count of completed-or-running automation tasks
         based on ``AUTOMATION_DAILY_LIMITS`` for the user's plan.
     """
-    if user_id in ["himu09854@gmail.com", "local-user"]:
+    if is_admin(user_id):
         return
 
-    subscription = db.get_user_subscription(user_id)
+    subscription = get_subscription_for_gating(user_id)
 
     if not subscription or subscription["status"] not in ["active", "trialing"]:
         raise HTTPException(
@@ -148,7 +150,8 @@ def assert_can_run_automation(user_id: str) -> None:
         try:
             expiry = datetime.fromisoformat(subscription["current_period_end"])
             if datetime.utcnow() > expiry:
-                db.upsert_subscription(user_id=user_id, status="expired")
+                if not uses_cloud_subscription():
+                    db.upsert_subscription(user_id=user_id, status="expired")
                 raise HTTPException(
                     status_code=402,
                     detail="Your free trial has expired. Please upgrade to a paid plan to continue.",

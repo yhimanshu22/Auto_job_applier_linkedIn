@@ -15,13 +15,14 @@ How:
 
 import logging
 from .. import config
-import pickle
 import os
 import time
 from selenium.common.exceptions import NoSuchWindowException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+
+from services.linkedin_session import load_linkedin_cookies, save_linkedin_cookies
 
 
 class LoginMixin:
@@ -38,19 +39,11 @@ class LoginMixin:
     """
 
     def save_cookies(self):
-        """Save current session cookies to file.
-        
-        Why:
-            Persist authentication across sessions to avoid repeated logins.
-        """
+        """Save current session cookies to the shared DB (user_sessions)."""
         try:
-            path = os.path.abspath(config.COOKIE_FILE)
-            parent = os.path.dirname(path)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
-            with open(path, "wb") as f:
-                pickle.dump(self.driver.get_cookies(), f)
-            logging.info(f"Saved session cookies to {path}")
+            cookies = self.driver.get_cookies()
+            save_linkedin_cookies(cookies)
+            logging.info("Saved session cookies to user_sessions")
         except Exception as e:
             logging.error(f"Failed to save cookies: {e}")
 
@@ -129,36 +122,30 @@ class LoginMixin:
         return False
 
     def load_cookies(self):
-        """Load session cookies from file and inject into browser.
-        
+        """Load session cookies from the shared DB and inject into browser.
+
         Returns:
             bool: True if cookies were loaded, False otherwise.
         """
-        cookie_path = os.path.abspath(config.COOKIE_FILE)
-        if not os.path.exists(cookie_path):
+        cookies = load_linkedin_cookies()
+        if not cookies:
             return False
 
         try:
-            # Must be on the domain to set cookies
             if not self._get_resilient(
                 config.LINKEDIN_BASE_URL, desc="LinkedIn (before cookies)"
             ):
                 return False
 
-            with open(cookie_path, "rb") as f:
-                cookies = pickle.load(f)
-                
             for cookie in cookies:
-                # Selenium might complain if domains don't match exactly or if fields are invalid
-                if 'expiry' in cookie:
-                    cookie['expiry'] = int(cookie['expiry'])
+                if "expiry" in cookie:
+                    cookie["expiry"] = int(cookie["expiry"])
                 try:
                     self.driver.add_cookie(cookie)
                 except Exception:
-                    # Ignore invalid cookies (e.g. mismatch domain)
                     continue
-                    
-            logging.info(f"Loaded {len(cookies)} cookies from {cookie_path}")
+
+            logging.info(f"Loaded {len(cookies)} cookies from user_sessions")
             return True
         except Exception as e:
             logging.error(f"Failed to load cookies: {e}")
@@ -244,6 +231,9 @@ class LoginMixin:
                 "input#username",
                 "input[name='session_key']",
                 "input[autocomplete='username']",
+                # Newer login layout: random ids, no name attribute.
+                "input[autocomplete^='username']",
+                "input[type='email']",
             ]
             username_field = self._find_element_from_selectors(username_selectors, By.CSS_SELECTOR)
             if not username_field:
@@ -263,6 +253,9 @@ class LoginMixin:
                 "input#password",
                 "input[name='session_password']",
                 "input[autocomplete='current-password']",
+                # Newer login layout: random ids, no name attribute.
+                "input[autocomplete^='current-password']",
+                "input[type='password']",
             ]
             password_field = self._find_element_from_selectors(password_selectors, By.CSS_SELECTOR)
             if not password_field:

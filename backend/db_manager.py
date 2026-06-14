@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, select, update, insert, func, case, literal, union_all
 from sqlalchemy.orm import sessionmaker, Session
@@ -17,6 +18,9 @@ SENSITIVE_KEYS = [
     "username",
     "linkedin_extra_accounts",  # JSON list of {username, password}
 ]
+
+# Legacy namespace used only when upgrading pre-multi-tenant DB schemas.
+_LEGACY_MIGRATION_OWNER = "local-user"
 
 
 def _ts_to_utc_iso(dt: datetime | None) -> str | None:
@@ -36,10 +40,22 @@ def _ts_to_utc_iso(dt: datetime | None) -> str | None:
 
 class DatabaseManager:
     def __init__(self):
-        # Database URL from environment variable, default to local SQLite
-        # For GCP Cloud SQL, this would be: postgresql://user:pass@host:port/dbname
-        self.db_url = os.getenv("DATABASE_URL")
-        
+        # Desktop sidecar: configs, secrets, applications, and bot history stay on
+        # local SQLite under LINKDAPPLY_USER_DATA even if DATABASE_URL is set.
+        force_local = os.getenv("LINKDAPPLY_LOCAL_DATA", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        self.db_url = None if force_local else os.getenv("DATABASE_URL")
+
+        if self.db_url:
+            # Render/Heroku use postgres://; SQLAlchemy expects postgresql://
+            if self.db_url.startswith("postgres://"):
+                self.db_url = self.db_url.replace(
+                    "postgres://", "postgresql://", 1
+                )
+
         if not self.db_url:
             db_path = os.path.join(get_runtime_writable_root(), "data.db")
             self.db_url = f"sqlite:///{db_path}"
@@ -57,46 +73,112 @@ class DatabaseManager:
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
 
     def _migrate_runtime_columns(self):
-        """Best-effort additive schema migration for SQLite-backed installs.
+        """Best-effort additive schema migration (no Alembic for two changes).
 
-        We don't pull in Alembic for a single-column change. Each entry is a
-        ``(table, column, ddl_type)`` triple; we look up the table via
-        ``PRAGMA table_info`` and ``ALTER TABLE ... ADD COLUMN`` when missing.
-        Postgres / MySQL ignore this path (handled by proper migrations there).
+        Handles:
+          * ``automation_tasks.account_username`` (SQLite-only legacy add).
+          * ``configs.user_id`` — multi-tenant config namespace. Existing rows
+            are assigned to the legacy owner id and the primary key becomes
+            ``(user_id, key)``. Implemented for both SQLite and Postgres.
         """
-        if "sqlite" not in self.db_url:
-            return
-
-        # ``automation_tasks.account_username`` was added after some installs
-        # already created the table — backfill it without losing rows.
-        migrations = [
-            ("automation_tasks", "account_username", "TEXT"),
-        ]
         try:
             with self.engine.begin() as conn:
-                for table, column, ddl in migrations:
-                    cols = {
-                        row[1]
-                        for row in conn.exec_driver_sql(
-                            f"PRAGMA table_info({table})"
-                        ).fetchall()
-                    }
-                    if not cols:
-                        # Table doesn't exist (fresh DB); create_all already
-                        # made it with the column included.
-                        continue
-                    if column not in cols:
-                        conn.exec_driver_sql(
-                            f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"
-                        )
+                if "sqlite" in self.db_url:
+                    self._sqlite_migrations(conn)
+                elif self.db_url.startswith("postgresql"):
+                    self._postgres_migrations(conn)
         except Exception as exc:
             import logging
             logging.warning(f"Runtime schema migration skipped: {exc}")
 
+    @staticmethod
+    def _sqlite_migrations(conn):
+        # automation_tasks.account_username (additive)
+        cols = {
+            row[1]
+            for row in conn.exec_driver_sql(
+                "PRAGMA table_info(automation_tasks)"
+            ).fetchall()
+        }
+        if cols and "account_username" not in cols:
+            conn.exec_driver_sql(
+                "ALTER TABLE automation_tasks ADD COLUMN account_username TEXT"
+            )
+
+        sub_cols = {
+            row[1]
+            for row in conn.exec_driver_sql(
+                "PRAGMA table_info(subscriptions)"
+            ).fetchall()
+        }
+        if sub_cols:
+            if "payment_provider" not in sub_cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE subscriptions ADD COLUMN payment_provider TEXT"
+                )
+            if "payu_txnid" not in sub_cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE subscriptions ADD COLUMN payu_txnid TEXT"
+                )
+
+        # configs.user_id — SQLite can't alter a PK, so rebuild the table.
+        cols = {
+            row[1]
+            for row in conn.exec_driver_sql("PRAGMA table_info(configs)").fetchall()
+        }
+        if cols and "user_id" not in cols:
+            conn.exec_driver_sql(
+                "CREATE TABLE configs_new ("
+                f"user_id TEXT NOT NULL DEFAULT '{_LEGACY_MIGRATION_OWNER}', "
+                "key TEXT NOT NULL, "
+                "value TEXT, category TEXT, is_encrypted INTEGER DEFAULT 0, "
+                "PRIMARY KEY (user_id, key))"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO configs_new (user_id, key, value, category, is_encrypted) "
+                f"SELECT '{_LEGACY_MIGRATION_OWNER}', key, value, category, is_encrypted FROM configs"
+            )
+            conn.exec_driver_sql("DROP TABLE configs")
+            conn.exec_driver_sql("ALTER TABLE configs_new RENAME TO configs")
+
+    @staticmethod
+    def _postgres_migrations(conn):
+        sub_cols = {
+            r[0]
+            for r in conn.exec_driver_sql(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'subscriptions'"
+            ).fetchall()
+        }
+        if sub_cols:
+            if "payment_provider" not in sub_cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE subscriptions ADD COLUMN payment_provider VARCHAR"
+                )
+            if "payu_txnid" not in sub_cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE subscriptions ADD COLUMN payu_txnid VARCHAR"
+                )
+
+        cols = {
+            r[0]
+            for r in conn.exec_driver_sql(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'configs'"
+            ).fetchall()
+        }
+        if cols and "user_id" not in cols:
+            conn.exec_driver_sql(
+                "ALTER TABLE configs ADD COLUMN user_id VARCHAR NOT NULL "
+                f"DEFAULT '{_LEGACY_MIGRATION_OWNER}'"
+            )
+            conn.exec_driver_sql("ALTER TABLE configs DROP CONSTRAINT configs_pkey")
+            conn.exec_driver_sql("ALTER TABLE configs ADD PRIMARY KEY (user_id, key)")
+
     def get_session(self) -> Session:
         return self.SessionLocal()
 
-    def set_config(self, key, value, category):
+    def set_config(self, key, value, category, *, user_id: str):
         is_encrypted = 1 if key in SENSITIVE_KEYS else 0
         val_str = json.dumps(value)
         
@@ -104,17 +186,17 @@ class DatabaseManager:
             val_str = encrypt_data(val_str)
             
         with self.get_session() as session:
-            config = session.get(Config, key)
+            config = session.get(Config, (user_id, key))
             if config:
                 config.value = val_str
                 config.category = category
                 config.is_encrypted = is_encrypted
             else:
-                config = Config(key=key, value=val_str, category=category, is_encrypted=is_encrypted)
+                config = Config(user_id=user_id, key=key, value=val_str, category=category, is_encrypted=is_encrypted)
                 session.add(config)
             session.commit()
 
-    def delete_config(self, key, category=None):
+    def delete_config(self, key, category=None, *, user_id: str):
         """Remove a config row outright (no-op if it doesn't exist).
 
         Used by the LinkedIn automation form-defaults clear flow — writing
@@ -127,7 +209,9 @@ class DatabaseManager:
         share a key name in the future.
         """
         with self.get_session() as session:
-            q = session.query(Config).filter(Config.key == key)
+            q = session.query(Config).filter(
+                Config.key == key, Config.user_id == user_id
+            )
             if category is not None:
                 q = q.filter(Config.category == category)
             row = q.first()
@@ -137,25 +221,51 @@ class DatabaseManager:
             session.commit()
             return True
 
-    def get_config(self, key, default=None):
+    @staticmethod
+    def _decode_config(config):
+        val_str = config.value
+        if val_str is None or (isinstance(val_str, str) and not val_str.strip()):
+            return None
+        if config.is_encrypted:
+            val_str = decrypt_data(val_str)
+            if val_str is None or (isinstance(val_str, str) and not val_str.strip()):
+                return None
+        try:
+            return json.loads(val_str)
+        except json.JSONDecodeError:
+            if config.is_encrypted:
+                logging.warning(
+                    "Could not decode encrypted config for %s/%s (%s)",
+                    config.user_id,
+                    config.key,
+                    config.category,
+                )
+                return None
+            logging.warning(
+                "Skipping invalid config JSON for %s/%s (%s)",
+                config.user_id,
+                config.key,
+                config.category,
+            )
+            return None
+
+    def get_config(self, key, default=None, *, user_id: str):
         with self.get_session() as session:
-            config = session.get(Config, key)
+            config = session.get(Config, (user_id, key))
             if config:
-                val_str = config.value
-                if config.is_encrypted:
-                    val_str = decrypt_data(val_str)
-                return json.loads(val_str)
+                return self._decode_config(config)
             return default
 
-    def get_all_by_category(self, category):
+    def get_all_by_category(self, category, *, user_id: str):
         with self.get_session() as session:
-            configs = session.query(Config).filter(Config.category == category).all()
             result = {}
+            configs = session.query(Config).filter(
+                Config.category == category, Config.user_id == user_id
+            ).all()
             for config in configs:
-                val_str = config.value
-                if config.is_encrypted:
-                    val_str = decrypt_data(val_str)
-                result[config.key] = json.loads(val_str)
+                decoded = self._decode_config(config)
+                if decoded is not None:
+                    result[config.key] = decoded
             return result
 
     def upsert_subscription(self, user_id, **kwargs):
@@ -194,14 +304,12 @@ class DatabaseManager:
                 run.applications_count = count
                 session.commit()
 
-    def get_recent_bot_runs(self, limit=10):
+    def get_recent_bot_runs(self, limit=10, user_id=None):
         with self.get_session() as session:
-            rows = (
-                session.query(BotRun)
-                .order_by(BotRun.start_time.desc())
-                .limit(limit)
-                .all()
-            )
+            q = session.query(BotRun)
+            if user_id:
+                q = q.filter(BotRun.user_id == user_id)
+            rows = q.order_by(BotRun.start_time.desc()).limit(limit).all()
             return [
                 {c.name: getattr(run, c.name) for c in run.__table__.columns}
                 for run in rows
@@ -300,10 +408,16 @@ class DatabaseManager:
     def get_user_session(self, user_id):
         with self.get_session() as session:
             sess = session.get(UserSession, user_id)
-            if sess:
+            if not sess or not sess.cookies_blob:
+                return None
+            try:
                 decrypted_json = decrypt_data(sess.cookies_blob)
+                if not decrypted_json or not str(decrypted_json).strip():
+                    return None
                 return json.loads(decrypted_json)
-            return None
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                logging.warning("Could not decode session cookies for %s: %s", user_id, exc)
+                return None
 
     def upsert_resume_metadata(self, user_id, file_name, storage_path, is_default=False):
         """Stores resume metadata in the database."""
@@ -419,7 +533,7 @@ class DatabaseManager:
         action,
         args,
         log_path,
-        user_id="local-user",
+        user_id: str,
         account_username=None,
     ):
         """Persist a freshly-launched LinkedIn automation subprocess."""

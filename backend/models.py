@@ -6,6 +6,8 @@ Base = declarative_base()
 
 class Config(Base):
     __tablename__ = "configs"
+    # Multi-tenant: each user has their own config namespace.
+    user_id = Column(String, primary_key=True)
     key = Column(String, primary_key=True)
     value = Column(Text)
     category = Column(String)
@@ -23,6 +25,8 @@ class Subscription(Base):
     status = Column(String, default="inactive")
     current_period_end = Column(String)
     cancel_at_period_end = Column(Integer, default=0)
+    payment_provider = Column(String)  # stripe | payu
+    payu_txnid = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -97,7 +101,7 @@ class AutomationTask(Base):
     """
     __tablename__ = "automation_tasks"
     id = Column(String, primary_key=True)
-    user_id = Column(String, nullable=False, default="local-user")
+    user_id = Column(String, nullable=False)
     action = Column(String, nullable=False)
     args_json = Column(Text)
     log_path = Column(String)

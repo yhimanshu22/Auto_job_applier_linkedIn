@@ -1,0 +1,32 @@
+[package]
+name = "linkdapply-desktop"
+version = "0.1.0"
+description = "LinkdApply desktop launcher"
+authors = ["LinkdApply"]
+edition = "2021"
+
+[lib]
+name = "linkdapply_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+dirs = "5"
+dotenvy = "0.15"
+
+# brotli 8.0.3 on crates.io pins conflicting alloc-no-stdlib 2.x/3.x; use git fix.
+[patch.crates-io]
+brotli = { git = "https://github.com/dropbox/rust-brotli", branch = "master" }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+strip = true

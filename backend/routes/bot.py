@@ -1,24 +1,27 @@
-import glob
 import logging
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
-from app_paths import get_base_path, get_logs_dir, get_runtime_writable_root
+from app_paths import get_runtime_writable_root, subprocess_env
 from db_manager import db
 from services.linkedin_env import apply_dashboard_linkedin_credentials
+from services.admin import effective_plan
 from services.plan_limits import PLAN_LIMITS, assert_can_start_bot
 from services import supervisor_state as sv
+from services.bot_supervisor import stop_supervisor, supervisor_popen_kwargs
+from utils.debug_logs import SUPERVISOR_CONSOLE_LOG, append_session_marker, collect_bot_logs_payload, log_file_path
+from utils.user_resolution import resolve_user_id
 
 router = APIRouter(prefix="/api/bot", tags=["bot"])
 
 
 @router.post("/start")
-async def start_bot(payload: dict = None):
-    user_id = payload.get("user_id", "local-user") if payload else "local-user"
+async def start_bot(request: Request, payload: dict = None):
+    claimed = payload.get("user_id") if payload else None
+    user_id = await resolve_user_id(request, claimed)
 
     assert_can_start_bot(user_id)
 
@@ -29,35 +32,30 @@ async def start_bot(payload: dict = None):
         if getattr(sys, "frozen", False):
             cmd = [sys.executable, "--supervisor"]
         else:
+            from app_paths import get_base_path
+
             server_script = os.path.join(get_base_path(), "server.py")
             cmd = [sys.executable, server_script, "--supervisor"]
 
         cwd = get_runtime_writable_root()
         logging.info(f"Starting supervisor with {cmd} in {cwd}")
 
-        env = os.environ.copy()
-        apply_dashboard_linkedin_credentials(env)
+        env = subprocess_env()
+        apply_dashboard_linkedin_credentials(env, user_id=user_id)
         env["USER_ID"] = user_id
 
         sv.close_supervisor_log()
-        logs_dir = get_logs_dir()
-        os.makedirs(logs_dir, exist_ok=True)
-        console_log = os.path.join(logs_dir, "supervisor-console.log")
+        console_log = log_file_path(SUPERVISOR_CONSOLE_LOG)
         sv.supervisor_log_handle = open(console_log, "a", encoding="utf-8", buffering=1)
-        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        sv.supervisor_log_handle.write(
-            f"\n{'=' * 60}\n[{ts}] Supervisor session started (API / dashboard)\n{'=' * 60}\n"
-        )
-        sv.supervisor_log_handle.flush()
+        append_session_marker(console_log, "Supervisor session started (API / dashboard)")
 
-        _sup_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
         sv.supervisor_process = subprocess.Popen(
             cmd,
             cwd=cwd,
             env=env,
             stdout=sv.supervisor_log_handle,
             stderr=subprocess.STDOUT,
-            creationflags=_sup_flags,
+            **supervisor_popen_kwargs(),
         )
 
         sv.current_run_id = db.start_bot_run(user_id)
@@ -69,26 +67,13 @@ async def start_bot(payload: dict = None):
 
 
 @router.post("/stop")
-async def stop_bot():
+async def stop_bot(request: Request, user_id: str | None = None):
+    await resolve_user_id(request, user_id)
     try:
-        was_running = sv.supervisor_process is not None and sv.supervisor_process.poll() is None
-
-        if was_running:
-            if os.name == "nt":
-                subprocess.run(
-                    ["taskkill", "/F", "/PID", str(sv.supervisor_process.pid), "/T"],
-                    capture_output=True,
-                )
-            else:
-                sv.supervisor_process.terminate()
-
-        sv.supervisor_process = None
-        sv.close_supervisor_log()
-
+        was_running = stop_supervisor(reason="dashboard")
         if sv.current_run_id:
             db.end_bot_run(sv.current_run_id, 0)
             sv.current_run_id = None
-
         return {"status": "stopped" if was_running else "not_running"}
     except Exception as e:
         print(f"Error in stop_bot: {e}")
@@ -99,12 +84,12 @@ async def stop_bot():
 
 
 @router.get("/status")
-async def get_bot_status(user_id: str = "local-user"):
+async def get_bot_status(request: Request, user_id: str | None = None):
+    user_id = await resolve_user_id(request, user_id)
     subscription = db.get_user_subscription(user_id)
     plan = subscription.get("plan", "free_trial") if subscription else "free_trial"
 
-    if user_id in ["himu09854@gmail.com", "local-user"]:
-        plan = "agency"
+    plan = effective_plan(user_id, plan)
 
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
 
@@ -126,66 +111,20 @@ async def get_bot_status(user_id: str = "local-user"):
 
 
 @router.get("/logs")
-async def get_bot_logs(lines: int = 120):
-    lines = max(20, min(int(lines), 500))
-    log_dir = get_logs_dir()
-    os.makedirs(log_dir, exist_ok=True)
-
-    def tail_file(path: str) -> str:
-        if not os.path.isfile(path):
-            return ""
-        try:
-            with open(path, "r", encoding="utf-8", errors="replace") as f:
-                buf = f.readlines()
-            return "".join(buf[-lines:])
-        except Exception as ex:
-            return f"(read error: {ex})"
-
-    infra = []
-    infra_text_parts = []
-    for title, filename in (
-        ("Supervisor console (stdout/stderr)", "supervisor-console.log"),
-        ("Supervisor", "supervisor.log"),
-    ):
-        path = os.path.join(log_dir, filename)
-        chunk = tail_file(path).strip()
-        if chunk:
-            infra.append({"title": title, "filename": filename, "content": chunk})
-            infra_text_parts.append(f"--- {title} ({filename}) ---\n{chunk}")
-
-    profiles = []
-    profile_text_parts = []
-    for path in sorted(glob.glob(os.path.join(log_dir, "bot-*.txt"))):
-        basename = os.path.basename(path)
-        inner = basename[len("bot-") : -len(".txt")]
-        chunk = tail_file(path).strip()
-        profiles.append({"id": inner, "filename": basename, "content": chunk})
-        if chunk:
-            profile_text_parts.append(f"--- Bot profile {inner} ({basename}) ---\n{chunk}")
-
-    legacy_parts = infra_text_parts + profile_text_parts
-    if not legacy_parts:
-        msg = (
-            "No log files yet. Start the bot from the dashboard to capture supervisor output "
-            f"under {log_dir}/."
-        )
-        return {"logs": msg, "infra": [], "profiles": []}
-
-    return {
-        "logs": "\n".join(legacy_parts),
-        "infra": infra,
-        "profiles": profiles,
-    }
+async def get_bot_logs(request: Request, lines: int = 120, user_id: str | None = None):
+    await resolve_user_id(request, user_id)
+    return collect_bot_logs_payload(lines=lines)
 
 
 @router.get("/runs")
-async def get_bot_runs(limit: int = 10):
-    runs = db.get_recent_bot_runs(limit)
+async def get_bot_runs(request: Request, user_id: str | None = None, limit: int = 10):
+    user_id = await resolve_user_id(request, user_id)
+    runs = db.get_recent_bot_runs(limit, user_id=user_id)
     return {"runs": runs}
 
 
 @router.get("/active")
-async def get_active_bot_count(user_id: str = "local-user"):
+async def get_active_bot_count(request: Request, user_id: str | None = None):
     """Live count of concurrently running bot processes for the billing tile.
 
     Two sources contribute, deliberately:
@@ -199,6 +138,7 @@ async def get_active_bot_count(user_id: str = "local-user"):
     Returns ``{active, supervisor, automation_tasks, limit, plan}`` so the
     frontend can render ``active / limit`` and optionally break it down.
     """
+    user_id = await resolve_user_id(request, user_id)
     automation = int(
         db.get_automation_task_stats(user_id=user_id).get("running", 0)
     )
@@ -209,8 +149,7 @@ async def get_active_bot_count(user_id: str = "local-user"):
 
     subscription = db.get_user_subscription(user_id)
     plan = (subscription or {}).get("plan", "free_trial")
-    if user_id in ("himu09854@gmail.com", "local-user"):
-        plan = "agency"
+    plan = effective_plan(user_id, plan)
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
 
     return {

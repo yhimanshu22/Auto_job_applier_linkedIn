@@ -26,8 +26,8 @@ export default function TermsPage() {
             <p>
               In these Terms, &quot;LinkdApply&quot;, &quot;we&quot;, &quot;us&quot;, and &quot;our&quot;
               refer to the party operating the Service. Contact details are available via{' '}
-              <Link href="/support" className="text-zinc-900 underline underline-offset-2 hover:text-zinc-600">
-                Support
+              <Link href="/contact" className="text-zinc-900 underline underline-offset-2 hover:text-zinc-600">
+                Contact Us
               </Link>
               .
             </p>
@@ -239,8 +239,8 @@ export default function TermsPage() {
               principles. Courts in Delaware may have exclusive jurisdiction for disputes, subject to
               mandatory rules where you live. Before filing a claim, you agree to try to resolve the dispute
               informally by contacting us through{' '}
-              <Link href="/support" className="text-zinc-900 underline underline-offset-2 hover:text-zinc-600">
-                Support
+              <Link href="/contact" className="text-zinc-900 underline underline-offset-2 hover:text-zinc-600">
+                Contact Us
               </Link>
               .
             </p>

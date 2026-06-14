@@ -47,6 +47,7 @@ backend/cookies/*.pkl
 backend/bot_pid.txt
 backend/test_output.txt
 backend/old/
+backend/scratch/
 
 # Environment and Secrets
 .env
@@ -67,5 +68,15 @@ Thumbs.db
 # Compiled Executables and Large Binaries
 *.exe
 
+# Tauri desktop
+desktop/node_modules/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+desktop/src-tauri/binaries/*
+!desktop/src-tauri/binaries/.gitkeep
+desktop/dist/
+
 backend/data.db
 backend/test_data.db
+backend/data.db.bak*
+backend/seed_log*.txt

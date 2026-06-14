@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
-const API = "http://127.0.0.1:8000/api/linkedin-automation";
-const BILLING_API = "http://127.0.0.1:8000/api/billing";
+import { apiFetch } from "@/lib/desktop-api";
+
+const API = "/api/linkedin-automation";
+const BILLING_API = "/api/billing";
 const TABS = ["post", "engage", "pursue", "calendar", "settings"] as const;
 type Tab = (typeof TABS)[number];
 
@@ -637,7 +639,7 @@ function CalendarForm({
     setCalendarError(null);
     try {
       const target = (output || "content_calendar.txt").trim();
-      const res = await fetch(
+      const res = await apiFetch(
         `${API}/calendar?file=${encodeURIComponent(target)}`
       );
       if (res.ok) {
@@ -814,18 +816,20 @@ function SettingsForm({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [s, setS] = useState<FrameworkSettings>({});
+  const { data: session } = useSession();
+  const userId = session?.user?.email;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/config`);
+      const res = await apiFetch(`${API}/config?user_id=${encodeURIComponent(userId)}`);
       if (res.ok) setS(await res.json());
     } catch {
       flash({ type: "error", text: "Could not load framework settings." });
     } finally {
       setLoading(false);
     }
-  }, [flash]);
+  }, [flash, userId]);
 
   useEffect(() => {
     load();
@@ -841,7 +845,7 @@ function SettingsForm({
       // Don't overwrite a masked key value on the server.
       if (payload.openai_api_key === "set") delete payload.openai_api_key;
       if (payload.gemini_api_key === "set") delete payload.gemini_api_key;
-      const res = await fetch(`${API}/config`, {
+      const res = await apiFetch(`${API}/config?user_id=${encodeURIComponent(userId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -1029,7 +1033,7 @@ function SettingsForm({
 
 export default function AutomationPage() {
   const { data: session } = useSession();
-  const userId = session?.user?.email || "local-user";
+  const userId = session?.user?.email;
 
   const [tab, setTab] = useState<Tab>("post");
   const [common, setCommon] = useState<CommonState>(COMMON_DEFAULT);
@@ -1043,6 +1047,7 @@ export default function AutomationPage() {
     framework_available?: boolean;
     main_py_exists?: boolean;
     shared_cookie_exists?: boolean;
+    session_in_db?: boolean;
   }>({});
   // LinkedIn accounts the bot can run as. `selectedAccount === ""` means
   // "use the primary account" (whatever the backend's dashboard secrets
@@ -1153,7 +1158,7 @@ export default function AutomationPage() {
     if (serialized === lastSavedDefaultsRef.current) return;
     const timer = setTimeout(() => {
       lastSavedDefaultsRef.current = serialized;
-      fetch(`${API}/form-defaults`, {
+      apiFetch(`${API}/form-defaults?user_id=${encodeURIComponent(userId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: serialized,
@@ -1164,15 +1169,15 @@ export default function AutomationPage() {
       });
     }, 500);
     return () => clearTimeout(timer);
-  }, [formDefaults, defaultsLoaded]);
+  }, [formDefaults, defaultsLoaded, userId]);
 
   const clearDefaults = useCallback(
     async (prefix: string) => {
       try {
         const url = prefix
-          ? `${API}/form-defaults?prefix=${encodeURIComponent(prefix)}`
-          : `${API}/form-defaults`;
-        const res = await fetch(url, { method: "DELETE" });
+          ? `${API}/form-defaults?prefix=${encodeURIComponent(prefix)}&user_id=${encodeURIComponent(userId)}`
+          : `${API}/form-defaults?user_id=${encodeURIComponent(userId)}`;
+        const res = await apiFetch(url, { method: "DELETE" });
         if (!res.ok) {
           flash({ type: "error", text: await parseErr(res) });
           return;
@@ -1192,7 +1197,7 @@ export default function AutomationPage() {
         flash({ type: "error", text: "Network error clearing defaults." });
       }
     },
-    [flash]
+    [flash, userId]
   );
 
   const refresh = useCallback(async () => {
@@ -1200,7 +1205,7 @@ export default function AutomationPage() {
     try {
       const headers: Record<string, string> = {};
       if (etagRef.current) headers["If-None-Match"] = etagRef.current;
-      const res = await fetch(
+      const res = await apiFetch(
         `${API}/dashboard?limit=25&user_id=${encodeURIComponent(userId)}`,
         { headers }
       );
@@ -1257,13 +1262,13 @@ export default function AutomationPage() {
   }, [userId]);
 
   // Plan pill — one-shot fetch when the user changes. /api/billing/subscription
-  // applies the local-user/admin → agency override server-side, so the pill
+  // Developer admin (himu09854@gmail.com) gets agency plan server-side.
   // here matches what /dashboard/billing renders.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${BILLING_API}/subscription?user_id=${encodeURIComponent(userId)}`
         );
         if (!cancelled && res.ok) {
@@ -1330,7 +1335,7 @@ export default function AutomationPage() {
       });
       setBusy(true);
       try {
-        const res = await fetch(`${API}${endpoint[tab]}`, {
+        const res = await apiFetch(`${API}${endpoint[tab]}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(cleaned),
@@ -1356,7 +1361,7 @@ export default function AutomationPage() {
 
   const stopTask = async (id: string) => {
     try {
-      const res = await fetch(`${API}/tasks/${id}/stop`, { method: "POST" });
+      const res = await apiFetch(`${API}/tasks/${id}/stop`, { method: "POST" });
       if (res.ok) {
         flash({ type: "success", text: `Task ${id} stopped.` });
         etagRef.current = null;
@@ -1371,7 +1376,7 @@ export default function AutomationPage() {
 
   const viewTask = async (id: string) => {
     try {
-      const res = await fetch(`${API}/tasks/${id}?log_lines=500`);
+      const res = await apiFetch(`${API}/tasks/${id}?log_lines=500`);
       if (res.ok) setOpenTask(await res.json());
       else flash({ type: "error", text: await parseErr(res) });
     } catch {
@@ -1391,7 +1396,7 @@ export default function AutomationPage() {
     setArtifactLoading(true);
     (async () => {
       try {
-        const res = await fetch(`${API}/tasks/${openTask.id}/artifact`);
+        const res = await apiFetch(`${API}/tasks/${openTask.id}/artifact`);
         if (cancelled) return;
         if (res.ok) {
           setArtifact((await res.json()) as Artifact);
@@ -1685,12 +1690,12 @@ export default function AutomationPage() {
           <div className="mt-4 bg-zinc-950 border border-zinc-900 rounded-xl p-3 text-[10px] text-zinc-500 space-y-1">
             <p>
               <span className="text-zinc-400 font-bold uppercase tracking-widest">Note —</span>{" "}
-              Credentials are shared with the job applier via the dashboard secrets, and the
-              same LinkedIn cookie file is reused.
+              Credentials are shared with the job applier via the dashboard secrets, and
+              LinkedIn sessions are stored in the local database (same as the job bot).
             </p>
-            {!health.shared_cookie_exists && (
+            {!(health.session_in_db ?? health.shared_cookie_exists) && (
               <p className="text-amber-400/80">
-                No cached LinkedIn cookie yet; the first run will log in and create one.
+                No cached LinkedIn session yet; the first run will log in and save cookies to the DB.
               </p>
             )}
           </div>

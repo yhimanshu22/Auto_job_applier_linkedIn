@@ -1,14 +1,29 @@
 import React from 'react';
 
-export default function PricingCard({ plan, billingCycle, loading, onBuy }: any) {
+function formatINR(amount: number) {
+  return amount.toLocaleString('en-IN');
+}
+
+export default function PricingCard({ plan, billingCycle, currency = "usd", loading, onBuy }: any) {
   const isFreeTrial = plan.key === "free_trial";
-  const price = billingCycle === "yearly" ? plan.yearlyMonthlyPrice : plan.monthlyPrice;
+  const isINR = currency === "inr";
+
+  const price = isINR
+    ? (billingCycle === "yearly" ? plan.inrYearlyMonthlyPrice : plan.inrMonthlyPrice)
+    : (billingCycle === "yearly" ? plan.yearlyMonthlyPrice : plan.monthlyPrice);
+
+  const symbol = isINR ? "₹" : "$";
+  const displayPrice = isINR ? formatINR(price) : price;
   const accent = plan.highlighted;
+
+  const yearlyTotalText = isINR
+    ? `₹${formatINR(plan.inrYearlyTotal)}`
+    : `$${plan.yearlyTotal}`;
 
   const billingText = isFreeTrial
     ? "Limited 24-hour access"
     : billingCycle === "yearly"
-      ? `Billed yearly at $${plan.yearlyTotal}`
+      ? `Billed yearly at ${yearlyTotalText}`
       : "Billed monthly";
 
   return (
@@ -25,7 +40,7 @@ export default function PricingCard({ plan, billingCycle, loading, onBuy }: any)
       <div className="flex-1">
         <h3 className="text-xl font-bold text-zinc-900">{plan.title}</h3>
         <div className="mt-4 flex items-baseline gap-1">
-          <span className="text-5xl font-extrabold tracking-tight text-zinc-900">${price}</span>
+          <span className="text-5xl font-extrabold tracking-tight text-zinc-900">{symbol}{displayPrice}</span>
           <span className="text-zinc-500 font-medium">
             {isFreeTrial ? "/trial" : "/mo"}
           </span>

@@ -25,11 +25,26 @@ import os
 
 def is_chrome_running():
     try:
-        # Check if chrome.exe is running using tasklist
-        output = subprocess.check_output("tasklist", shell=True).decode()
-        return "chrome.exe" in output.lower()
+        if os.name == "nt":
+            output = subprocess.check_output("tasklist", shell=True).decode()
+            return "chrome.exe" in output.lower()
+        output = subprocess.check_output(
+            ["pgrep", "-f", "chrome|chromium"], stderr=subprocess.DEVNULL
+        ).decode()
+        return bool(output.strip())
     except Exception:
         return False
+
+
+def _clear_chrome_profile_locks(profile_dir: str) -> None:
+    """Remove stale singleton locks left by crashed Chrome sessions."""
+    for name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+        path = os.path.join(profile_dir, name)
+        if os.path.lexists(path):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
 
 
 def log_versions():
@@ -72,7 +87,14 @@ try:
     # Set up WebDriver with Chrome Profile
     options = uc.ChromeOptions() if stealth_mode else Options()
     if run_in_background:
-        options.add_argument("--headless")
+        options.add_argument("--headless=new")
+        options.add_argument("--window-size=1920,1080")
+    if os.name != "nt":
+        # Required on Linux servers: root-less sandbox and tiny /dev/shm
+        # otherwise crash Chrome at startup or mid-session.
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
     if disable_extensions:
         options.add_argument("--disable-extensions")
 
@@ -96,6 +118,7 @@ try:
         os.path.join(get_runtime_writable_root(), "chrome_profiles", _safe)
     )
     os.makedirs(profile_dir, exist_ok=True)
+    _clear_chrome_profile_locks(profile_dir)
     options.add_argument(f"--user-data-dir={profile_dir}")
     _port = 9222 + (int(hashlib.md5(_safe.encode("utf-8")).hexdigest(), 16) % 800)
     options.add_argument(f"--remote-debugging-port={_port}")
@@ -120,7 +143,10 @@ try:
         driver = webdriver.Chrome(
             options=options
         )  # , service=Service(executable_path="C:\\Program Files\\Google\\Chrome\\chromedriver-win64\\chromedriver.exe"))
-    driver.maximize_window()
+    try:
+        driver.maximize_window()
+    except Exception:
+        pass  # headless / no window manager
     wait = WebDriverWait(driver, 5)
     actions = ActionChains(driver)
 except Exception as e:
@@ -132,7 +158,7 @@ except Exception as e:
 
     print_lg(msg)
     critical_error_log("In Opening Chrome", e)
-    from pyautogui import alert
+    from modules.gui_safe import alert
 
     alert(msg, "Error in opening chrome")
     try:

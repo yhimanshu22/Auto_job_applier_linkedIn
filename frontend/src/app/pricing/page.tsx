@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 
 import PricingCard from '@/components/PricingCard';
 
 type PlanType = "free_trial" | "starter" | "pro" | "agency";
 type BillingCycle = "monthly" | "yearly";
+type Currency = "inr" | "usd";
 
 const PLANS = [
   {
@@ -17,6 +18,9 @@ const PLANS = [
     monthlyPrice: 0,
     yearlyMonthlyPrice: 0,
     yearlyTotal: 0,
+    inrMonthlyPrice: 0,
+    inrYearlyMonthlyPrice: 0,
+    inrYearlyTotal: 0,
     suffix: "1 day",
     badge: "No card required",
     description: "Try LinkdApply for 24 hours with limited applications.",
@@ -36,6 +40,9 @@ const PLANS = [
     monthlyPrice: 19,
     yearlyMonthlyPrice: 15,
     yearlyTotal: 180,
+    inrMonthlyPrice: 1599,
+    inrYearlyMonthlyPrice: 1299,
+    inrYearlyTotal: 15588,
     description: "For individual job seekers who want consistent applications.",
     features: [
       "1 LinkedIn account",
@@ -54,6 +61,9 @@ const PLANS = [
     monthlyPrice: 49,
     yearlyMonthlyPrice: 39,
     yearlyTotal: 468,
+    inrMonthlyPrice: 3999,
+    inrYearlyMonthlyPrice: 3299,
+    inrYearlyTotal: 39588,
     badge: "Most Popular",
     highlighted: true,
     description: "For serious job seekers who want AI answers and higher limits.",
@@ -75,6 +85,9 @@ const PLANS = [
     monthlyPrice: 149,
     yearlyMonthlyPrice: 119,
     yearlyTotal: 1428,
+    inrMonthlyPrice: 11999,
+    inrYearlyMonthlyPrice: 9999,
+    inrYearlyTotal: 119988,
     description: "For agencies and power users managing multiple accounts.",
     features: [
       "10 LinkedIn accounts",
@@ -93,68 +106,157 @@ const PLANS = [
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
-export default function PricingPage() {
+const TRIAL_LOGIN_URL = `/login?callbackUrl=${encodeURIComponent("/pricing?trial=1")}`;
+const PRICING_LOGIN_URL = `/login?callbackUrl=${encodeURIComponent("/pricing")}`;
+
+function PricingPageContent() {
   const [loading, setLoading] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
-  const { data: session } = useSession();
+  const [currency, setCurrency] = useState<Currency>("inr");
+  const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const autoTrialStarted = useRef(false);
 
-  async function startFreeTrial() {
+  const redirectToLogin = useCallback(
+    (callbackUrl: string = TRIAL_LOGIN_URL) => {
+      router.push(callbackUrl);
+    },
+    [router]
+  );
+
+  const startFreeTrial = useCallback(async () => {
+    if (status === "loading") return;
+
+    if (status !== "authenticated" || !session?.user?.email) {
+      redirectToLogin();
+      return;
+    }
+
+    const email = session.user.email;
     setLoading("free_trial");
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/billing/start-free-trial", {
+      const res = await fetch("/api/billing/start-free-trial", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          user_id: session?.user?.email || "local-user",
-          email: session?.user?.email || "user@example.com"
-        }),
+        body: JSON.stringify({ user_id: email }),
       });
 
       const data = await res.json();
+      if (res.status === 401 || res.status === 403) {
+        redirectToLogin();
+        return;
+      }
       if (!res.ok) throw new Error(data.detail || "Failed to start trial");
-      
-      alert("Trial activated! Redirecting to dashboard...");
-      router.push("/dashboard");
-    } catch (error: any) {
+
+      router.replace("/dashboard");
+    } catch (error: unknown) {
       console.error(error);
-      alert(error.message || "Failed to start free trial.");
+      const message = error instanceof Error ? error.message : "Failed to start free trial.";
+      alert(message);
     } finally {
       setLoading(null);
     }
+  }, [redirectToLogin, router, session?.user?.email, status]);
+
+  useEffect(() => {
+    if (searchParams.get("trial") !== "1") return;
+    if (status === "loading") return;
+
+    if (status !== "authenticated" || !session?.user?.email) {
+      redirectToLogin();
+      return;
+    }
+
+    if (autoTrialStarted.current) return;
+    autoTrialStarted.current = true;
+    void startFreeTrial();
+  }, [status, searchParams, startFreeTrial, session?.user?.email, redirectToLogin]);
+
+  async function startPayUCheckout(plan: Exclude<PlanType, "free_trial">) {
+    if (status === "loading") return;
+
+    if (status !== "authenticated" || !session?.user?.email) {
+      redirectToLogin(PRICING_LOGIN_URL);
+      return;
+    }
+
+    const email = session.user.email;
+    setLoading(plan);
+    const qs = new URLSearchParams({
+      plan,
+      billing_cycle: billingCycle,
+      user_id: email,
+      email,
+    });
+    const name = session.user.name?.trim();
+    if (name) qs.set("firstname", name);
+
+    // PayU docs Step 1.3a: server-rendered HTML form auto-POSTs to PayU.
+    window.location.href = `/api/billing/payu/checkout-page?${qs.toString()}`;
   }
 
   async function startStripeCheckout(plan: Exclude<PlanType, "free_trial">) {
+    if (status === "loading") return;
+
+    if (status !== "authenticated" || !session?.user?.email) {
+      redirectToLogin(PRICING_LOGIN_URL);
+      return;
+    }
+
+    const email = session.user.email;
     setLoading(plan);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/billing/create-checkout-session", {
+      const res = await fetch("/api/billing/create-checkout-session", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           plan,
           billing_cycle: billingCycle,
-          user_id: session?.user?.email || "local-user",
-          email: session?.user?.email || "user@example.com",
+          user_id: email,
+          email,
         }),
       });
 
       const data = await res.json();
+      if (res.status === 401 || res.status === 403) {
+        redirectToLogin(PRICING_LOGIN_URL);
+        return;
+      }
       if (!res.ok) throw new Error(data.detail || "Failed to start checkout");
       window.location.href = data.url;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      alert(error.message || "Failed to initiate checkout. Is the backend running?");
+      const message = error instanceof Error ? error.message : "Failed to initiate checkout. Is the backend running?";
+      alert(message);
     } finally {
       setLoading(null);
     }
   }
 
   function handleBuy(plan: PlanType) {
+    if (status === "loading") return;
+
     if (plan === "free_trial") {
-      startFreeTrial();
+      if (status !== "authenticated" || !session?.user?.email) {
+        redirectToLogin();
+        return;
+      }
+      void startFreeTrial();
       return;
     }
-    startStripeCheckout(plan as Exclude<PlanType, "free_trial">);
+
+    if (status !== "authenticated" || !session?.user?.email) {
+      redirectToLogin(PRICING_LOGIN_URL);
+      return;
+    }
+    if (currency === "inr") {
+      void startPayUCheckout(plan as Exclude<PlanType, "free_trial">);
+      return;
+    }
+    void startStripeCheckout(plan as Exclude<PlanType, "free_trial">);
   }
 
   return (
@@ -180,8 +282,34 @@ export default function PricingPage() {
               Try LinkdApply for 24 hours, then choose the plan that matches your application volume.
             </p>
 
+            {/* Currency Toggle */}
+            <div className="mt-8 flex justify-center">
+              <div className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 p-1 shadow-sm">
+                <button
+                  onClick={() => setCurrency("inr")}
+                  className={`rounded-full px-6 py-2 text-sm font-bold transition-all ${
+                    currency === "inr"
+                      ? "bg-white text-zinc-950 shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-900"
+                  }`}
+                >
+                  ₹ INR (India)
+                </button>
+                <button
+                  onClick={() => setCurrency("usd")}
+                  className={`rounded-full px-6 py-2 text-sm font-bold transition-all ${
+                    currency === "usd"
+                      ? "bg-white text-zinc-950 shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-900"
+                  }`}
+                >
+                  $ USD (International)
+                </button>
+              </div>
+            </div>
+
             {/* Billing Cycle Toggle */}
-            <div className="mt-8 inline-flex rounded-full border border-zinc-200 bg-zinc-50 p-1 shadow-sm">
+            <div className="mt-4 inline-flex rounded-full border border-zinc-200 bg-zinc-50 p-1 shadow-sm">
               <button
                 onClick={() => setBillingCycle("monthly")}
                 className={`rounded-full px-8 py-2.5 text-sm font-bold transition-all ${
@@ -209,22 +337,43 @@ export default function PricingPage() {
             </div>
           </div>
 
-          <div className="mt-20 space-y-12 lg:space-y-0 lg:grid lg:grid-cols-4 lg:gap-x-4 items-stretch mb-24">
+          <div className="mt-20 space-y-12 lg:space-y-0 lg:grid lg:grid-cols-4 lg:gap-x-4 items-stretch mb-12">
             {PLANS.map((plan) => (
               <PricingCard 
                 key={plan.key}
                 plan={plan}
                 billingCycle={billingCycle}
+                currency={currency}
                 loading={loading === plan.key}
                 onBuy={() => handleBuy(plan.key as PlanType)}
               />
             ))}
           </div>
+
+          <p className="text-center text-sm text-zinc-500 max-w-3xl mx-auto mb-24">
+            All prices for Indian customers are listed in Indian Rupees (INR) and are inclusive of applicable
+            taxes. Indian payments are processed securely via PayU (UPI, cards, net banking). International
+            payments are processed securely in USD via Stripe.
+          </p>
         </div>
       </main>
 
       <Footer />
     </div>
+  );
+}
+
+export default function PricingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-white">
+          <div className="size-6 animate-spin rounded-full border-2 border-zinc-200 border-t-accent" />
+        </div>
+      }
+    >
+      <PricingPageContent />
+    </Suspense>
   );
 }
 

@@ -1,10 +1,15 @@
 import os
 import stripe
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Query, Header
+from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from db_manager import db
+from services.admin import admin_subscription, is_admin
+from utils.user_resolution import resolve_user_id
+from services.plan_limits import PLAN_LIMITS
+from services import payu as payu_service
 
 load_dotenv()
 
@@ -13,6 +18,7 @@ router = APIRouter(prefix="/api/billing", tags=["billing"])
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", FRONTEND_URL).rstrip("/")
 
 PRICE_MAP = {
     "monthly": {
@@ -37,8 +43,188 @@ class CheckoutRequest(BaseModel):
     email: str
 
 
+class PayUInitiateRequest(BaseModel):
+    plan: Literal["starter", "pro", "agency"]
+    billing_cycle: Literal["monthly", "yearly"] = "monthly"
+    user_id: str
+    email: str
+    firstname: str | None = None
+    phone: str | None = None
+
+
+def _payu_callback_urls() -> tuple[str, str]:
+    return (
+        f"{BACKEND_PUBLIC_URL}/api/billing/payu/callback/success",
+        f"{BACKEND_PUBLIC_URL}/api/billing/payu/callback/failure",
+    )
+
+
+async def _build_payu_checkout_params(
+    *,
+    request: Request,
+    plan: Literal["starter", "pro", "agency"],
+    billing_cycle: Literal["monthly", "yearly"],
+    user_id: str,
+    email: str,
+    firstname: str | None = None,
+    phone: str | None = None,
+) -> dict[str, str]:
+    if not payu_service.is_payu_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="PayU is not configured. Set PAYU_MERCHANT_KEY and PAYU_MERCHANT_SALT.",
+        )
+
+    resolved_user_id = await resolve_user_id(request, user_id)
+    surl, furl = _payu_callback_urls()
+    try:
+        return payu_service.build_payment_params(
+            user_id=resolved_user_id,
+            email=email,
+            plan=plan,
+            billing_cycle=billing_cycle,
+            success_url=surl,
+            failure_url=furl,
+            firstname=firstname,
+            phone=phone,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+@router.get("/payu/checkout-page", response_class=HTMLResponse)
+async def payu_checkout_page(
+    request: Request,
+    plan: Literal["starter", "pro", "agency"] = Query(...),
+    billing_cycle: Literal["monthly", "yearly"] = Query("monthly"),
+    user_id: str = Query(...),
+    email: str = Query(...),
+    firstname: str | None = Query(None),
+    phone: str | None = Query(None),
+):
+    """PayU Hosted Checkout — server-rendered form that auto-POSTs to PayU."""
+    params = await _build_payu_checkout_params(
+        request=request,
+        plan=plan,
+        billing_cycle=billing_cycle,
+        user_id=user_id,
+        email=email,
+        firstname=firstname,
+        phone=phone,
+    )
+    print(f"DEBUG: PayU checkout-page txnid={params.get('txnid')} user={params.get('udf1')}")
+    return payu_service.render_checkout_html(payu_service.payu_payment_url(), params)
+
+
+@router.post("/payu/initiate")
+async def initiate_payu_payment(payload: PayUInitiateRequest, request: Request):
+    params = await _build_payu_checkout_params(
+        request=request,
+        plan=payload.plan,
+        billing_cycle=payload.billing_cycle,
+        user_id=payload.user_id,
+        email=payload.email,
+        firstname=payload.firstname,
+        phone=payload.phone,
+    )
+    return {
+        "action": payu_service.payu_payment_url(),
+        "params": params,
+        "checkout_page": (
+            f"{BACKEND_PUBLIC_URL}/api/billing/payu/checkout-page"
+            f"?plan={payload.plan}&billing_cycle={payload.billing_cycle}"
+            f"&user_id={payload.user_id}&email={payload.email}"
+        ),
+    }
+
+
+def _activate_payu_subscription(params: dict[str, str]) -> bool:
+    user_id = params.get("udf1")
+    plan = params.get("udf2")
+    billing_cycle = params.get("udf3", "monthly")
+    txnid = params.get("txnid")
+
+    if not user_id or plan not in payu_service.PLAN_LABELS:
+        print("WARNING: PayU callback missing user_id or plan in UDF fields")
+        return False
+
+    expected_amount = payu_service.get_inr_amount(plan, billing_cycle)  # type: ignore[arg-type]
+    if params.get("amount") != expected_amount:
+        print(
+            f"WARNING: PayU amount mismatch for {txnid}: "
+            f"expected {expected_amount}, got {params.get('amount')}"
+        )
+        return False
+
+    period_end = payu_service.period_end_for_cycle(billing_cycle)  # type: ignore[arg-type]
+    db.upsert_subscription(
+        user_id=user_id,
+        plan=plan,
+        billing_cycle=billing_cycle,
+        status="active",
+        payment_provider="payu",
+        payu_txnid=txnid,
+        current_period_end=period_end,
+        cancel_at_period_end=0,
+    )
+    return True
+
+
+async def _handle_payu_callback(request: Request, *, success: bool):
+    form = await request.form()
+    params = {k: str(v) for k, v in form.items()}
+    salt = (os.getenv("PAYU_MERCHANT_SALT") or "").strip()
+
+    if not payu_service.verify_response_hash(params, salt):
+        print(f"WARNING: PayU hash verification failed for txnid={params.get('txnid')}")
+        return RedirectResponse(
+            f"{FRONTEND_URL}/billing/cancel?reason=hash_verification_failed",
+            status_code=303,
+        )
+
+    status = (params.get("status") or "").lower()
+    txnid = params.get("txnid", "")
+    print(f"DEBUG: PayU callback success={success} status={status} txnid={txnid}")
+
+    if success and status == "success":
+        verified = payu_service.verify_payment_with_payu(txnid)
+        if verified and str(verified.get("status", "")).lower() not in ("success", "captured"):
+            print(f"WARNING: PayU verify_payment status mismatch for {txnid}: {verified}")
+            return RedirectResponse(
+                f"{FRONTEND_URL}/billing/cancel?reason=payment_not_verified",
+                status_code=303,
+            )
+
+        if not _activate_payu_subscription(params):
+            return RedirectResponse(
+                f"{FRONTEND_URL}/billing/cancel?reason=activation_failed",
+                status_code=303,
+            )
+        return RedirectResponse(
+            f"{FRONTEND_URL}/billing/success?provider=payu&txnid={txnid}",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        f"{FRONTEND_URL}/billing/cancel?reason={status or 'failed'}",
+        status_code=303,
+    )
+
+
+@router.post("/payu/callback/success")
+async def payu_callback_success(request: Request):
+    return await _handle_payu_callback(request, success=True)
+
+
+@router.post("/payu/callback/failure")
+async def payu_callback_failure(request: Request):
+    return await _handle_payu_callback(request, success=False)
+
+
 @router.post("/create-checkout-session")
-async def create_checkout_session(payload: CheckoutRequest):
+async def create_checkout_session(payload: CheckoutRequest, request: Request):
+    # The verified session (when present) decides which account gets the plan.
+    user_id = await resolve_user_id(request, payload.user_id)
     price_id = PRICE_MAP.get(payload.billing_cycle, {}).get(payload.plan)
 
     if not price_id:
@@ -61,13 +247,13 @@ async def create_checkout_session(payload: CheckoutRequest):
             success_url=f"{FRONTEND_URL}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{FRONTEND_URL}/billing/cancel",
             metadata={
-                "user_id": payload.user_id,
+                "user_id": user_id,
                 "plan": payload.plan,
                 "billing_cycle": payload.billing_cycle,
             },
             subscription_data={
                 "metadata": {
-                    "user_id": payload.user_id,
+                    "user_id": user_id,
                     "plan": payload.plan,
                     "billing_cycle": payload.billing_cycle,
                 }
@@ -81,27 +267,25 @@ async def create_checkout_session(payload: CheckoutRequest):
 
 
 class FreeTrialRequest(BaseModel):
-    user_id: str = "local-user"
+    user_id: str | None = None
 
 
 @router.post("/start-free-trial")
-async def start_free_trial(payload: FreeTrialRequest):
-    # Check if user already has/had a trial or paid plan
-    sub = db.get_user_subscription(payload.user_id)
-    
-    if sub and sub.get("plan") != "free":
-        # If they already have a plan (trial or paid), don't allow another trial
+async def start_free_trial(payload: FreeTrialRequest, request: Request):
+    user_id = await resolve_user_id(request, payload.user_id)
+    sub = db.get_user_subscription(user_id)
+
+    if sub:
         raise HTTPException(
-            status_code=400, 
-            detail="You have already used your trial or have an active plan."
+            status_code=400,
+            detail="You have already used your trial or have an active plan.",
         )
 
-    # Set trial to expire in 24 hours
     expiry = datetime.utcnow() + timedelta(hours=24)
     
     try:
         db.upsert_subscription(
-            user_id=payload.user_id,
+            user_id=user_id,
             plan="free_trial",
             status="trialing",
             current_period_end=expiry.isoformat()
@@ -167,7 +351,8 @@ def handle_checkout_completed(session):
                 stripe_subscription_id=subscription_id,
                 plan=plan,
                 billing_cycle=billing_cycle,
-                status='active'
+                status='active',
+                payment_provider='stripe',
             )
         else:
             print("WARNING: No user_id found in checkout session metadata. Skip DB update.")
@@ -204,7 +389,8 @@ def handle_subscription_updated(subscription):
                 billing_cycle=billing_cycle,
                 status=status,
                 current_period_end=current_period_end,
-                cancel_at_period_end=1 if cancel_at_period_end else 0
+                cancel_at_period_end=1 if cancel_at_period_end else 0,
+                payment_provider='stripe',
             )
     except Exception as e:
         print(f"ERROR in handle_subscription_updated: {e}")
@@ -232,33 +418,66 @@ def handle_payment_failed(invoice):
 
 
 class PortalRequest(BaseModel):
-    user_id: str = "local-user"
+    user_id: str | None = None
 
-ADMIN_EMAILS = ["himu09854@gmail.com", "local-user"]
+
+def _enrich_subscription(sub: dict) -> dict:
+    plan = (sub.get("plan") or "free_trial").lower()
+    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
+    out = dict(sub)
+    out["limit"] = limits["monthly_applications"]
+    out["max_accounts"] = limits["max_accounts"]
+    out["max_active_bots"] = limits["max_active_bots"]
+    return out
+
+
+@router.get("/subscription-internal")
+async def get_subscription_internal(
+    user_id: str = Query(...),
+    x_linkdapply_key: str | None = Header(None, alias="X-LinkdApply-Key"),
+):
+    """Trusted lookup for the desktop sidecar (local data + cloud billing)."""
+    expected = os.getenv("LINKDAPPLY_INTERNAL_KEY", "").strip()
+    if not expected or x_linkdapply_key != expected:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    uid = user_id.strip()
+    if is_admin(uid):
+        return admin_subscription()
+
+    sub = db.get_user_subscription(uid)
+    if not sub:
+        return {"plan": "free", "status": "inactive", "limit": 0}
+    return _enrich_subscription(sub)
+
 
 @router.get("/subscription")
-async def get_subscription(user_id: str = "local-user"):
-    # Administrative Bypass for Project Admin
-    if user_id in ["himu09854@gmail.com", "local-user"]:
-        return {
-            "plan": "agency",
-            "status": "active",
-            "current_period_end": 4102444800,  # Far future (Year 2100)
-            "billing_cycle": "yearly",
-            "limit": 3000
-        }
-        
+async def get_subscription(request: Request, user_id: str | None = None):
+    user_id = await resolve_user_id(request, user_id)
+    if is_admin(user_id):
+        return admin_subscription()
+
     sub = db.get_user_subscription(user_id)
     if not sub:
         return {"plan": "free", "status": "inactive", "limit": 0}
-    return sub
+    return _enrich_subscription(sub)
 
 
 @router.post("/create-portal-session")
-async def create_portal_session(payload: PortalRequest):
+async def create_portal_session(payload: PortalRequest, request: Request):
+    user_id = await resolve_user_id(request, payload.user_id)
     try:
-        sub = db.get_user_subscription(payload.user_id)
-        if not sub or not sub.get("stripe_customer_id"):
+        sub = db.get_user_subscription(user_id)
+        if not sub:
+            raise HTTPException(status_code=400, detail="No active subscription found for this user.")
+
+        if sub.get("payment_provider") == "payu":
+            raise HTTPException(
+                status_code=400,
+                detail="PayU subscriptions are managed from the pricing page. Visit /pricing to renew or change your plan.",
+            )
+
+        if not sub.get("stripe_customer_id"):
             raise HTTPException(status_code=400, detail="No active Stripe customer found for this user.")
 
         session = stripe.billing_portal.Session.create(

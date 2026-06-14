@@ -23,9 +23,11 @@ def _effective_bot_speed() -> int:
         speed_val = int(bot_speed)
     except Exception:
         speed_val = 5
-    user_id = os.getenv("USER_ID", "local-user")
-    is_priv = user_id == "local-user" or os.getenv("USER_EMAIL") == "himu09854@gmail.com"
-    if is_priv:
+    from services.admin import is_admin
+
+    user_id = (os.getenv("USER_ID") or "").strip()
+    privileged = is_admin(user_id) or is_admin(os.getenv("USER_EMAIL"))
+    if privileged:
         speed_val = max(speed_val, 9)
     return speed_val
 

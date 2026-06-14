@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "default",
+  "description": "LinkdApply desktop permissions",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-spawn",
+    "shell:allow-kill",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "linkdapply-backend",
+          "sidecar": true
+        },
+        {
+          "name": "uv-backend-dev",
+          "cmd": "uv",
+          "args": [
+            "run",
+            "python",
+            "-m",
+            "uvicorn",
+            "server:app",
+            { "validator": "Any" }
+          ]
+        },
+        {
+          "name": "python-backend-dev",
+          "cmd": "python",
+          "args": [
+            "-m",
+            "uvicorn",
+            "server:app",
+            { "validator": "Any" }
+          ]
+        }
+      ]
+    }
+  ]
+}
