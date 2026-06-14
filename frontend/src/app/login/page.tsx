@@ -14,6 +14,16 @@ function LoginContent() {
   const [authError, setAuthError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    try {
+      if (searchParams.get("desktop") === "1") {
+        localStorage.setItem("linkdapply_desktop", "1");
+      }
+    } catch {
+      /* blocked storage */
+    }
+  }, [searchParams]);
+
+  React.useEffect(() => {
     if (status === "authenticated") {
       router.push(callbackUrl);
     }

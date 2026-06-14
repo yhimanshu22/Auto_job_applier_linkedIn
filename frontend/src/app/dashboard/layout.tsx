@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
-import { apiFetch } from "@/lib/desktop-api";
+import { apiFetch, isDesktopApp } from "@/lib/desktop-api";
 
 /** Ask the backend to stop the job bot (tab close, navigate away, or layout unmount). */
 function requestStopJobBot() {
@@ -29,7 +29,12 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.replace("/");
+      const callback = isDesktopApp()
+        ? "/dashboard?desktop=1"
+        : "/dashboard";
+      router.replace(
+        `/login?callbackUrl=${encodeURIComponent(callback)}${isDesktopApp() ? "&desktop=1" : ""}`
+      );
     }
   }, [status, router]);
 
