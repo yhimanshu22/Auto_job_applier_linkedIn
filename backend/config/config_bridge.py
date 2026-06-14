@@ -31,7 +31,10 @@ def _apply_headless_server_defaults(config_dict: dict) -> dict:
 
 def _bot_user_id() -> str:
     """The bot subprocess is launched with USER_ID in its env (see routes/bot.py)."""
-    return os.getenv("USER_ID", "").strip() or "local-user"
+    uid = os.getenv("USER_ID", "").strip()
+    if not uid:
+        raise RuntimeError("USER_ID environment variable is required")
+    return uid
 
 
 def _base_config_defaults() -> dict:
@@ -68,28 +71,6 @@ def _apply_env_secret_fallbacks(config_dict: dict) -> None:
                 config_dict[config_key] = env_val
 
 
-def _fill_missing_secrets_from_template(config_dict: dict, user_id: str) -> None:
-    """New dashboard users inherit search/settings but not secrets — copy AI keys only."""
-    if user_id == "local-user":
-        return
-    template = db.get_all_by_category("secrets", user_id="local-user")
-    if not isinstance(template, dict):
-        return
-    for key in (
-        "stream_output",
-        "showAiErrorAlerts",
-        "use_AI",
-        "ai_provider",
-        "llm_api_url",
-        "llm_model",
-        "llm_spec",
-        "llm_api_key",
-    ):
-        if config_dict.get(key) in (None, ""):
-            if key in template and template[key] not in (None, ""):
-                config_dict[key] = template[key]
-
-
 def _load_bot_config() -> dict:
     user_id = _bot_user_id()
     config_dict = _base_config_defaults()
@@ -97,7 +78,6 @@ def _load_bot_config() -> dict:
     for cat in ["personals", "search", "settings", "questions", "secrets"]:
         config_dict.update(db.get_all_by_category(cat, user_id=user_id))
 
-    _fill_missing_secrets_from_template(config_dict, user_id)
     _apply_env_secret_fallbacks(config_dict)
 
     if os.getenv("LINKEDIN_USERNAME"):

@@ -1,7 +1,6 @@
 import pytest
 from fastapi import HTTPException
 
-from db_manager import DEFAULT_USER
 from utils import user_resolution as ur
 
 
@@ -27,15 +26,28 @@ async def test_resolve_user_id_rejects_spoofed_claim(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_resolve_user_id_local_mode_ignores_claim(monkeypatch):
+async def test_resolve_user_id_dev_mode_accepts_claimed(monkeypatch):
     monkeypatch.delenv("REQUIRE_AUTH", raising=False)
 
     async def _session(_request):
         return None
 
     monkeypatch.setattr(ur, "_session_email", _session)
-    user = await ur.resolve_user_id(None, "victim@example.com")
-    assert user == DEFAULT_USER
+    user = await ur.resolve_user_id(None, "dev@example.com")
+    assert user == "dev@example.com"
+
+
+@pytest.mark.asyncio
+async def test_resolve_user_id_requires_auth_when_no_session_or_claim(monkeypatch):
+    monkeypatch.delenv("REQUIRE_AUTH", raising=False)
+
+    async def _session(_request):
+        return None
+
+    monkeypatch.setattr(ur, "_session_email", _session)
+    with pytest.raises(HTTPException) as exc:
+        await ur.resolve_user_id(None, None)
+    assert exc.value.status_code == 401
 
 
 @pytest.mark.asyncio

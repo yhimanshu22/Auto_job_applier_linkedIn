@@ -34,12 +34,8 @@ def run(total_runs: int) -> int:
         "########################################################################################################################\n"
     )
     if not dailyEasyApplyLimitReached:
-        _is_admin = (
-            user_id == "local-user" or os.getenv("USER_EMAIL") == "himu09854@gmail.com"
-        )
-
-        if _is_admin:
-            print_lg("Admin/Local user detected. Skipping 10 min sleep.")
+        if is_admin_user:
+            print_lg("Admin user detected. Skipping 10 min sleep.")
         else:
             print_lg("Sleeping for 10 min...")
             sleep(300)
@@ -434,7 +430,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     current_count += 1
                     if application_link == "Easy Applied":
                         easy_applied_count += 1
-                        if not is_admin and easy_applied_count >= daily_apply_limit:
+                        if not is_admin_user and easy_applied_count >= daily_apply_limit:
                             print_lg(f"Daily Easy Apply limit reached: {daily_apply_limit}")
                             dailyEasyApplyLimitReached = True
                             return

@@ -14,20 +14,26 @@ import os
 import sys
 import time
 
+_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+_CONFIG_DIR = os.path.join(_BACKEND_DIR, "config")
+for _path in (_CONFIG_DIR, _BACKEND_DIR):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
-from db_manager import db
+from services.linkedin_session import save_linkedin_cookies
 
 
 def main(linkedin_email: str) -> None:
-    user_id = os.getenv("USER_ID", "local-user")
-    # Save under both the dashboard user id and the legacy local-user id,
-    # so the server bot finds the session regardless of how it was started.
-    store_ids = {
-        f"{user_id}::linkedin::{linkedin_email.lower()}",
-        f"local-user::linkedin::{linkedin_email.lower()}",
-    }
+    user_id = (os.getenv("USER_ID") or "").strip()
+    if not user_id:
+        raise SystemExit("Set USER_ID to your dashboard login email (e.g. you@gmail.com).")
 
     options = Options()
     options.add_argument("--window-size=1280,900")
@@ -54,11 +60,11 @@ def main(linkedin_email: str) -> None:
         driver.quit()
         sys.exit(1)
 
-    time.sleep(3)  # let post-login cookies settle
+    time.sleep(3)
     cookies = driver.get_cookies()
-    for store_id in store_ids:
-        db.set_user_session(store_id, cookies)
-        print(f"Saved {len(cookies)} cookies to user_sessions as {store_id!r}")
+    save_linkedin_cookies(cookies, user_id=user_id, linkedin_username=linkedin_email)
+    store_id = f"{user_id}::linkedin::{linkedin_email.lower()}"
+    print(f"Saved {len(cookies)} cookies to user_sessions as {store_id!r}")
     driver.quit()
 
 

@@ -172,9 +172,11 @@ def buffer(speed: int = 0) -> None:
     except:
         speed_val = 5
         
-    user_id = os.getenv("USER_ID", "local-user")
-    is_admin = user_id == "local-user" or os.getenv("USER_EMAIL") == "himu09854@gmail.com"
-    if is_admin:
+    from services.admin import is_admin
+
+    user_id = (os.getenv("USER_ID") or "").strip()
+    privileged = is_admin(user_id) or is_admin(os.getenv("USER_EMAIL"))
+    if privileged:
         speed_val = max(speed_val, 9)
 
     multiplier = max(0.05, (11 - speed_val) / 5.0) # Speed 10 -> 0.2, Speed 5 -> 1.2, Speed 1 -> 2.0
@@ -192,21 +194,20 @@ def buffer(speed: int = 0) -> None:
 
 def random_sleep(min_time=1.0, max_time=None):
     """Sleeps for a random amount of time to simulate human processing."""
-    user_id = os.getenv("USER_ID", "local-user")
-    is_admin = user_id == "local-user" or os.getenv("USER_EMAIL") == "himu09854@gmail.com"
-    
-    if max_time is None:
-        max_time = min_time + 2.0  # Add 2 seconds jitter by default
-
-    # Load speed from config
+    from services.admin import is_admin
     from config.config_bridge import bot_speed
+
+    if max_time is None:
+        max_time = min_time + 2.0
+
     try:
         speed_val = int(bot_speed)
-    except:
+    except Exception:
         speed_val = 5
 
-    # Privileged users get a speed boost
-    if is_admin:
+    user_id = (os.getenv("USER_ID") or "").strip()
+    privileged = is_admin(user_id) or is_admin(os.getenv("USER_EMAIL"))
+    if privileged:
         speed_val = max(speed_val, 9)
 
     multiplier = max(0.05, (11 - speed_val) / 5.0)

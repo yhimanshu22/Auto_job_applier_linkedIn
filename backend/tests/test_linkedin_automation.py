@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+TEST_USER = "automation-test@example.com"
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -87,6 +88,13 @@ def fake_popen(monkeypatch):
             proc._exit_code = 0
         la_service._reap(t)
     la_service._tasks.clear()
+
+
+@pytest.fixture(autouse=True)
+def automation_api_user(auth_as, test_db):
+    """Simulate a signed-in dashboard user with an active plan for route tests."""
+    auth_as(TEST_USER)
+    test_db.upsert_subscription(TEST_USER, plan="pro", status="active")
 
 
 @pytest.fixture
@@ -222,81 +230,27 @@ def test_build_command_unknown_action_rejected():
         la_service._build_command("teleport", {"foo": "bar"})
 
 
-def test_build_env_sets_cookie_path_and_pythonpath():
+def test_build_env_sets_user_id_and_pythonpath():
     from services import linkedin_automation as la_service
 
-    env = la_service._build_env()
-    assert env["LINKEDIN_COOKIE_PATH"].endswith("linkedin_cookies.pkl")
+    env = la_service._build_env(user_id="alice@example.com")
+    assert env["USER_ID"] == "alice@example.com"
     assert la_service.get_base_path() in env["PYTHONPATH"]
 
 
 # ---------------------------------------------------------------------------
-# Per-account cookie path
-#
-# A single shared ``linkedin_cookies.pkl`` meant whichever LinkedIn identity
-# logged in first won — every subsequent run reused that session even when
-# the dashboard had selected a different account. The path is now derived
-# from the resolved account, with the legacy path kept for the primary so
-# existing sessions survive the upgrade.
+# Shared DB session cookies (user_sessions)
 # ---------------------------------------------------------------------------
 
 
-def test_cookie_slug_sanitises_email():
-    from services.linkedin_automation import _cookie_slug
+def test_cookie_store_ids_primary():
+    from services.linkedin_session import cookie_store_ids
 
-    assert _cookie_slug("himu09854@gmail.com") == "himu09854_at_gmail.com"
-    assert _cookie_slug("YHimanshu220456@Gmail.com") == "yhimanshu220456_at_gmail.com"
-    # Anything outside [a-z0-9._-] collapses to underscores; trailing
-    # underscores trimmed so we don't produce names like ``foo_.pkl``.
-    assert _cookie_slug("weird ::name++") == "weird_name"
-    assert _cookie_slug("") == "default"
+    ids = cookie_store_ids("alice@example.com", "bob@linkedin.com")
+    assert ids == ["alice@example.com::linkedin::bob@linkedin.com"]
 
 
-def test_get_cookie_path_for_account_returns_legacy_when_no_account():
-    from services.linkedin_automation import (
-        get_cookie_path_for_account,
-        get_shared_cookie_path,
-    )
-
-    assert get_cookie_path_for_account(None) == get_shared_cookie_path()
-    assert get_cookie_path_for_account("") == get_shared_cookie_path()
-    assert get_cookie_path_for_account("   ") == get_shared_cookie_path()
-
-
-def test_get_cookie_path_for_account_returns_legacy_for_primary():
-    from services.linkedin_automation import (
-        get_cookie_path_for_account,
-        get_shared_cookie_path,
-    )
-
-    legacy = get_shared_cookie_path()
-    # Case-insensitive match against the primary returns the legacy path
-    # so the existing main-account session survives the migration.
-    assert (
-        get_cookie_path_for_account("himu09854@gmail.com", "Himu09854@Gmail.com")
-        == legacy
-    )
-
-
-def test_get_cookie_path_for_account_returns_per_account_for_other():
-    from services.linkedin_automation import (
-        get_cookie_path_for_account,
-        get_shared_cookie_path,
-    )
-
-    primary = "himu09854@gmail.com"
-    path = get_cookie_path_for_account("yhimanshu220456@gmail.com", primary)
-    assert path != get_shared_cookie_path()
-    # Per-account paths live under ``<root>/cookies/<slug>.pkl``.
-    assert os.sep + "cookies" + os.sep in path or "/cookies/" in path
-    assert path.endswith("yhimanshu220456_at_gmail.com.pkl")
-
-
-def test_build_env_uses_per_account_cookie_when_secondary_account_selected(
-    monkeypatch,
-):
-    """Selecting a non-primary account must point the subprocess at its own
-    cookie pickle so the previous account's session can't be reused."""
+def test_build_env_sets_user_id_for_automation_subprocess(monkeypatch):
     from services import linkedin_automation as la_service
 
     monkeypatch.setenv("LINKEDIN_USERNAME", "himu09854@gmail.com")
@@ -304,28 +258,35 @@ def test_build_env_uses_per_account_cookie_when_secondary_account_selected(
     monkeypatch.setenv("LINKEDIN_USERNAME_1", "yhimanshu220456@gmail.com")
     monkeypatch.setenv("LINKEDIN_PASSWORD_1", "pw-secondary")
 
-    env = la_service._build_env(account="yhimanshu220456@gmail.com")
+    env = la_service._build_env(
+        account="yhimanshu220456@gmail.com", user_id="himu09854@gmail.com"
+    )
 
+    assert env["USER_ID"] == "himu09854@gmail.com"
     assert env["LINKEDIN_USERNAME"] == "yhimanshu220456@gmail.com"
     assert env["LINKEDIN_PASSWORD"] == "pw-secondary"
-    # The cookie path must NOT be the legacy single file — that's what made
-    # both accounts share a session before.
-    assert not env["LINKEDIN_COOKIE_PATH"].endswith(os.sep + "linkedin_cookies.pkl")
-    assert env["LINKEDIN_COOKIE_PATH"].endswith("yhimanshu220456_at_gmail.com.pkl")
+    assert "LINKEDIN_COOKIE_PATH" not in env
 
 
-def test_build_env_keeps_legacy_cookie_path_for_primary_account(monkeypatch):
-    """Asking for the primary account explicitly still uses the legacy file
-    so the user's existing main-account session survives this change."""
-    from services import linkedin_automation as la_service
+def test_save_and_load_linkedin_cookies_roundtrip(test_db):
+    from services.linkedin_session import (
+        cookie_store_ids,
+        load_linkedin_cookies,
+        save_linkedin_cookies,
+    )
 
-    monkeypatch.setenv("LINKEDIN_USERNAME", "himu09854@gmail.com")
-    monkeypatch.setenv("LINKEDIN_PASSWORD", "pw-primary")
-
-    env = la_service._build_env(account="himu09854@gmail.com")
-
-    assert env["LINKEDIN_USERNAME"] == "himu09854@gmail.com"
-    assert env["LINKEDIN_COOKIE_PATH"].endswith("linkedin_cookies.pkl")
+    sample = [{"name": "li_at", "value": "abc", "domain": ".linkedin.com"}]
+    save_linkedin_cookies(
+        sample, user_id="u1@example.com", linkedin_username="acct@linkedin.com"
+    )
+    loaded = load_linkedin_cookies(
+        user_id="u1@example.com", linkedin_username="acct@linkedin.com"
+    )
+    assert loaded == sample
+    assert (
+        "u1@example.com::linkedin::acct@linkedin.com"
+        in cookie_store_ids("u1@example.com", "acct@linkedin.com")
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -550,31 +511,31 @@ def test_get_automation_task_stats_respects_30d_window(
 def test_get_automation_settings_masks_sensitive_keys(
     test_db, clear_automation_config
 ):
-    test_db.set_config("openai_api_key", "sk-secret", category="linkedin_automation")
-    test_db.set_config("project_name", "Plain", category="linkedin_automation")
+    test_db.set_config("openai_api_key", "sk-secret", category="linkedin_automation", user_id=TEST_USER)
+    test_db.set_config("project_name", "Plain", category="linkedin_automation", user_id=TEST_USER)
 
     from services.linkedin_env import get_automation_settings
 
-    masked = get_automation_settings(mask_sensitive=True)
+    masked = get_automation_settings(mask_sensitive=True, user_id=TEST_USER)
     assert masked["openai_api_key"] == "set"
     assert masked["project_name"] == "Plain"
 
-    raw = get_automation_settings(mask_sensitive=False)
+    raw = get_automation_settings(mask_sensitive=False, user_id=TEST_USER)
     assert raw["openai_api_key"] == "sk-secret"
 
 
 def test_apply_dashboard_automation_settings_into_env(
     test_db, clear_automation_config
 ):
-    test_db.set_config("openai_api_key", "sk-abc", category="linkedin_automation")
-    test_db.set_config("marketing_mode", True, category="linkedin_automation")
-    test_db.set_config("use_gemini", False, category="linkedin_automation")
-    test_db.set_config("project_url", "https://example.com", category="linkedin_automation")
+    test_db.set_config("openai_api_key", "sk-abc", category="linkedin_automation", user_id=TEST_USER)
+    test_db.set_config("marketing_mode", True, category="linkedin_automation", user_id=TEST_USER)
+    test_db.set_config("use_gemini", False, category="linkedin_automation", user_id=TEST_USER)
+    test_db.set_config("project_url", "https://example.com", category="linkedin_automation", user_id=TEST_USER)
 
     from services.linkedin_env import apply_dashboard_automation_settings
 
     env: dict = {}
-    apply_dashboard_automation_settings(env)
+    apply_dashboard_automation_settings(env, user_id=TEST_USER)
     assert env["OPENAI_API_KEY"] == "sk-abc"
     assert env["MARKETING_MODE"] == "true"
     assert env["USE_GEMINI"] == "false"
@@ -589,17 +550,18 @@ def test_apply_dashboard_automation_settings_into_env(
 
 
 def test_health_endpoint(client):
-    res = client.get("/api/linkedin-automation/health")
+    res = client.get(f"/api/linkedin-automation/health")
     assert res.status_code == 200
     body = res.json()
     assert body["framework_available"] is True
     assert body["main_py_exists"] is True  # __main__.py exists under the package
-    # We don't make assumptions about a saved cookie in CI.
-    assert "shared_cookie_path" in body
+    assert body["session_store"] == "user_sessions"
+    assert "session_in_db" in body
 
 
-def test_stats_endpoint_for_empty_user(client, clear_automation_tasks):
-    res = client.get("/api/linkedin-automation/stats?user_id=fresh-user")
+def test_stats_endpoint_for_empty_user(client, clear_automation_tasks, auth_as):
+    auth_as("fresh-user")
+    res = client.get(f"/api/linkedin-automation/stats?user_id=fresh-user")
     assert res.status_code == 200
     body = res.json()
     assert body["last_24h"] == 0
@@ -610,8 +572,9 @@ def test_stats_endpoint_for_empty_user(client, clear_automation_tasks):
     assert body["daily_limit"] >= 1
 
 
-def test_stats_endpoint_admin_user_uses_agency_plan(client):
-    res = client.get("/api/linkedin-automation/stats?user_id=local-user")
+def test_stats_endpoint_admin_user_uses_agency_plan(client, auth_as):
+    auth_as("himu09854@gmail.com")
+    res = client.get(f"/api/linkedin-automation/stats?user_id=himu09854@gmail.com")
     assert res.status_code == 200
     body = res.json()
     assert body["plan"] == "agency"
@@ -625,7 +588,7 @@ def test_tasks_list_endpoint_returns_db_rows(
     test_db.create_automation_task("hist-1", "post", [], "/log/hist-1", user_id="lu")
     test_db.finalize_automation_task("hist-1", exit_code=0)
 
-    res = client.get("/api/linkedin-automation/tasks")
+    res = client.get(f"/api/linkedin-automation/tasks")
     assert res.status_code == 200
     ids = {t["id"] for t in res.json()["tasks"]}
     assert "hist-1" in ids
@@ -637,7 +600,7 @@ def test_get_task_falls_back_to_db_when_not_in_memory(
     test_db.create_automation_task("dead-1", "engage", [], "/log/dead-1", user_id="lu")
     test_db.finalize_automation_task("dead-1", exit_code=0)
 
-    res = client.get("/api/linkedin-automation/tasks/dead-1")
+    res = client.get(f"/api/linkedin-automation/tasks/dead-1")
     assert res.status_code == 200
     body = res.json()
     assert body["id"] == "dead-1"
@@ -646,7 +609,7 @@ def test_get_task_falls_back_to_db_when_not_in_memory(
 
 
 def test_get_task_404_when_unknown(client, clear_automation_tasks):
-    res = client.get("/api/linkedin-automation/tasks/does-not-exist")
+    res = client.get(f"/api/linkedin-automation/tasks/does-not-exist")
     assert res.status_code == 404
 
 
@@ -658,9 +621,9 @@ def test_get_task_404_when_unknown(client, clear_automation_tasks):
 def test_config_get_returns_keys_with_sensitive_masked(
     client, test_db, clear_automation_config
 ):
-    test_db.set_config("openai_api_key", "sk-stored", category="linkedin_automation")
+    test_db.set_config("openai_api_key", "sk-stored", category="linkedin_automation", user_id=TEST_USER)
 
-    res = client.get("/api/linkedin-automation/config")
+    res = client.get(f"/api/linkedin-automation/config")
     assert res.status_code == 200
     body = res.json()
     assert body["openai_api_key"] == "set"
@@ -687,7 +650,7 @@ def test_config_post_writes_settings_and_preserves_masked(
     # Read raw to verify the sentinel didn't overwrite the real key.
     from services.linkedin_env import get_automation_settings
 
-    raw = get_automation_settings(mask_sensitive=False)
+    raw = get_automation_settings(mask_sensitive=False, user_id=TEST_USER)
     assert raw["openai_api_key"] == "sk-real-1"
     assert raw["project_name"] == "Acme Updated"
 
@@ -748,11 +711,12 @@ def test_post_endpoint_blocks_when_daily_limit_reached(
 
 
 def test_post_endpoint_admin_bypass_starts_task(
-    client, fake_popen, clear_automation_tasks
+    client, fake_popen, clear_automation_tasks, auth_as
 ):
+    auth_as("himu09854@gmail.com")
     res = client.post(
         "/api/linkedin-automation/post",
-        json={"post_text": "Hello world", "no_ai": True, "user_id": "local-user"},
+        json={"post_text": "Hello world", "no_ai": True, "user_id": "himu09854@gmail.com"},
     )
     assert res.status_code == 200
     body = res.json()
@@ -763,7 +727,7 @@ def test_post_endpoint_admin_bypass_starts_task(
     spawned = fake_popen.instances[0]
     assert "-m" in spawned.cmd and "linkedin_automation" in spawned.cmd
     assert spawned.cwd.endswith("linkedin_automation")
-    assert "LINKEDIN_COOKIE_PATH" in spawned.env
+    assert spawned.env.get("USER_ID") == "himu09854@gmail.com"
 
 
 def test_post_endpoint_persists_task_to_db(
@@ -771,7 +735,7 @@ def test_post_endpoint_persists_task_to_db(
 ):
     res = client.post(
         "/api/linkedin-automation/post",
-        json={"post_text": "persist me", "user_id": "local-user"},
+        json={"post_text": "persist me", "user_id": TEST_USER},
     )
     assert res.status_code == 200
     task_id = res.json()["id"]
@@ -779,13 +743,14 @@ def test_post_endpoint_persists_task_to_db(
     row = test_db.get_automation_task(task_id)
     assert row is not None
     assert row["status"] == "running"
-    assert row["user_id"] == "local-user"
+    assert row["user_id"] == TEST_USER
 
 
-def test_engage_endpoint_admin_bypass(client, fake_popen, clear_automation_tasks):
+def test_engage_endpoint_admin_bypass(client, fake_popen, clear_automation_tasks, auth_as):
+    auth_as("himu09854@gmail.com")
     res = client.post(
         "/api/linkedin-automation/engage",
-        json={"engage_action": "both", "max_actions": 3, "user_id": "local-user"},
+        json={"engage_action": "both", "max_actions": 3, "user_id": "himu09854@gmail.com"},
     )
     assert res.status_code == 200
     spawned = fake_popen.instances[-1]
@@ -796,7 +761,7 @@ def test_engage_endpoint_admin_bypass(client, fake_popen, clear_automation_tasks
 def test_pursue_endpoint_requires_profile_name(client, fake_popen):
     res = client.post(
         "/api/linkedin-automation/pursue",
-        json={"user_id": "local-user", "max_posts": 2},
+        json={"user_id": TEST_USER, "max_posts": 2},
     )
     # Pydantic returns 422 for missing required `profile_name`.
     assert res.status_code == 422
@@ -805,7 +770,7 @@ def test_pursue_endpoint_requires_profile_name(client, fake_popen):
 def test_calendar_endpoint_requires_niche(client, fake_popen):
     res = client.post(
         "/api/linkedin-automation/calendar",
-        json={"user_id": "local-user", "total_posts": 5},
+        json={"user_id": TEST_USER, "total_posts": 5},
     )
     assert res.status_code == 422
 
@@ -813,7 +778,7 @@ def test_calendar_endpoint_requires_niche(client, fake_popen):
 def test_calendar_endpoint_happy_path(client, fake_popen, clear_automation_tasks):
     res = client.post(
         "/api/linkedin-automation/calendar",
-        json={"niche": "fitness", "total_posts": 3, "user_id": "local-user"},
+        json={"niche": "fitness", "total_posts": 3, "user_id": TEST_USER},
     )
     assert res.status_code == 200
     assert res.json()["action"] == "generate-calendar"
@@ -832,7 +797,7 @@ def test_stop_task_terminates_running_process(
 ):
     start = client.post(
         "/api/linkedin-automation/post",
-        json={"post_text": "to be stopped", "user_id": "local-user"},
+        json={"post_text": "to be stopped", "user_id": TEST_USER},
     )
     assert start.status_code == 200
     task_id = start.json()["id"]
@@ -855,13 +820,13 @@ def test_stop_task_404_when_unknown(client):
 
 
 def test_dashboard_returns_combined_payload(client, clear_automation_tasks):
-    res = client.get("/api/linkedin-automation/dashboard?user_id=local-user")
+    res = client.get(f"/api/linkedin-automation/dashboard?user_id={TEST_USER}")
     assert res.status_code == 200
     body = res.json()
     assert {"tasks", "stats", "health", "etag"} <= set(body.keys())
     assert "ETag" in res.headers
     # Plan info threaded into stats
-    assert body["stats"]["plan"] == "agency"
+    assert body["stats"]["plan"] == "pro"
     assert body["stats"]["daily_used"] == body["stats"]["last_24h"]
     # Health probes the framework dir + entrypoint
     assert body["health"]["framework_available"] is True
@@ -875,8 +840,8 @@ def test_dashboard_etag_is_stable_when_nothing_changes(
     test_db.create_automation_task("etag-1", "post", [], "/log", user_id="lu")
     test_db.finalize_automation_task("etag-1", exit_code=0)
 
-    res1 = client.get("/api/linkedin-automation/dashboard")
-    res2 = client.get("/api/linkedin-automation/dashboard")
+    res1 = client.get(f"/api/linkedin-automation/dashboard")
+    res2 = client.get(f"/api/linkedin-automation/dashboard")
     assert res1.headers["ETag"] == res2.headers["ETag"]
     assert res1.json()["etag"] == res2.json()["etag"]
 
@@ -888,7 +853,7 @@ def test_dashboard_returns_304_for_matching_if_none_match(
     test_db.create_automation_task("etag-2", "post", [], "/log", user_id="lu")
     test_db.finalize_automation_task("etag-2", exit_code=0)
 
-    first = client.get("/api/linkedin-automation/dashboard")
+    first = client.get(f"/api/linkedin-automation/dashboard")
     etag = first.headers["ETag"]
 
     second = client.get(
@@ -905,7 +870,7 @@ def test_dashboard_etag_changes_when_new_task_added(
     client, test_db, clear_automation_tasks, auth_as
 ):
     auth_as("lu")
-    first = client.get("/api/linkedin-automation/dashboard")
+    first = client.get(f"/api/linkedin-automation/dashboard")
     etag_before = first.headers["ETag"]
 
     test_db.create_automation_task("etag-3", "post", [], "/log", user_id="lu")
@@ -923,7 +888,7 @@ def test_dashboard_etag_changes_when_task_completes(
 ):
     auth_as("lu")
     test_db.create_automation_task("etag-4", "post", [], "/log", user_id="lu")
-    first = client.get("/api/linkedin-automation/dashboard")
+    first = client.get(f"/api/linkedin-automation/dashboard")
     etag_before = first.headers["ETag"]
 
     test_db.finalize_automation_task("etag-4", exit_code=0)
@@ -955,9 +920,9 @@ def test_dashboard_etag_per_user(client, test_db, clear_automation_tasks, auth_a
     test_db.create_automation_task("u2-t2", "engage", [], "/log", user_id="dashboard-u2")
 
     auth_as("dashboard-u1")
-    r1 = client.get("/api/linkedin-automation/dashboard")
+    r1 = client.get(f"/api/linkedin-automation/dashboard")
     auth_as("dashboard-u2")
-    r2 = client.get("/api/linkedin-automation/dashboard")
+    r2 = client.get(f"/api/linkedin-automation/dashboard")
     assert r1.headers["ETag"] != r2.headers["ETag"]
 
 
@@ -969,8 +934,8 @@ def test_dashboard_etag_per_user(client, test_db, clear_automation_tasks, auth_a
 @pytest.fixture
 def configured_accounts(test_db):
     """Plant a primary + 2 extra LinkedIn accounts in the DB secrets category."""
-    test_db.set_config("username", "primary@example.com", category="secrets")
-    test_db.set_config("password", "primary-pw", category="secrets")
+    test_db.set_config("username", "primary@example.com", category="secrets", user_id=TEST_USER)
+    test_db.set_config("password", "primary-pw", category="secrets", user_id=TEST_USER)
     test_db.set_config(
         "linkedin_extra_accounts",
         [
@@ -978,12 +943,13 @@ def configured_accounts(test_db):
             {"username": "bob@example.com", "password": "bob-pw"},
         ],
         category="secrets",
+        user_id=TEST_USER,
     )
     yield
     # Wipe so other tests stay isolated.
-    test_db.set_config("username", "", category="secrets")
-    test_db.set_config("password", "", category="secrets")
-    test_db.set_config("linkedin_extra_accounts", [], category="secrets")
+    test_db.set_config("username", "", category="secrets", user_id=TEST_USER)
+    test_db.set_config("password", "", category="secrets", user_id=TEST_USER)
+    test_db.set_config("linkedin_extra_accounts", [], category="secrets", user_id=TEST_USER)
 
 
 def test_list_linkedin_accounts_returns_primary_and_extras(
@@ -991,7 +957,7 @@ def test_list_linkedin_accounts_returns_primary_and_extras(
 ):
     from services.linkedin_env import list_linkedin_accounts
 
-    rows = list_linkedin_accounts()
+    rows = list_linkedin_accounts(user_id=TEST_USER)
     assert len(rows) == 3
     assert rows[0] == {
         "username": "primary@example.com",
@@ -1008,7 +974,7 @@ def test_apply_linkedin_account_overrides_credentials(test_db, configured_accoun
     from services.linkedin_env import apply_linkedin_account
 
     env: dict = {"LINKEDIN_USERNAME": "primary@example.com", "LINKEDIN_PASSWORD": "primary-pw"}
-    resolved = apply_linkedin_account(env, "alice@example.com")
+    resolved = apply_linkedin_account(env, "alice@example.com", user_id=TEST_USER)
     assert resolved == "alice@example.com"
     assert env["LINKEDIN_USERNAME"] == "alice@example.com"
     assert env["LINKEDIN_PASSWORD"] == "alice-pw"
@@ -1018,7 +984,7 @@ def test_apply_linkedin_account_is_case_insensitive(test_db, configured_accounts
     from services.linkedin_env import apply_linkedin_account
 
     env: dict = {}
-    resolved = apply_linkedin_account(env, "ALICE@example.COM")
+    resolved = apply_linkedin_account(env, "ALICE@example.COM", user_id=TEST_USER)
     assert resolved == "alice@example.com"
     assert env["LINKEDIN_USERNAME"] == "alice@example.com"
 
@@ -1027,13 +993,13 @@ def test_apply_linkedin_account_returns_none_for_unknown(test_db, configured_acc
     from services.linkedin_env import apply_linkedin_account
 
     env: dict = {}
-    assert apply_linkedin_account(env, "noone@example.com") is None
+    assert apply_linkedin_account(env, "noone@example.com", user_id=TEST_USER) is None
     # env must not have been mutated when the account isn't found.
     assert "LINKEDIN_USERNAME" not in env
 
 
 def test_accounts_endpoint_returns_active_and_list(client, test_db, configured_accounts):
-    res = client.get("/api/linkedin-automation/accounts")
+    res = client.get(f"/api/linkedin-automation/accounts")
     assert res.status_code == 200
     body = res.json()
     assert body["active"] == "primary@example.com"
@@ -1046,7 +1012,7 @@ def test_accounts_endpoint_returns_active_and_list(client, test_db, configured_a
 
 
 def test_dashboard_endpoint_includes_accounts(client, test_db, configured_accounts):
-    res = client.get("/api/linkedin-automation/dashboard?user_id=local-user")
+    res = client.get(f"/api/linkedin-automation/dashboard?user_id={TEST_USER}")
     assert res.status_code == 200
     body = res.json()
     assert "accounts" in body
@@ -1061,7 +1027,7 @@ def test_post_endpoint_captures_account_on_task(
         "/api/linkedin-automation/post",
         json={
             "post_text": "Hi from Alice",
-            "user_id": "local-user",
+            "user_id": TEST_USER,
             "account": "alice@example.com",
         },
     )
@@ -1082,7 +1048,7 @@ def test_post_endpoint_defaults_to_primary_when_no_account(
 ):
     res = client.post(
         "/api/linkedin-automation/post",
-        json={"post_text": "Hi from primary", "user_id": "local-user"},
+        json={"post_text": "Hi from primary", "user_id": TEST_USER},
     )
     assert res.status_code == 200
     assert res.json()["account_username"] == "primary@example.com"
@@ -1095,7 +1061,7 @@ def test_post_endpoint_400_for_unknown_account(
         "/api/linkedin-automation/post",
         json={
             "post_text": "x",
-            "user_id": "local-user",
+            "user_id": TEST_USER,
             "account": "missing@example.com",
         },
     )
@@ -1113,9 +1079,9 @@ def test_post_endpoint_400_for_unknown_account(
 @pytest.fixture
 def env_only_accounts(test_db, monkeypatch):
     """No DB-side accounts; two env-only accounts loaded as if from .env."""
-    test_db.set_config("username", "", category="secrets")
-    test_db.set_config("password", "", category="secrets")
-    test_db.set_config("linkedin_extra_accounts", [], category="secrets")
+    test_db.set_config("username", "", category="secrets", user_id=TEST_USER)
+    test_db.set_config("password", "", category="secrets", user_id=TEST_USER)
+    test_db.set_config("linkedin_extra_accounts", [], category="secrets", user_id=TEST_USER)
     monkeypatch.setenv("LINKEDIN_USERNAME_1", "envuser1@example.com")
     monkeypatch.setenv("LINKEDIN_PASSWORD_1", "env-pw-1")
     monkeypatch.setenv("LINKEDIN_USERNAME_2", "envuser2@example.com")
@@ -1123,13 +1089,13 @@ def env_only_accounts(test_db, monkeypatch):
     monkeypatch.delenv("LINKEDIN_USERNAME", raising=False)
     monkeypatch.delenv("LINKEDIN_PASSWORD", raising=False)
     yield
-    test_db.set_config("linkedin_extra_accounts", [], category="secrets")
+    test_db.set_config("linkedin_extra_accounts", [], category="secrets", user_id=TEST_USER)
 
 
 def test_list_linkedin_accounts_includes_env_only_accounts(test_db, env_only_accounts):
     from services.linkedin_env import list_linkedin_accounts
 
-    rows = list_linkedin_accounts()
+    rows = list_linkedin_accounts(user_id=TEST_USER)
     usernames = [r["username"] for r in rows]
     assert usernames == ["envuser1@example.com", "envuser2@example.com"]
     for r in rows:
@@ -1142,7 +1108,7 @@ def test_list_linkedin_accounts_includes_env_only_accounts(test_db, env_only_acc
 def test_accounts_endpoint_surfaces_env_only_accounts(client, test_db, env_only_accounts):
     """Regression: the billing tile + dashboard selector showed 0 even when
     the user had two LINKEDIN_USERNAME_<n> entries in their .env file."""
-    res = client.get("/api/linkedin-automation/accounts")
+    res = client.get(f"/api/linkedin-automation/accounts")
     assert res.status_code == 200
     body = res.json()
     assert [a["username"] for a in body["accounts"]] == [
@@ -1160,7 +1126,7 @@ def test_apply_linkedin_account_resolves_env_only_account(test_db, env_only_acco
         "LINKEDIN_USERNAME_2": "envuser2@example.com",
         "LINKEDIN_PASSWORD_2": "env-pw-2",
     }
-    resolved = apply_linkedin_account(env, "envuser2@example.com")
+    resolved = apply_linkedin_account(env, "envuser2@example.com", user_id=TEST_USER)
     assert resolved == "envuser2@example.com"
     assert env["LINKEDIN_USERNAME"] == "envuser2@example.com"
     assert env["LINKEDIN_PASSWORD"] == "env-pw-2"
@@ -1173,15 +1139,15 @@ def test_db_primary_takes_precedence_over_duplicate_env_entry(
     keeps the DB entry (with its primary=True flag) and drops the env dup."""
     from services.linkedin_env import list_linkedin_accounts
 
-    test_db.set_config("username", "alice@example.com", category="secrets")
-    test_db.set_config("password", "db-pw", category="secrets")
-    test_db.set_config("linkedin_extra_accounts", [], category="secrets")
+    test_db.set_config("username", "alice@example.com", category="secrets", user_id=TEST_USER)
+    test_db.set_config("password", "db-pw", category="secrets", user_id=TEST_USER)
+    test_db.set_config("linkedin_extra_accounts", [], category="secrets", user_id=TEST_USER)
     monkeypatch.setenv("LINKEDIN_USERNAME_1", "alice@example.com")
     monkeypatch.setenv("LINKEDIN_PASSWORD_1", "env-pw")
     monkeypatch.setenv("LINKEDIN_USERNAME_2", "bob@example.com")
     monkeypatch.setenv("LINKEDIN_PASSWORD_2", "env-pw")
 
-    rows = list_linkedin_accounts()
+    rows = list_linkedin_accounts(user_id=TEST_USER)
     assert [r["username"] for r in rows] == [
         "alice@example.com",
         "bob@example.com",
@@ -1190,8 +1156,8 @@ def test_db_primary_takes_precedence_over_duplicate_env_entry(
     assert rows[1]["primary"] is False
 
     # Cleanup
-    test_db.set_config("username", "", category="secrets")
-    test_db.set_config("password", "", category="secrets")
+    test_db.set_config("username", "", category="secrets", user_id=TEST_USER)
+    test_db.set_config("password", "", category="secrets", user_id=TEST_USER)
 
 
 # ---------------------------------------------------------------------------
@@ -1206,12 +1172,12 @@ def clear_form_defaults(test_db):
 
     def _wipe():
         try:
-            cfg = test_db.get_all_by_category(FORM_DEFAULTS_CATEGORY) or {}
+            cfg = test_db.get_all_by_category(FORM_DEFAULTS_CATEGORY, user_id=TEST_USER) or {}
         except Exception:
             cfg = {}
         if isinstance(cfg, dict):
             for k in list(cfg.keys()):
-                test_db.set_config(k, None, FORM_DEFAULTS_CATEGORY)
+                test_db.set_config(k, None, FORM_DEFAULTS_CATEGORY, user_id=TEST_USER)
 
     _wipe()
     yield
@@ -1219,7 +1185,7 @@ def clear_form_defaults(test_db):
 
 
 def test_form_defaults_empty_when_nothing_saved(client, clear_form_defaults):
-    res = client.get("/api/linkedin-automation/form-defaults")
+    res = client.get(f"/api/linkedin-automation/form-defaults")
     assert res.status_code == 200
     assert res.json() == {}
 
@@ -1236,7 +1202,7 @@ def test_form_defaults_put_then_get_round_trip(client, clear_form_defaults):
     assert put.status_code == 200
     assert put.json()["status"] == "saved"
 
-    got = client.get("/api/linkedin-automation/form-defaults").json()
+    got = client.get(f"/api/linkedin-automation/form-defaults").json()
     for k, v in payload.items():
         assert got[k] == v, f"key {k!r}: expected {v!r}, got {got.get(k)!r}"
 
@@ -1251,7 +1217,7 @@ def test_form_defaults_put_merges_partial_updates(client, clear_form_defaults):
         "/api/linkedin-automation/form-defaults",
         json={"engage_max_actions": 9},
     )
-    got = client.get("/api/linkedin-automation/form-defaults").json()
+    got = client.get(f"/api/linkedin-automation/form-defaults").json()
     assert got["engage_action"] == "both"
     assert got["engage_max_actions"] == 9
 
@@ -1266,7 +1232,7 @@ def test_form_defaults_put_none_clears_individual_key(client, clear_form_default
         json={"pursue_profile_name": None},
     )
     assert res.status_code == 200
-    got = client.get("/api/linkedin-automation/form-defaults").json()
+    got = client.get(f"/api/linkedin-automation/form-defaults").json()
     # The unset key is gone, the other stays.
     assert "pursue_profile_name" not in got
     assert got["pursue_max_posts"] == 8
@@ -1289,7 +1255,7 @@ def test_form_defaults_delete_clears_all(client, clear_form_defaults):
     res = client.delete("/api/linkedin-automation/form-defaults")
     assert res.status_code == 200
     assert res.json()["status"] == "cleared"
-    assert client.get("/api/linkedin-automation/form-defaults").json() == {}
+    assert client.get(f"/api/linkedin-automation/form-defaults").json() == {}
 
 
 def test_form_defaults_delete_with_prefix_only_clears_matching_keys(
@@ -1309,7 +1275,7 @@ def test_form_defaults_delete_with_prefix_only_clears_matching_keys(
     removed = set(res.json()["removed"])
     assert removed == {"engage_action", "engage_max_actions"}
 
-    got = client.get("/api/linkedin-automation/form-defaults").json()
+    got = client.get(f"/api/linkedin-automation/form-defaults").json()
     assert got == {"tab": "engage", "calendar_niche": "fitness"}
 
 
@@ -1318,7 +1284,7 @@ def test_dashboard_endpoint_includes_form_defaults(client, clear_form_defaults):
         "/api/linkedin-automation/form-defaults",
         json={"tab": "post", "engage_max_actions": 11},
     )
-    res = client.get("/api/linkedin-automation/dashboard?user_id=local-user")
+    res = client.get(f"/api/linkedin-automation/dashboard?user_id={TEST_USER}")
     assert res.status_code == 200
     body = res.json()
     assert body["form_defaults"]["tab"] == "post"
@@ -1326,7 +1292,7 @@ def test_dashboard_endpoint_includes_form_defaults(client, clear_form_defaults):
 
 
 def test_dashboard_etag_changes_when_form_defaults_change(client, clear_form_defaults):
-    first = client.get("/api/linkedin-automation/dashboard?user_id=local-user")
+    first = client.get(f"/api/linkedin-automation/dashboard?user_id={TEST_USER}")
     etag_before = first.headers["ETag"]
 
     client.put(
@@ -1335,7 +1301,7 @@ def test_dashboard_etag_changes_when_form_defaults_change(client, clear_form_def
     )
 
     second = client.get(
-        "/api/linkedin-automation/dashboard?user_id=local-user",
+        f"/api/linkedin-automation/dashboard?user_id={TEST_USER}",
         headers={"If-None-Match": etag_before},
     )
     # The change must bust the cached ETag — a 304 here would mean the
@@ -1351,11 +1317,11 @@ def test_dashboard_etag_unchanged_when_form_defaults_unchanged(
         "/api/linkedin-automation/form-defaults",
         json={"engage_action": "like"},
     )
-    first = client.get("/api/linkedin-automation/dashboard?user_id=local-user")
+    first = client.get(f"/api/linkedin-automation/dashboard?user_id={TEST_USER}")
     etag = first.headers["ETag"]
 
     second = client.get(
-        "/api/linkedin-automation/dashboard?user_id=local-user",
+        f"/api/linkedin-automation/dashboard?user_id={TEST_USER}",
         headers={"If-None-Match": etag},
     )
     assert second.status_code == 304
@@ -1367,10 +1333,10 @@ def test_form_defaults_strips_unknown_keys_already_in_db(
     """Legacy / mis-injected keys must not leak through the read path."""
     from routes.linkedin_automation import FORM_DEFAULTS_CATEGORY
 
-    test_db.set_config("legacy_key", "x", FORM_DEFAULTS_CATEGORY)
-    test_db.set_config("engage_action", "comment", FORM_DEFAULTS_CATEGORY)
+    test_db.set_config("legacy_key", "x", FORM_DEFAULTS_CATEGORY, user_id=TEST_USER)
+    test_db.set_config("engage_action", "comment", FORM_DEFAULTS_CATEGORY, user_id=TEST_USER)
 
-    got = client.get("/api/linkedin-automation/form-defaults").json()
+    got = client.get(f"/api/linkedin-automation/form-defaults").json()
     assert "legacy_key" not in got
     assert got["engage_action"] == "comment"
 
@@ -1398,7 +1364,7 @@ def planted_calendar(test_db, tmp_path, monkeypatch):
         "generate-calendar",
         ["generate-calendar", "--niche", "Fitness", "--total-posts", "3"],
         "/tmp/calendar.log",
-        user_id="local-user",
+        user_id=TEST_USER,
     )
     test_db.finalize_automation_task("la-generate-calendar-fixture", exit_code=0)
     yield {"task_id": "la-generate-calendar-fixture", "path": calendar_path}
@@ -1439,7 +1405,7 @@ def test_artifact_honors_custom_output_flag(
             "Topics.txt",
         ],
         "/tmp/calendar.log",
-        user_id="local-user",
+        user_id=TEST_USER,
     )
     test_db.finalize_automation_task("la-generate-calendar-custom", exit_code=0)
 
@@ -1465,11 +1431,11 @@ def test_artifact_400_for_non_calendar_action(client, test_db):
         "post",
         ["post", "--post-text", "Hi"],
         "/tmp/post.log",
-        user_id="local-user",
+        user_id=TEST_USER,
     )
     test_db.finalize_automation_task("la-post-no-artifact", exit_code=0)
 
-    res = client.get("/api/linkedin-automation/tasks/la-post-no-artifact/artifact")
+    res = client.get(f"/api/linkedin-automation/tasks/la-post-no-artifact/artifact")
     assert res.status_code == 400
     assert "post" in res.json()["detail"]
 
@@ -1487,7 +1453,7 @@ def test_artifact_404_when_calendar_file_missing(
         "generate-calendar",
         ["generate-calendar", "--niche", "AI", "--total-posts", "1"],
         "/tmp/calendar.log",
-        user_id="local-user",
+        user_id=TEST_USER,
     )
     test_db.finalize_automation_task("la-generate-calendar-empty", exit_code=0)
 
@@ -1524,7 +1490,7 @@ def test_artifact_rejects_path_traversal(
             "../escape.txt",
         ],
         "/tmp/calendar.log",
-        user_id="local-user",
+        user_id=TEST_USER,
     )
     test_db.finalize_automation_task("la-generate-calendar-traversal", exit_code=0)
 
@@ -1548,7 +1514,7 @@ def test_calendar_endpoint_returns_default_file(client, tmp_path, monkeypatch):
         "Day 1: Hello\nDay 2: World\n", encoding="utf-8"
     )
 
-    res = client.get("/api/linkedin-automation/calendar")
+    res = client.get(f"/api/linkedin-automation/calendar")
     assert res.status_code == 200
     body = res.json()
     assert body["filename"] == "content_calendar.txt"
@@ -1563,7 +1529,7 @@ def test_calendar_endpoint_honors_file_query(client, tmp_path, monkeypatch):
     monkeypatch.setattr(la_service, "get_framework_dir", lambda: str(tmp_path))
     (tmp_path / "Topics.txt").write_text("custom output", encoding="utf-8")
 
-    res = client.get("/api/linkedin-automation/calendar?file=Topics.txt")
+    res = client.get(f"/api/linkedin-automation/calendar?file=Topics.txt")
     assert res.status_code == 200
     body = res.json()
     assert body["filename"] == "Topics.txt"
@@ -1574,7 +1540,7 @@ def test_calendar_endpoint_404_when_missing(client, tmp_path, monkeypatch):
     from services import linkedin_automation as la_service
 
     monkeypatch.setattr(la_service, "get_framework_dir", lambda: str(tmp_path))
-    res = client.get("/api/linkedin-automation/calendar")
+    res = client.get(f"/api/linkedin-automation/calendar")
     assert res.status_code == 404
 
 
@@ -1595,7 +1561,7 @@ def test_calendar_endpoint_rejects_path_traversal(client, tmp_path, monkeypatch)
 def test_dashboard_etag_changes_when_accounts_change(
     client, test_db, configured_accounts
 ):
-    first = client.get("/api/linkedin-automation/dashboard?user_id=local-user")
+    first = client.get(f"/api/linkedin-automation/dashboard?user_id={TEST_USER}")
     etag_before = first.headers["ETag"]
 
     # Add a new extra account and re-check.
@@ -1607,10 +1573,11 @@ def test_dashboard_etag_changes_when_accounts_change(
             {"username": "charlie@example.com", "password": "charlie-pw"},
         ],
         category="secrets",
+        user_id=TEST_USER,
     )
 
     second = client.get(
-        "/api/linkedin-automation/dashboard?user_id=local-user",
+        f"/api/linkedin-automation/dashboard?user_id={TEST_USER}",
         headers={"If-None-Match": etag_before},
     )
     assert second.status_code == 200

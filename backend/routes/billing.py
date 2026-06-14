@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from db_manager import db
+from services.admin import admin_subscription, is_admin
 from utils.user_resolution import resolve_user_id
 from services.plan_limits import PLAN_LIMITS
 from services import payu as payu_service
@@ -419,8 +420,6 @@ def handle_payment_failed(invoice):
 class PortalRequest(BaseModel):
     user_id: str | None = None
 
-ADMIN_EMAILS = ["himu09854@gmail.com", "local-user"]
-
 
 def _enrich_subscription(sub: dict) -> dict:
     plan = (sub.get("plan") or "free_trial").lower()
@@ -443,16 +442,8 @@ async def get_subscription_internal(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     uid = user_id.strip()
-    if uid in ADMIN_EMAILS:
-        return {
-            "plan": "agency",
-            "status": "active",
-            "current_period_end": 4102444800,
-            "billing_cycle": "yearly",
-            "limit": 3000,
-            "max_accounts": 10,
-            "max_active_bots": 5,
-        }
+    if is_admin(uid):
+        return admin_subscription()
 
     sub = db.get_user_subscription(uid)
     if not sub:
@@ -463,17 +454,8 @@ async def get_subscription_internal(
 @router.get("/subscription")
 async def get_subscription(request: Request, user_id: str | None = None):
     user_id = await resolve_user_id(request, user_id)
-    # Administrative Bypass for Project Admin
-    if user_id in ADMIN_EMAILS:
-        return {
-            "plan": "agency",
-            "status": "active",
-            "current_period_end": 4102444800,  # Far future (Year 2100)
-            "billing_cycle": "yearly",
-            "limit": 3000,
-            "max_accounts": 10,
-            "max_active_bots": 5,
-        }
+    if is_admin(user_id):
+        return admin_subscription()
 
     sub = db.get_user_subscription(user_id)
     if not sub:

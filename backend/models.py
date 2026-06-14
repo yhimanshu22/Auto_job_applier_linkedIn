@@ -6,9 +6,8 @@ Base = declarative_base()
 
 class Config(Base):
     __tablename__ = "configs"
-    # Multi-tenant: each user has their own config namespace. "local-user"
-    # holds shared template values that non-secret categories inherit from.
-    user_id = Column(String, primary_key=True, default="local-user")
+    # Multi-tenant: each user has their own config namespace.
+    user_id = Column(String, primary_key=True)
     key = Column(String, primary_key=True)
     value = Column(Text)
     category = Column(String)
@@ -102,7 +101,7 @@ class AutomationTask(Base):
     """
     __tablename__ = "automation_tasks"
     id = Column(String, primary_key=True)
-    user_id = Column(String, nullable=False, default="local-user")
+    user_id = Column(String, nullable=False)
     action = Column(String, nullable=False)
     args_json = Column(Text)
     log_path = Column(String)

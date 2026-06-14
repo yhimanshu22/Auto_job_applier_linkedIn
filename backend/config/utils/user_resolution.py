@@ -17,9 +17,6 @@ import os
 import httpx
 from fastapi import HTTPException, Request
 
-from db_manager import DEFAULT_USER
-
-
 def _require_auth() -> bool:
     # Read lazily — module import can happen before load_dotenv() runs.
     return os.getenv("REQUIRE_AUTH", "").strip().lower() in ("1", "true", "yes")
@@ -55,8 +52,8 @@ async def _session_email(request: Request) -> str | None:
 async def resolve_user_id(request: Request, claimed_user_id: str | None = None) -> str:
     """Return the user namespace for this request.
 
-    Order: verified session email > DEFAULT_USER (local single-user mode).
-    Raises 401 when REQUIRE_AUTH is set and no valid session is presented.
+    Order: verified session email > explicit ``user_id`` query/body (dev only).
+    Raises 401 when no session is available and no ``user_id`` was supplied.
     Raises 403 when the client supplies a user_id that does not match the
     authenticated session.
     """
@@ -77,4 +74,4 @@ async def resolve_user_id(request: Request, claimed_user_id: str | None = None) 
     if claimed:
         return claimed
 
-    return DEFAULT_USER
+    raise HTTPException(status_code=401, detail="Not authenticated")

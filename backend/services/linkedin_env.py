@@ -8,10 +8,10 @@ subprocess at launch time.
 import logging
 import os
 
-from db_manager import DEFAULT_USER, db
+from db_manager import db
 
 
-def apply_dashboard_linkedin_credentials(env: dict, user_id: str = DEFAULT_USER) -> None:
+def apply_dashboard_linkedin_credentials(env: dict, *, user_id: str) -> None:
     """
     Inject LinkedIn credentials from DB (dashboard) into env for the supervisor / bot:
     - Primary: username + password -> LINKEDIN_USERNAME, LINKEDIN_PASSWORD
@@ -42,7 +42,7 @@ def apply_dashboard_linkedin_credentials(env: dict, user_id: str = DEFAULT_USER)
             env[f"LINKEDIN_PASSWORD_{i}"] = str(p)
 
 
-def preview_env_with_dashboard_credentials(user_id: str = DEFAULT_USER) -> dict:
+def preview_env_with_dashboard_credentials(*, user_id: str) -> dict:
     env = os.environ.copy()
     apply_dashboard_linkedin_credentials(env, user_id=user_id)
     return env
@@ -98,7 +98,7 @@ def _coerce_env_value(value) -> str | None:
     return s or None
 
 
-def apply_dashboard_automation_settings(env: dict, user_id: str = DEFAULT_USER) -> None:
+def apply_dashboard_automation_settings(env: dict, *, user_id: str) -> None:
     """Inject framework env vars from the dashboard DB (category 'linkedin_automation').
 
     Only sets keys that are configured and non-empty; existing env values win
@@ -120,7 +120,7 @@ def apply_dashboard_automation_settings(env: dict, user_id: str = DEFAULT_USER) 
         env[env_key] = value
 
 
-def get_automation_settings(mask_sensitive: bool = True, user_id: str = DEFAULT_USER) -> dict:
+def get_automation_settings(mask_sensitive: bool = True, *, user_id: str) -> dict:
     """Return the dashboard-configured automation settings.
 
     Sensitive values (API keys) are reduced to ``"set"`` / ``""`` when
@@ -147,7 +147,7 @@ def get_automation_settings(mask_sensitive: bool = True, user_id: str = DEFAULT_
 # ---------------------------------------------------------------------------
 
 
-def _load_secrets(user_id: str = DEFAULT_USER) -> dict:
+def _load_secrets(*, user_id: str) -> dict:
     try:
         s = db.get_all_by_category("secrets", user_id=user_id) or {}
         return s if isinstance(s, dict) else {}
@@ -221,7 +221,7 @@ def get_linkedin_password_for_email(user_id: str, linkedin_email: str) -> str:
     return ""
 
 
-def list_linkedin_accounts(env: dict | None = None, user_id: str = DEFAULT_USER) -> list[dict]:
+def list_linkedin_accounts(env: dict | None = None, *, user_id: str) -> list[dict]:
     """Return all configured LinkedIn accounts from BOTH the DB ``secrets``
     category and the process environment (``LINKEDIN_USERNAME`` /
     ``LINKEDIN_USERNAME_<n>`` style variables loaded from ``.env``).
@@ -279,7 +279,7 @@ def list_linkedin_accounts(env: dict | None = None, user_id: str = DEFAULT_USER)
     return out
 
 
-def count_linkedin_accounts(env: dict | None = None, user_id: str = DEFAULT_USER) -> int:
+def count_linkedin_accounts(env: dict | None = None, *, user_id: str) -> int:
     """Count distinct configured LinkedIn accounts (DB + env), deduplicated by email."""
     return len(list_linkedin_accounts(env=env, user_id=user_id))
 
@@ -296,7 +296,7 @@ def get_active_linkedin_account(env: dict | None = None) -> str | None:
     return u.strip() if isinstance(u, str) and u.strip() else None
 
 
-def apply_linkedin_account(env: dict, account: str | None, user_id: str = DEFAULT_USER) -> str | None:
+def apply_linkedin_account(env: dict, account: str | None, *, user_id: str) -> str | None:
     """Override ``LINKEDIN_USERNAME`` / ``LINKEDIN_PASSWORD`` in ``env`` with the
     chosen account's credentials.
 

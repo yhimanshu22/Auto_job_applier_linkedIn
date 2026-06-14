@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from app_paths import get_runtime_writable_root, subprocess_env
 from db_manager import db
 from services.linkedin_env import apply_dashboard_linkedin_credentials
+from services.admin import effective_plan
 from services.plan_limits import PLAN_LIMITS, assert_can_start_bot
 from services import supervisor_state as sv
 from services.bot_supervisor import stop_supervisor, supervisor_popen_kwargs
@@ -66,8 +67,8 @@ async def start_bot(request: Request, payload: dict = None):
 
 
 @router.post("/stop")
-async def stop_bot(request: Request):
-    await resolve_user_id(request)
+async def stop_bot(request: Request, user_id: str | None = None):
+    await resolve_user_id(request, user_id)
     try:
         was_running = stop_supervisor(reason="dashboard")
         if sv.current_run_id:
@@ -88,8 +89,7 @@ async def get_bot_status(request: Request, user_id: str | None = None):
     subscription = db.get_user_subscription(user_id)
     plan = subscription.get("plan", "free_trial") if subscription else "free_trial"
 
-    if user_id in ["himu09854@gmail.com", "local-user"]:
-        plan = "agency"
+    plan = effective_plan(user_id, plan)
 
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
 
@@ -111,8 +111,8 @@ async def get_bot_status(request: Request, user_id: str | None = None):
 
 
 @router.get("/logs")
-async def get_bot_logs(request: Request, lines: int = 120):
-    await resolve_user_id(request)
+async def get_bot_logs(request: Request, lines: int = 120, user_id: str | None = None):
+    await resolve_user_id(request, user_id)
     return collect_bot_logs_payload(lines=lines)
 
 
@@ -149,8 +149,7 @@ async def get_active_bot_count(request: Request, user_id: str | None = None):
 
     subscription = db.get_user_subscription(user_id)
     plan = (subscription or {}).get("plan", "free_trial")
-    if user_id in ("himu09854@gmail.com", "local-user"):
-        plan = "agency"
+    plan = effective_plan(user_id, plan)
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
 
     return {

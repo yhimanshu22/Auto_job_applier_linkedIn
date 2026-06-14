@@ -6,6 +6,7 @@ from fastapi import HTTPException
 
 from db_manager import db
 
+from services.admin import is_admin
 from services.cloud_billing import get_subscription_for_gating, uses_cloud_subscription
 from services.linkedin_env import (
     count_linkedin_accounts,
@@ -50,8 +51,7 @@ PLAN_LIMITS = {
 
 
 def assert_can_start_bot(user_id: str) -> None:
-    # Administrative Bypass for Project Admin
-    if user_id in ["himu09854@gmail.com", "local-user"]:
+    if is_admin(user_id):
         return
 
     subscription = get_subscription_for_gating(user_id)
@@ -135,7 +135,7 @@ def assert_can_run_automation(user_id: str) -> None:
       * Enforce a per-day count of completed-or-running automation tasks
         based on ``AUTOMATION_DAILY_LIMITS`` for the user's plan.
     """
-    if user_id in ["himu09854@gmail.com", "local-user"]:
+    if is_admin(user_id):
         return
 
     subscription = get_subscription_for_gating(user_id)

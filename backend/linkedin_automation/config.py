@@ -186,7 +186,7 @@ SHORT_TIMEOUT = 5  # Shorter timeout for quick checks
 DEFAULT_TOPIC_FILE = "Topics.txt"
 LOG_DIRECTORY = "logs"
 CUSTOM_POSTS_FILE = os.getenv("CUSTOM_POSTS_FILE", "CustomPosts.txt")
-COOKIE_FILE = os.getenv("LINKEDIN_COOKIE_PATH", "linkedin_cookies.pkl")
+COOKIE_FILE = os.getenv("LINKEDIN_COOKIE_PATH", "linkedin_cookies.pkl")  # legacy; cookies use DB
 
 # Content limits
 MAX_POST_LENGTH = 1300

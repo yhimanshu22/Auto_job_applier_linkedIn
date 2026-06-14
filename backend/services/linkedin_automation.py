@@ -1,19 +1,15 @@
 """LinkedIn Automation Framework integration.
 
-Spawns the sibling project `Linkedln-Automation-Framework/main.py` (posting,
-engagement, calendar generation, profile pursuit) as isolated subprocesses, with
-LinkedIn credentials sourced from the dashboard DB secrets and the cookie file
-shared with the parent backend so a single LinkedIn session is reused.
-
-Tasks are tracked in-memory by id; each task gets its own log file under the
-runtime logs directory so the dashboard can tail per-task output.
+Spawns the sibling ``linkedin_automation`` package (posting, engagement,
+calendar generation, profile pursuit) as isolated subprocesses, with LinkedIn
+credentials from the dashboard DB. Session cookies are stored in SQLite
+(``user_sessions``) — same table the job-applier bot uses.
 """
 
 from __future__ import annotations
 
 import logging
 import os
-import re
 import subprocess
 import sys
 import threading
@@ -22,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from app_paths import get_base_path, get_logs_dir, get_runtime_writable_root
+from app_paths import get_base_path, get_logs_dir
 from db_manager import db
 from services.linkedin_env import (
     apply_dashboard_automation_settings,
@@ -42,57 +38,6 @@ def get_framework_dir() -> str:
     return os.path.join(get_base_path(), "linkedin_automation")
 
 
-def get_shared_cookie_path() -> str:
-    """Path to the legacy shared LinkedIn cookie pickle.
-
-    Kept as the default for the **primary** account so existing sessions
-    survive the move to per-account cookie files. Non-primary accounts get
-    isolated files via :func:`get_cookie_path_for_account`.
-    """
-    return os.path.join(get_runtime_writable_root(), "linkedin_cookies.pkl")
-
-
-def _cookie_slug(username: str) -> str:
-    """Sanitise a LinkedIn username into a safe filename fragment.
-
-    Lower-cases, swaps ``@`` for ``_at_`` so e-mails read naturally on disk,
-    then collapses any remaining non-``[a-z0-9._-]`` characters to ``_``.
-    Returns ``"default"`` when the input would otherwise become empty.
-    """
-    s = (username or "").strip().lower()
-    s = s.replace("@", "_at_")
-    s = re.sub(r"[^a-z0-9._-]+", "_", s).strip("_")
-    return s or "default"
-
-
-def get_cookie_path_for_account(
-    account: str | None, primary_username: str | None = None
-) -> str:
-    """Return the cookies pickle path the framework subprocess should use.
-
-    Why:
-        Without this, every account shared a single ``linkedin_cookies.pkl``
-        and the first session ever logged in won regardless of which account
-        the dashboard had selected.
-
-    Rules:
-      * No account specified, or the account *is* the primary → legacy path
-        (``<root>/linkedin_cookies.pkl``). This keeps the user's existing
-        session for their main account working without a forced re-login.
-      * Any other account → ``<root>/cookies/<safe-slug>.pkl``. First use
-        will have no file so the framework falls back to password login and
-        saves cookies to this per-account path on success.
-    """
-    legacy = get_shared_cookie_path()
-    if not account or not str(account).strip():
-        return legacy
-    if primary_username and account.strip().lower() == primary_username.strip().lower():
-        return legacy
-    return os.path.join(
-        get_runtime_writable_root(), "cookies", f"{_cookie_slug(account)}.pkl"
-    )
-
-
 # ---------------------------------------------------------------------------
 # Task tracking (in-memory)
 # ---------------------------------------------------------------------------
@@ -104,7 +49,7 @@ class AutomationTask:
     action: str
     args: list[str]
     log_path: str
-    user_id: str = "local-user"
+    user_id: str
     process: subprocess.Popen | None = field(default=None, repr=False)
     log_handle: Any = field(default=None, repr=False)
     started_at: str = ""
@@ -132,31 +77,23 @@ def _now_iso() -> str:
 # ---------------------------------------------------------------------------
 
 
-def _build_env(account: str | None = None, user_id: str = "local-user") -> dict[str, str]:
-    """Build the subprocess env: shell env + dashboard creds + framework settings + cookie path + PYTHONPATH.
+def _build_env(account: str | None = None, *, user_id: str) -> dict[str, str]:
+    """Build the subprocess env: shell env + dashboard creds + framework settings + PYTHONPATH.
 
     When ``account`` is set, the credentials injected by
     ``apply_dashboard_linkedin_credentials`` are overridden so that account's
     username/password are used for this run. When ``account`` is ``None`` or
     empty, the primary account stays in place.
 
-    ``LINKEDIN_COOKIE_PATH`` is derived from the resolved account so each
-    LinkedIn identity gets its own cookies pickle. The primary account
-    continues to use the legacy ``linkedin_cookies.pkl`` for backwards
-    compatibility — non-primary accounts use ``cookies/<slug>.pkl``.
+    LinkedIn cookies are loaded/saved via SQLite ``user_sessions`` (see
+    ``services.linkedin_session``), keyed by ``USER_ID`` + ``LINKEDIN_USERNAME``.
     """
     env = os.environ.copy()
+    env["USER_ID"] = user_id
     apply_dashboard_linkedin_credentials(env, user_id=user_id)
-    # Capture the primary username *before* any explicit-account override so
-    # we can decide whether to keep using the legacy single-cookie file.
-    primary_username = (env.get("LINKEDIN_USERNAME") or "").strip() or None
     if account:
         apply_linkedin_account(env, account, user_id=user_id)
     apply_dashboard_automation_settings(env, user_id=user_id)
-    resolved_username = (env.get("LINKEDIN_USERNAME") or "").strip() or None
-    env["LINKEDIN_COOKIE_PATH"] = get_cookie_path_for_account(
-        resolved_username, primary_username
-    )
 
     # `python -m linkedin_automation` needs the backend root on sys.path so the
     # package can be imported. The subprocess cwd is the package dir itself
@@ -242,7 +179,7 @@ def _build_command(action: str, params: dict[str, Any]) -> list[str]:
 def start_task(
     action: str,
     params: dict[str, Any],
-    user_id: str = "local-user",
+    user_id: str,
     account: str | None = None,
 ) -> AutomationTask:
     """Launch a framework subprocess and register it as a tracked task.
@@ -469,13 +406,3 @@ def merged_task_history(limit: int = 50, user_id: Optional[str] = None) -> list[
     return merged[:limit]
 
 
-# ---------------------------------------------------------------------------
-# Optional cookie bridge
-# ---------------------------------------------------------------------------
-
-
-def ensure_shared_cookie_path_exists() -> Optional[str]:
-    """Touch the shared cookie path so both processes can locate / write to it."""
-    path = get_shared_cookie_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    return path

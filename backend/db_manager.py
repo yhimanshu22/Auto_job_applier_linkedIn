@@ -19,17 +19,8 @@ SENSITIVE_KEYS = [
     "linkedin_extra_accounts",  # JSON list of {username, password}
 ]
 
-# The pseudo-user that owns shared/template config rows. Single-user installs
-# (no login) read and write this namespace directly. Named "local-user" because
-# that's the id legacy data (applications, tasks) was already stored under.
-DEFAULT_USER = "local-user"
-
-# Behavioral categories that real users inherit from DEFAULT_USER when they
-# have no row of their own. Identity-ish categories (personals, secrets,
-# linkedin_automation) are deliberately excluded — one user must never see
-# another's name, credentials, or API keys. Encrypted rows are never inherited
-# regardless of category.
-INHERIT_CATEGORIES = {"personals", "settings", "search", "questions"}
+# Legacy namespace used only when upgrading pre-multi-tenant DB schemas.
+_LEGACY_MIGRATION_OWNER = "local-user"
 
 
 def _ts_to_utc_iso(dt: datetime | None) -> str | None:
@@ -80,7 +71,7 @@ class DatabaseManager:
         Handles:
           * ``automation_tasks.account_username`` (SQLite-only legacy add).
           * ``configs.user_id`` — multi-tenant config namespace. Existing rows
-            are assigned to ``DEFAULT_USER`` and the primary key becomes
+            are assigned to the legacy owner id and the primary key becomes
             ``(user_id, key)``. Implemented for both SQLite and Postgres.
         """
         try:
@@ -131,14 +122,14 @@ class DatabaseManager:
         if cols and "user_id" not in cols:
             conn.exec_driver_sql(
                 "CREATE TABLE configs_new ("
-                f"user_id TEXT NOT NULL DEFAULT '{DEFAULT_USER}', "
+                f"user_id TEXT NOT NULL DEFAULT '{_LEGACY_MIGRATION_OWNER}', "
                 "key TEXT NOT NULL, "
                 "value TEXT, category TEXT, is_encrypted INTEGER DEFAULT 0, "
                 "PRIMARY KEY (user_id, key))"
             )
             conn.exec_driver_sql(
                 "INSERT INTO configs_new (user_id, key, value, category, is_encrypted) "
-                f"SELECT '{DEFAULT_USER}', key, value, category, is_encrypted FROM configs"
+                f"SELECT '{_LEGACY_MIGRATION_OWNER}', key, value, category, is_encrypted FROM configs"
             )
             conn.exec_driver_sql("DROP TABLE configs")
             conn.exec_driver_sql("ALTER TABLE configs_new RENAME TO configs")
@@ -172,7 +163,7 @@ class DatabaseManager:
         if cols and "user_id" not in cols:
             conn.exec_driver_sql(
                 "ALTER TABLE configs ADD COLUMN user_id VARCHAR NOT NULL "
-                f"DEFAULT '{DEFAULT_USER}'"
+                f"DEFAULT '{_LEGACY_MIGRATION_OWNER}'"
             )
             conn.exec_driver_sql("ALTER TABLE configs DROP CONSTRAINT configs_pkey")
             conn.exec_driver_sql("ALTER TABLE configs ADD PRIMARY KEY (user_id, key)")
@@ -180,7 +171,7 @@ class DatabaseManager:
     def get_session(self) -> Session:
         return self.SessionLocal()
 
-    def set_config(self, key, value, category, user_id=DEFAULT_USER):
+    def set_config(self, key, value, category, *, user_id: str):
         is_encrypted = 1 if key in SENSITIVE_KEYS else 0
         val_str = json.dumps(value)
         
@@ -198,7 +189,7 @@ class DatabaseManager:
                 session.add(config)
             session.commit()
 
-    def delete_config(self, key, category=None, user_id=DEFAULT_USER):
+    def delete_config(self, key, category=None, *, user_id: str):
         """Remove a config row outright (no-op if it doesn't exist).
 
         Used by the LinkedIn automation form-defaults clear flow — writing
@@ -251,39 +242,16 @@ class DatabaseManager:
             )
             return None
 
-    def get_config(self, key, default=None, user_id=DEFAULT_USER):
+    def get_config(self, key, default=None, *, user_id: str):
         with self.get_session() as session:
             config = session.get(Config, (user_id, key))
-            if config is None and user_id != DEFAULT_USER:
-                # Fall back to the shared template row — but never inherit
-                # secrets/identity (see INHERIT_CATEGORIES).
-                fallback = session.get(Config, (DEFAULT_USER, key))
-                if (
-                    fallback is not None
-                    and not fallback.is_encrypted
-                    and fallback.category in INHERIT_CATEGORIES
-                ):
-                    config = fallback
             if config:
                 return self._decode_config(config)
             return default
 
-    def get_all_by_category(self, category, user_id=DEFAULT_USER):
+    def get_all_by_category(self, category, *, user_id: str):
         with self.get_session() as session:
             result = {}
-            # Shared template values first (only for inheritable categories,
-            # never encrypted rows), then the user's own rows on top.
-            if user_id != DEFAULT_USER and category in INHERIT_CATEGORIES:
-                defaults = session.query(Config).filter(
-                    Config.category == category,
-                    Config.user_id == DEFAULT_USER,
-                    Config.is_encrypted == 0,
-                ).all()
-                for config in defaults:
-                    decoded = self._decode_config(config)
-                    if decoded is not None:
-                        result[config.key] = decoded
-
             configs = session.query(Config).filter(
                 Config.category == category, Config.user_id == user_id
             ).all()
@@ -558,7 +526,7 @@ class DatabaseManager:
         action,
         args,
         log_path,
-        user_id="local-user",
+        user_id: str,
         account_username=None,
     ):
         """Persist a freshly-launched LinkedIn automation subprocess."""

@@ -16,7 +16,8 @@ from typing import Any, Optional
 from fastapi import APIRouter, Body, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from db_manager import DEFAULT_USER, db
+from db_manager import db
+from services.admin import is_admin
 from utils.user_resolution import resolve_user_id
 from services import linkedin_automation as la
 from services.linkedin_env import (
@@ -49,7 +50,7 @@ def _stats_with_plan(user_id: Optional[str]) -> dict[str, Any]:
         subscription = db.get_user_subscription(user_id)
         if subscription:
             plan = subscription.get("plan", "free_trial") or "free_trial"
-    if user_id in {"himu09854@gmail.com", "local-user"}:
+    if is_admin(user_id):
         plan = "agency"
     data["plan"] = plan
     data["daily_limit"] = AUTOMATION_DAILY_LIMITS.get(
@@ -59,22 +60,34 @@ def _stats_with_plan(user_id: Optional[str]) -> dict[str, Any]:
     return data
 
 
-def _health_snapshot() -> dict[str, Any]:
+def _health_snapshot(user_id: str) -> dict[str, Any]:
     """Cheap filesystem probes that report whether the framework is reachable."""
+    from services.linkedin_session import cookie_store_ids, load_linkedin_cookies
+
     framework_dir = la.get_framework_dir()
-    cookie_path = la.get_shared_cookie_path()
     entrypoint = os.path.join(framework_dir, "__main__.py")
+    active = get_active_linkedin_account(
+        preview_env_with_dashboard_credentials(user_id=user_id)
+    )
+    has_db_session = bool(
+        load_linkedin_cookies(user_id=user_id, linkedin_username=active)
+        if active
+        else False
+    )
     return {
         "framework_dir": framework_dir,
         "framework_available": os.path.isdir(framework_dir),
         "main_py_exists": os.path.isfile(entrypoint),
         "entrypoint_path": entrypoint,
-        "shared_cookie_path": cookie_path,
-        "shared_cookie_exists": os.path.isfile(cookie_path),
+        "session_store": "user_sessions",
+        "session_store_ids": cookie_store_ids(user_id=user_id, linkedin_username=active)
+        if active
+        else [],
+        "session_in_db": has_db_session,
     }
 
 
-def _accounts_snapshot(user_id: str = DEFAULT_USER) -> dict[str, Any]:
+def _accounts_snapshot(user_id: str) -> dict[str, Any]:
     """Available LinkedIn accounts and which one is currently the default."""
     accounts = list_linkedin_accounts(user_id=user_id)
     active = get_active_linkedin_account(
@@ -116,7 +129,7 @@ def _compute_etag(
         "health": {
             "framework_available": health.get("framework_available"),
             "main_py_exists": health.get("main_py_exists"),
-            "shared_cookie_exists": health.get("shared_cookie_exists"),
+            "session_in_db": health.get("session_in_db"),
         },
         "accounts": {
             "active": accounts.get("active"),
@@ -256,8 +269,6 @@ async def get_task(request: Request, task_id: str, log_lines: int = 200):
         _assert_task_owner(uid, task.user_id)
         return la.task_to_dict(task, include_log=True, log_lines=log_lines)
     # Fall back to persisted history when the process is no longer in memory.
-    from db_manager import db
-
     row = db.get_automation_task(task_id)
     if not row:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
@@ -416,9 +427,9 @@ async def stop_task(request: Request, task_id: str):
 
 @router.get("/health")
 async def health(request: Request, user_id: Optional[str] = None):
-    """Report whether the framework is reachable and a shared cookie is in place."""
-    await resolve_user_id(request, user_id)
-    return _health_snapshot()
+    """Report whether the framework is reachable and a DB session exists."""
+    uid = await resolve_user_id(request, user_id)
+    return _health_snapshot(user_id=uid)
 
 
 # ---------------------------------------------------------------------------
@@ -457,7 +468,7 @@ async def dashboard(
     uid = await resolve_user_id(request, user_id)
     tasks = la.merged_task_history(limit=limit, user_id=uid)
     stats_payload = _stats_with_plan(uid)
-    health_payload = _health_snapshot()
+    health_payload = _health_snapshot(user_id=uid)
     accounts_payload = _accounts_snapshot(user_id=uid)
     form_defaults_payload = _form_defaults_snapshot(user_id=uid)
 
@@ -549,7 +560,7 @@ ALLOWED_FORM_KEYS: frozenset[str] = frozenset({
 })
 
 
-def _form_defaults_snapshot(user_id: str = DEFAULT_USER) -> dict[str, Any]:
+def _form_defaults_snapshot(user_id: str) -> dict[str, Any]:
     """Read the current form-defaults blob from the DB, returning {} on failure.
 
     Strips two classes of stale entries from the result:

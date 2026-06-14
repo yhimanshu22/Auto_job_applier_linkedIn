@@ -4,44 +4,26 @@ import os
 
 from run_ai_bot.bootstrap_env import *
 from run_ai_bot.state import *
-
-
-def _cookie_store_ids():
-    """Dashboard users may have cookies seeded under local-user or their own id."""
-    ln_user = (os.getenv("LINKEDIN_USERNAME") or "").strip().lower()
-    ids = []
-    if linkedin_cookie_store_id:
-        ids.append(linkedin_cookie_store_id)
-    if ln_user:
-        legacy = f"local-user::linkedin::{ln_user}"
-        if legacy not in ids:
-            ids.append(legacy)
-    if user_id and user_id not in ("local-user",):
-        alt = f"{user_id}::linkedin::{ln_user}" if ln_user else user_id
-        if alt not in ids:
-            ids.append(alt)
-    return ids
+from services.linkedin_session import load_linkedin_cookies, save_linkedin_cookies
 
 
 def save_cookies():
-    """Saves current cookies to a file."""
+    """Saves current cookies to the shared user_sessions table."""
     try:
         cookies = driver.get_cookies()
-        for store_id in _cookie_store_ids():
-            db.set_user_session(store_id, cookies)
+        ln_user = os.getenv("LINKEDIN_USERNAME", "").strip()
+        save_linkedin_cookies(cookies, user_id=user_id, linkedin_username=ln_user)
         print_lg("Session cookies saved successfully!")
     except Exception as e:
         print_lg("Failed to save cookies!", e)
 
 
 def load_cookies():
-    """Loads cookies from file and refreshes the page."""
-    cookies = None
-    for store_id in _cookie_store_ids():
-        cookies = db.get_user_session(store_id)
-        if cookies:
-            print_lg(f"Loaded session cookies from {store_id}")
-            break
+    """Loads cookies from the DB and refreshes the page."""
+    ln_user = os.getenv("LINKEDIN_USERNAME", "").strip()
+    cookies = load_linkedin_cookies(user_id=user_id, linkedin_username=ln_user)
+    if cookies:
+        print_lg(f"Loaded session cookies for {linkedin_cookie_store_id}")
     if cookies:
         try:
             if "linkedin.com" not in driver.current_url:

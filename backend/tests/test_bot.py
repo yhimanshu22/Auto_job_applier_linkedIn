@@ -1,7 +1,7 @@
 import pytest
 
 def test_get_bot_status(client):
-    response = client.get("/api/bot/status")
+    response = client.get("/api/bot/status?user_id=test@example.com")
     assert response.status_code == 200
     assert "status" in response.json()
     assert response.json()["status"] in ["stopped", "running", "error"]
@@ -22,14 +22,14 @@ def test_bot_stop_when_not_running(client, monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: None)
     
     # Ensure bot is stopped
-    client.post("/api/bot/stop")
+    client.post("/api/bot/stop?user_id=test@example.com")
     
-    response = client.post("/api/bot/stop")
+    response = client.post("/api/bot/stop?user_id=test@example.com")
     assert response.status_code == 200
     assert response.json()["status"] == "not_running"
 
 def test_bot_logs_availability(client):
-    response = client.get("/api/bot/logs")
+    response = client.get("/api/bot/logs?user_id=test@example.com")
     assert response.status_code == 200
     body = response.json()
     assert "logs" in body
@@ -39,13 +39,12 @@ def test_bot_logs_availability(client):
 
 def test_bot_active_zero_when_idle(client):
     """No supervisor process and no running automation tasks → active == 0."""
-    res = client.get("/api/bot/active?user_id=local-user")
+    res = client.get("/api/bot/active?user_id=himu09854@gmail.com")
     assert res.status_code == 200
     body = res.json()
     assert body["active"] == 0
     assert body["supervisor"] == 0
     assert body["automation_tasks"] == 0
-    # local-user is force-promoted to the agency plan by the route.
     assert body["plan"] == "agency"
     assert body["limit"] >= 1
 
@@ -84,7 +83,7 @@ def test_bot_active_includes_supervisor(client, monkeypatch):
 
     monkeypatch.setattr(sv, "supervisor_process", _FakeProc())
     try:
-        res = client.get("/api/bot/active?user_id=local-user")
+        res = client.get("/api/bot/active?user_id=test@example.com")
         assert res.status_code == 200
         body = res.json()
         assert body["supervisor"] == 1
