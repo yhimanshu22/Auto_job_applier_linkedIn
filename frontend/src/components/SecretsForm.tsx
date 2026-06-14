@@ -69,7 +69,7 @@ export default function SecretsForm({
   const patch = (key: string, value: any) => onChange({ ...data, [key]: value });
 
   const { data: session } = useSession();
-  const userId = session?.user?.email || "local-user";
+  const userId = session?.user?.email;
 
   const [accountRows, setAccountRows] = useState<AccountRow[]>([emptyPrimaryRow()]);
   const [accountCount, setAccountCount] = useState(0);

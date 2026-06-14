@@ -90,13 +90,11 @@ export default function BillingPage() {
   const [isBackendHealthy, setIsBackendHealthy] = useState(true);
   const [loaded, setLoaded] = useState(false);
 
-  const userId = session?.user?.email || "local-user";
+  const userId = session?.user?.email;
 
-  // Note: We don't bounce on ``status === "unauthenticated"``. Local installs
-  // may run without a NextAuth session cookie; other dashboard pages fall back
-  // to ``userId = "local-user"``.
+  // Requires a signed-in Google session; API calls use the session email as user_id.
   useEffect(() => {
-    if (status === "loading") return;
+    if (status === "loading" || !userId) return;
     let cancelled = false;
 
     const load = async () => {

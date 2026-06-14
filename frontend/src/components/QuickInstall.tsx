@@ -78,8 +78,8 @@ export default function QuickInstall({ id, variant = "section" }: QuickInstallPr
         </div>
 
         <p className="text-xs text-zinc-500 text-center">
-          Requires Git, Python 3.10+, Node.js, and Google Chrome. Opens dashboard at{" "}
-          <span className="font-semibold text-zinc-700">http://localhost:3000</span>
+          Requires Rust, Node.js, and Google Chrome. Installer output:{" "}
+          <span className="font-semibold text-zinc-700">desktop/src-tauri/target/release/bundle/</span>
         </p>
       </div>
     );
@@ -90,10 +90,10 @@ export default function QuickInstall({ id, variant = "section" }: QuickInstallPr
       <div className="mx-auto max-w-4xl px-6 lg:px-8">
         <div className="text-center space-y-4 mb-10">
           <h2 className="font-serif text-4xl lg:text-5xl font-medium tracking-tight text-zinc-900 leading-tight">
-            Install in <span className="text-accent italic">one command</span>
+            Build the <span className="text-accent italic">desktop app</span>
           </h2>
           <p className="text-zinc-500">
-            Copy, paste, run. This installs dependencies, sets up the app, then starts the backend and dashboard.
+            Tauri packages the local bot sidecar and opens the dashboard. Build from source, or download a release when available.
           </p>
         </div>
 
@@ -132,14 +132,10 @@ export default function QuickInstall({ id, variant = "section" }: QuickInstallPr
 
           <div className="mt-5 text-xs text-zinc-500 space-y-1">
             <p>
-              Backend: <span className="font-semibold text-zinc-700">http://127.0.0.1:8000</span> · Dashboard:{" "}
-              <span className="font-semibold text-zinc-700">http://localhost:3000</span>
+              Dev run: <span className="font-mono">cd desktop && npm run dev</span> (starts backend + opens dashboard)
             </p>
             <p>
-              Requires Git, Python 3.10+, Node.js, and Google Chrome.
-            </p>
-            <p>
-              After first run, fill credentials in <span className="font-mono">backend/.env</span> (it’s created automatically).
+              Requires Rust, Node.js, uv/Python 3.10+, and Google Chrome.
             </p>
           </div>
         </div>

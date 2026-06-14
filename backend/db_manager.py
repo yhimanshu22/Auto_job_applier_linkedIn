@@ -49,6 +49,13 @@ class DatabaseManager:
         )
         self.db_url = None if force_local else os.getenv("DATABASE_URL")
 
+        if self.db_url:
+            # Render/Heroku use postgres://; SQLAlchemy expects postgresql://
+            if self.db_url.startswith("postgres://"):
+                self.db_url = self.db_url.replace(
+                    "postgres://", "postgresql://", 1
+                )
+
         if not self.db_url:
             db_path = os.path.join(get_runtime_writable_root(), "data.db")
             self.db_url = f"sqlite:///{db_path}"

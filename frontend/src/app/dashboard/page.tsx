@@ -109,7 +109,7 @@ export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const userId = session?.user?.email || "local-user";
+  const userId = session?.user?.email;
 
   useEffect(() => {
     fetchConfig(activeTab);

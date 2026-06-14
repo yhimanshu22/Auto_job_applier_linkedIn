@@ -817,7 +817,7 @@ function SettingsForm({
   const [saving, setSaving] = useState(false);
   const [s, setS] = useState<FrameworkSettings>({});
   const { data: session } = useSession();
-  const userId = session?.user?.email || "local-user";
+  const userId = session?.user?.email;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1033,7 +1033,7 @@ function SettingsForm({
 
 export default function AutomationPage() {
   const { data: session } = useSession();
-  const userId = session?.user?.email || "local-user";
+  const userId = session?.user?.email;
 
   const [tab, setTab] = useState<Tab>("post");
   const [common, setCommon] = useState<CommonState>(COMMON_DEFAULT);
@@ -1047,6 +1047,7 @@ export default function AutomationPage() {
     framework_available?: boolean;
     main_py_exists?: boolean;
     shared_cookie_exists?: boolean;
+    session_in_db?: boolean;
   }>({});
   // LinkedIn accounts the bot can run as. `selectedAccount === ""` means
   // "use the primary account" (whatever the backend's dashboard secrets
@@ -1261,7 +1262,7 @@ export default function AutomationPage() {
   }, [userId]);
 
   // Plan pill — one-shot fetch when the user changes. /api/billing/subscription
-  // applies the local-user/admin → agency override server-side, so the pill
+  // Developer admin (himu09854@gmail.com) gets agency plan server-side.
   // here matches what /dashboard/billing renders.
   useEffect(() => {
     let cancelled = false;
@@ -1689,12 +1690,12 @@ export default function AutomationPage() {
           <div className="mt-4 bg-zinc-950 border border-zinc-900 rounded-xl p-3 text-[10px] text-zinc-500 space-y-1">
             <p>
               <span className="text-zinc-400 font-bold uppercase tracking-widest">Note —</span>{" "}
-              Credentials are shared with the job applier via the dashboard secrets, and the
-              same LinkedIn cookie file is reused.
+              Credentials are shared with the job applier via the dashboard secrets, and
+              LinkedIn sessions are stored in the local database (same as the job bot).
             </p>
-            {!health.shared_cookie_exists && (
+            {!(health.session_in_db ?? health.shared_cookie_exists) && (
               <p className="text-amber-400/80">
-                No cached LinkedIn cookie yet; the first run will log in and create one.
+                No cached LinkedIn session yet; the first run will log in and save cookies to the DB.
               </p>
             )}
           </div>

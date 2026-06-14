@@ -38,7 +38,7 @@ fn local_api_url(port: u16) -> String {
 
 fn dashboard_url() -> String {
     let mut url = std::env::var("LINKDAPPLY_FRONTEND_URL")
-        .unwrap_or_else(|_| "http://localhost:3000/dashboard?desktop=1".to_string());
+        .unwrap_or_else(|_| "https://frontend-pink-phi-37.vercel.app/dashboard?desktop=1".to_string());
 
     if !url.contains("desktop=1") {
         let sep = if url.contains('?') { '&' } else { '?' };
@@ -46,6 +46,20 @@ fn dashboard_url() -> String {
     }
 
     url
+}
+
+/// Origin (scheme + host) from a dashboard URL, e.g. `https://app.example.com`.
+fn frontend_origin_from_dashboard_url(dashboard: &str) -> Option<String> {
+    let base = dashboard.split('?').next()?.trim_end_matches('/');
+    let scheme_sep = base.find("://")?;
+    let scheme = &base[..scheme_sep];
+    let after_scheme = &base[scheme_sep + 3..];
+    let host_end = after_scheme.find('/').unwrap_or(after_scheme.len());
+    let host = &after_scheme[..host_end];
+    if host.is_empty() {
+        return None;
+    }
+    Some(format!("{scheme}://{host}"))
 }
 
 fn wait_for_health(port: u16, timeout: Duration) -> bool {
@@ -98,6 +112,24 @@ fn sidecar_env(
             cmd = cmd.env("LINKDAPPLY_INTERNAL_KEY", key.trim());
         }
     }
+
+    // When the webview loads a hosted dashboard, the sidecar must verify sessions
+    // and allow CORS against that origin (unless already set in desktop/.env).
+    if std::env::var("FRONTEND_URL").is_err() {
+        if let Ok(dashboard) = std::env::var("LINKDAPPLY_FRONTEND_URL") {
+            if let Some(origin) = frontend_origin_from_dashboard_url(&dashboard) {
+                cmd = cmd.env("FRONTEND_URL", origin.trim());
+                if std::env::var("EXTRA_CORS_ORIGINS").is_err() {
+                    cmd = cmd.env("EXTRA_CORS_ORIGINS", origin.trim());
+                }
+                if std::env::var("NEXTAUTH_SESSION_URL").is_err() {
+                    let session = format!("{}/api/auth/session", origin.trim().trim_end_matches('/'));
+                    cmd = cmd.env("NEXTAUTH_SESSION_URL", session);
+                }
+            }
+        }
+    }
+
     cmd
 }
 

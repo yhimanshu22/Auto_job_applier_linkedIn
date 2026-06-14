@@ -2,7 +2,7 @@
 name = "auto-job-applier-backend"
 version = "0.1.0"
 description = "FastAPI + Selenium backend for the LinkedIn job applier"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 dependencies = [
     "undetected-chromedriver",
     "selenium",
