@@ -105,11 +105,16 @@ export default function Dashboard() {
   const [logsPayload, setLogsPayload] = useState<{
     logs: string;
     log_dir?: string;
+    run_id?: number | null;
     files?: { filename: string; path: string; size_bytes: number; modified_utc: string }[];
     infra?: { title: string; filename: string; content: string }[];
     profiles?: { id: string; filename: string; content: string }[];
   } | null>(null);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [botRuns, setBotRuns] = useState<
+    { id: number; status?: string; start_time?: string; has_logs?: boolean }[]
+  >([]);
+  const [selectedLogRunId, setSelectedLogRunId] = useState<number | "">("");
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -129,25 +134,53 @@ export default function Dashboard() {
     fetchConfig(activeTab);
   }, [activeTab, userId]);
 
+  const loadBotLogs = useCallback(
+    async (runId?: number | "") => {
+      setLogsLoading(true);
+      try {
+        const runParam =
+          runId !== undefined && runId !== "" ? `&run_id=${runId}` : "";
+        const res = await apiFetch(
+          `/api/bot/logs?lines=200&user_id=${encodeUserId(userId)}${runParam}`
+        );
+        if (res.ok) {
+          setLogsPayload(await res.json());
+        } else {
+          setLogsPayload({ logs: await parseApiError(res) });
+        }
+      } catch {
+        setLogsPayload({ logs: "Could not load logs. Is the backend running?" });
+      } finally {
+        setLogsLoading(false);
+      }
+    },
+    [userId]
+  );
+
   const openLogsModal = useCallback(async () => {
     setShowLogsModal(true);
-    setLogsLoading(true);
     setLogsPayload(null);
+    let initialRun: number | "" = "";
     try {
-      const res = await apiFetch(
-        `/api/bot/logs?lines=200&user_id=${encodeUserId(userId)}`
+      const runsRes = await apiFetch(
+        `/api/bot/runs?limit=15&user_id=${encodeUserId(userId)}`
       );
-      if (res.ok) {
-        setLogsPayload(await res.json());
-      } else {
-        setLogsPayload({ logs: await parseApiError(res) });
+      if (runsRes.ok) {
+        const data = await runsRes.json();
+        const runs = Array.isArray(data.runs) ? data.runs : [];
+        setBotRuns(runs);
+        const withLogs = runs.find((r: { has_logs?: boolean }) => r.has_logs);
+        const pick = withLogs ?? runs[0];
+        if (pick?.id != null) {
+          initialRun = pick.id;
+          setSelectedLogRunId(pick.id);
+        }
       }
     } catch {
-      setLogsPayload({ logs: "Could not load logs. Is the backend running?" });
-    } finally {
-      setLogsLoading(false);
+      setBotRuns([]);
     }
-  }, [userId]);
+    await loadBotLogs(initialRun);
+  }, [userId, loadBotLogs]);
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -946,9 +979,43 @@ export default function Dashboard() {
       {showLogsModal && (
         <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
           <div className="bg-zinc-950 border border-zinc-800 rounded-xl max-w-4xl w-full max-h-[85vh] flex flex-col shadow-2xl">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Bot logs</h3>
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 gap-3 flex-wrap">
+              <div className="flex items-center gap-3 min-w-0">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest shrink-0">
+                  Bot logs
+                </h3>
+                {botRuns.length > 0 && (
+                  <select
+                    value={selectedLogRunId}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const runId = val === "" ? "" : Number(val);
+                      setSelectedLogRunId(runId);
+                      loadBotLogs(runId);
+                    }}
+                    className="max-w-[220px] bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[10px] text-zinc-300 focus:outline-none focus:border-blue-600"
+                  >
+                    {botRuns.map((run) => (
+                      <option key={run.id} value={run.id}>
+                        Run #{run.id}
+                        {run.start_time
+                          ? ` · ${formatShortTime(run.start_time)}`
+                          : ""}
+                        {run.status ? ` · ${run.status}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={logsLoading}
+                  onClick={() => loadBotLogs(selectedLogRunId)}
+                  className="px-2.5 py-1 rounded-lg border border-zinc-800 text-zinc-400 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-900 disabled:opacity-40"
+                >
+                  Refresh
+                </button>
                 <button
                   type="button"
                   disabled={logsLoading || !logsPayload?.logs}
@@ -1036,6 +1103,11 @@ export default function Dashboard() {
             </div>
             {!logsLoading && logsPayload?.log_dir && (
               <div className="px-4 py-2 border-t border-zinc-800 text-[10px] text-zinc-500 font-mono">
+                {logsPayload.run_id != null && (
+                  <span className="text-zinc-600 uppercase tracking-wider font-bold mr-2">
+                    Run #{logsPayload.run_id}
+                  </span>
+                )}
                 <span className="text-zinc-600 uppercase tracking-wider font-bold mr-2">Log dir</span>
                 {logsPayload.log_dir}
                 {logsPayload.files && logsPayload.files.length > 0 && (

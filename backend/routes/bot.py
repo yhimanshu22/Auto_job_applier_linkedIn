@@ -12,7 +12,13 @@ from services.admin import effective_plan
 from services.plan_limits import PLAN_LIMITS, assert_can_start_bot
 from services import supervisor_state as sv
 from services.bot_supervisor import stop_supervisor, supervisor_popen_kwargs
-from utils.debug_logs import SUPERVISOR_CONSOLE_LOG, append_session_marker, collect_bot_logs_payload, log_file_path
+from utils.debug_logs import (
+    SUPERVISOR_CONSOLE_LOG,
+    append_session_marker,
+    collect_bot_logs_payload,
+    run_has_logs,
+    scoped_log_path,
+)
 from utils.user_resolution import resolve_user_id
 
 router = APIRouter(prefix="/api/bot", tags=["bot"])
@@ -44,10 +50,17 @@ async def start_bot(request: Request, payload: dict = None):
         apply_dashboard_linkedin_credentials(env, user_id=user_id)
         env["USER_ID"] = user_id
 
+        run_id = db.start_bot_run(user_id)
+        sv.current_run_id = run_id
+        env["BOT_RUN_ID"] = str(run_id)
+
         sv.close_supervisor_log()
-        console_log = log_file_path(SUPERVISOR_CONSOLE_LOG)
+        console_log = scoped_log_path(SUPERVISOR_CONSOLE_LOG)
+        os.makedirs(os.path.dirname(console_log), exist_ok=True)
         sv.supervisor_log_handle = open(console_log, "a", encoding="utf-8", buffering=1)
-        append_session_marker(console_log, "Supervisor session started (API / dashboard)")
+        append_session_marker(
+            console_log, f"Supervisor session started (run #{run_id}, API / dashboard)"
+        )
 
         sv.supervisor_process = subprocess.Popen(
             cmd,
@@ -58,9 +71,7 @@ async def start_bot(request: Request, payload: dict = None):
             **supervisor_popen_kwargs(),
         )
 
-        sv.current_run_id = db.start_bot_run(user_id)
-
-        return {"status": "started"}
+        return {"status": "started", "run_id": run_id}
     except Exception as e:
         sv.close_supervisor_log()
         raise HTTPException(status_code=500, detail=str(e))
@@ -111,16 +122,29 @@ async def get_bot_status(request: Request, user_id: str | None = None):
 
 
 @router.get("/logs")
-async def get_bot_logs(request: Request, lines: int = 120, user_id: str | None = None):
+async def get_bot_logs(
+    request: Request,
+    lines: int = 120,
+    user_id: str | None = None,
+    run_id: int | None = None,
+):
     await resolve_user_id(request, user_id)
-    return collect_bot_logs_payload(lines=lines)
+    resolved_run = run_id
+    if resolved_run is None and sv.current_run_id:
+        resolved_run = sv.current_run_id
+    return collect_bot_logs_payload(lines=lines, run_id=resolved_run)
 
 
 @router.get("/runs")
 async def get_bot_runs(request: Request, user_id: str | None = None, limit: int = 10):
     user_id = await resolve_user_id(request, user_id)
     runs = db.get_recent_bot_runs(limit, user_id=user_id)
-    return {"runs": runs}
+    enriched = []
+    for row in runs:
+        item = dict(row)
+        item["has_logs"] = run_has_logs(row["id"])
+        enriched.append(item)
+    return {"runs": enriched}
 
 
 @router.get("/active")

@@ -1,15 +1,16 @@
 """
-Plain-text debug logs under backend/logs/ (local dev and AWS EC2).
+Plain-text debug logs under backend/logs/ (local dev and desktop sidecar).
 
-Files (all .txt):
-  api.txt                 — FastAPI / uvicorn server
-  supervisor.txt          — supervisor process (structured logging)
-  supervisor-console.txt  — supervisor stdout/stderr
-  bot-<id>.txt            — job-applier application log (print_lg)
-  bot-<id>-console.txt    — job-applier subprocess stdout/stderr
-  log.txt                 — legacy single-bot log when BOT_ID is unset
+Layout:
+  api.txt                    — FastAPI / uvicorn (always at logs root)
+  log.txt                    — legacy single-bot log when BOT_ID is unset
+  runs/<bot_run_id>/         — one folder per dashboard bot start (BOT_RUN_ID)
+    supervisor.txt
+    supervisor-console.txt
+    bot-<account_id>.txt
+    bot-<account_id>-console.txt
 
-Legacy .log names are still read if present from older runs.
+Legacy flat bot-<id>.txt at logs root are still read when no run folder exists.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ SUPERVISOR_LOG = "supervisor.txt"
 SUPERVISOR_CONSOLE_LOG = "supervisor-console.txt"
 LEGACY_BOT_LOG = "log.txt"
 BOT_LOG_GLOB = "bot-*.txt"
+RUNS_SUBDIR = "runs"
 
 _LEGACY_READ_ALIASES: dict[str, tuple[str, ...]] = {
     SUPERVISOR_LOG: ("supervisor.log",),
@@ -45,7 +47,31 @@ def logs_dir() -> str:
     return path
 
 
+def bot_run_id() -> str | None:
+    rid = (os.getenv("BOT_RUN_ID") or "").strip()
+    return rid or None
+
+
+def run_logs_dir(run_id: int | str) -> str:
+    return os.path.join(logs_dir(), RUNS_SUBDIR, str(run_id).strip())
+
+
+def scoped_logs_base() -> str:
+    """Active write directory: runs/<BOT_RUN_ID>/ when set, else logs root."""
+    rid = bot_run_id()
+    if rid:
+        base = run_logs_dir(rid)
+        os.makedirs(base, exist_ok=True)
+        return base
+    return logs_dir()
+
+
+def scoped_log_path(basename: str) -> str:
+    return os.path.join(scoped_logs_base(), basename)
+
+
 def log_file_path(basename: str) -> str:
+    """Root logs path (api.txt). Bot/supervisor paths should use scoped_log_path."""
     return os.path.join(logs_dir(), basename)
 
 
@@ -54,20 +80,51 @@ def safe_bot_id(bot_id: str) -> str:
 
 
 def bot_log_path(bot_id: str) -> str:
-    return log_file_path(f"bot-{safe_bot_id(bot_id)}.txt")
+    return scoped_log_path(f"bot-{safe_bot_id(bot_id)}.txt")
 
 
 def bot_console_path(bot_id: str) -> str:
-    return log_file_path(f"bot-{safe_bot_id(bot_id)}-console.txt")
+    return scoped_log_path(f"bot-{safe_bot_id(bot_id)}-console.txt")
 
 
-def resolve_readable_path(basename: str) -> str:
+def run_has_logs(run_id: int | str) -> bool:
+    d = run_logs_dir(run_id)
+    if not os.path.isdir(d):
+        return False
+    try:
+        return any(name.endswith(".txt") for name in os.listdir(d))
+    except OSError:
+        return False
+
+
+def latest_run_logs_dir() -> str | None:
+    runs_root = os.path.join(logs_dir(), RUNS_SUBDIR)
+    if not os.path.isdir(runs_root):
+        return None
+    best_id: int | None = None
+    best_path: str | None = None
+    for name in os.listdir(runs_root):
+        path = os.path.join(runs_root, name)
+        if not os.path.isdir(path):
+            continue
+        try:
+            rid = int(name)
+        except ValueError:
+            continue
+        if best_id is None or rid > best_id:
+            best_id = rid
+            best_path = path
+    return best_path
+
+
+def resolve_readable_path(basename: str, *, base_dir: str | None = None) -> str:
     """Prefer canonical .txt; fall back to legacy .log if that is all that exists."""
-    primary = log_file_path(basename)
+    root = base_dir or logs_dir()
+    primary = os.path.join(root, basename)
     if os.path.isfile(primary):
         return primary
     for legacy in _LEGACY_READ_ALIASES.get(basename, ()):
-        alt = log_file_path(legacy)
+        alt = os.path.join(root, legacy)
         if os.path.isfile(alt):
             return alt
     return primary
@@ -97,7 +154,7 @@ def configure_file_logger(
         return logger
 
     formatter = logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
-    path = log_file_path(filename)
+    path = scoped_log_path(filename) if filename != API_LOG else log_file_path(filename)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
     fh = logging.FileHandler(path, encoding="utf-8")
@@ -153,24 +210,40 @@ def tail_file(path: str, lines: int = 120) -> str:
         return f"(read error: {ex})"
 
 
-def list_log_files() -> list[dict]:
-    """Metadata for every .txt log in logs/ (for debugging dashboards and SSH)."""
+def list_log_files(*, base_dir: str | None = None) -> list[dict]:
+    """Metadata for .txt logs under base_dir (default: logs root + all run folders)."""
     out: list[dict] = []
-    for path in sorted(glob.glob(os.path.join(logs_dir(), "*.txt"))):
-        try:
-            st = os.stat(path)
-            out.append(
-                {
-                    "filename": os.path.basename(path),
-                    "path": path,
-                    "size_bytes": st.st_size,
-                    "modified_utc": datetime.fromtimestamp(
-                        st.st_mtime, tz=timezone.utc
-                    ).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                }
-            )
-        except OSError:
-            continue
+
+    def _scan(directory: str, prefix: str = "") -> None:
+        pattern = os.path.join(directory, "*.txt")
+        for path in sorted(glob.glob(pattern)):
+            try:
+                st = os.stat(path)
+                name = os.path.basename(path)
+                out.append(
+                    {
+                        "filename": f"{prefix}{name}" if prefix else name,
+                        "path": path,
+                        "size_bytes": st.st_size,
+                        "modified_utc": datetime.fromtimestamp(
+                            st.st_mtime, tz=timezone.utc
+                        ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    }
+                )
+            except OSError:
+                continue
+
+    if base_dir:
+        _scan(base_dir)
+        return out
+
+    _scan(logs_dir())
+    runs_root = os.path.join(logs_dir(), RUNS_SUBDIR)
+    if os.path.isdir(runs_root):
+        for run_name in sorted(os.listdir(runs_root), reverse=True):
+            run_path = os.path.join(runs_root, run_name)
+            if os.path.isdir(run_path):
+                _scan(run_path, prefix=f"runs/{run_name}/")
     return out
 
 
@@ -183,11 +256,109 @@ def _profile_id_from_filename(filename: str) -> str | None:
     return inner
 
 
-def collect_bot_logs_payload(*, lines: int = 120) -> dict:
-    """Build the /api/bot/logs response from canonical .txt files."""
-    lines = max(20, min(int(lines), 500))
-    log_dir = logs_dir()
+def _collect_from_directory(
+    log_dir: str,
+    *,
+    lines: int,
+    include_api: bool = True,
+) -> dict:
+    infra_specs: Iterable[tuple[str, str]] = (
+        ("Supervisor console (stdout/stderr)", SUPERVISOR_CONSOLE_LOG),
+        ("Supervisor", SUPERVISOR_LOG),
+    )
 
+    infra: list[dict] = []
+    infra_text_parts: list[str] = []
+
+    if include_api:
+        api_path = resolve_readable_path(API_LOG, base_dir=logs_dir())
+        api_chunk = tail_file(api_path, lines).strip()
+        if api_chunk or os.path.isfile(api_path):
+            infra.append(
+                {
+                    "title": "API server",
+                    "filename": os.path.basename(api_path),
+                    "content": api_chunk,
+                }
+            )
+        if api_chunk:
+            infra_text_parts.append(
+                f"--- API server ({os.path.basename(api_path)}) ---\n{api_chunk}"
+            )
+
+    for title, basename in infra_specs:
+        path = resolve_readable_path(basename, base_dir=log_dir)
+        chunk = tail_file(path, lines).strip()
+        filename = os.path.basename(path)
+        if chunk or os.path.isfile(path):
+            infra.append({"title": title, "filename": filename, "content": chunk})
+        if chunk:
+            infra_text_parts.append(f"--- {title} ({filename}) ---\n{chunk}")
+
+    profiles: list[dict] = []
+    profile_text_parts: list[str] = []
+    seen_ids: set[str] = set()
+
+    for path in sorted(glob.glob(os.path.join(log_dir, BOT_LOG_GLOB))):
+        basename = os.path.basename(path)
+        profile_id = _profile_id_from_filename(basename)
+        if not profile_id or profile_id in seen_ids:
+            continue
+        seen_ids.add(profile_id)
+        chunk = tail_file(path, lines).strip()
+        profiles.append({"id": profile_id, "filename": basename, "content": chunk})
+        if chunk:
+            profile_text_parts.append(
+                f"--- Bot profile {profile_id} ({basename}) ---\n{chunk}"
+            )
+
+        console_path = os.path.join(log_dir, f"bot-{safe_bot_id(profile_id)}-console.txt")
+        legacy_console = os.path.join(log_dir, f"bot-{safe_bot_id(profile_id)}-stdout.log")
+        console_read = console_path if os.path.isfile(console_path) else legacy_console
+        if os.path.isfile(console_read):
+            console_chunk = tail_file(console_read, lines).strip()
+            console_name = os.path.basename(console_read)
+            if console_chunk:
+                infra.append(
+                    {
+                        "title": f"Bot {profile_id} console",
+                        "filename": console_name,
+                        "content": console_chunk,
+                    }
+                )
+                infra_text_parts.append(
+                    f"--- Bot {profile_id} console ({console_name}) ---\n{console_chunk}"
+                )
+
+    legacy_parts = infra_text_parts + profile_text_parts
+    run_id = os.path.basename(log_dir.rstrip("/\\"))
+    if not legacy_parts:
+        msg = (
+            f"No log files yet for run {run_id}. "
+            f"Expected files under {log_dir}/"
+        )
+        return {
+            "log_dir": log_dir,
+            "run_id": int(run_id) if run_id.isdigit() else run_id,
+            "files": list_log_files(base_dir=log_dir),
+            "logs": msg,
+            "infra": [],
+            "profiles": [],
+        }
+
+    return {
+        "log_dir": log_dir,
+        "run_id": int(run_id) if run_id.isdigit() else run_id,
+        "files": list_log_files(base_dir=log_dir),
+        "logs": "\n".join(legacy_parts),
+        "infra": infra,
+        "profiles": profiles,
+    }
+
+
+def _collect_legacy_root(*, lines: int) -> dict:
+    """Pre-run-scoping layout: flat files under logs/."""
+    log_dir = logs_dir()
     infra_specs: Iterable[tuple[str, str]] = (
         ("API server", API_LOG),
         ("Supervisor console (stdout/stderr)", SUPERVISOR_CONSOLE_LOG),
@@ -223,14 +394,12 @@ def collect_bot_logs_payload(*, lines: int = 120) -> dict:
             )
 
         console_path = bot_console_path(profile_id)
-        legacy_console = log_file_path(
-            f"bot-{safe_bot_id(profile_id)}-stdout.log"
-        )
-        console_read = console_path if os.path.isfile(console_path) else legacy_console
-        if os.path.isfile(console_read):
-            console_chunk = tail_file(console_read, lines).strip()
-            console_name = os.path.basename(console_read)
+        if not os.path.isfile(console_path):
+            console_path = log_file_path(f"bot-{safe_bot_id(profile_id)}-stdout.log")
+        if os.path.isfile(console_path):
+            console_chunk = tail_file(console_path, lines).strip()
             if console_chunk:
+                console_name = os.path.basename(console_path)
                 infra.append(
                     {
                         "title": f"Bot {profile_id} console",
@@ -259,10 +428,11 @@ def collect_bot_logs_payload(*, lines: int = 120) -> dict:
     if not legacy_parts:
         msg = (
             "No log files yet. Start the bot from the dashboard to capture supervisor output "
-            f"under {log_dir}/ (api.txt, supervisor.txt, bot-<id>.txt)."
+            f"under {log_dir}/runs/<run_id>/ (or legacy flat files at logs root)."
         )
         return {
             "log_dir": log_dir,
+            "run_id": None,
             "files": list_log_files(),
             "logs": msg,
             "infra": [],
@@ -271,8 +441,27 @@ def collect_bot_logs_payload(*, lines: int = 120) -> dict:
 
     return {
         "log_dir": log_dir,
+        "run_id": None,
         "files": list_log_files(),
         "logs": "\n".join(legacy_parts),
         "infra": infra,
         "profiles": profiles,
     }
+
+
+def collect_bot_logs_payload(*, lines: int = 120, run_id: int | str | None = None) -> dict:
+    """Build the /api/bot/logs response from run-scoped or legacy log files."""
+    lines = max(20, min(int(lines), 500))
+
+    if run_id is not None and str(run_id).strip():
+        run_dir = run_logs_dir(run_id)
+        if os.path.isdir(run_dir):
+            return _collect_from_directory(run_dir, lines=lines)
+        os.makedirs(run_dir, exist_ok=True)
+        return _collect_from_directory(run_dir, lines=lines)
+
+    latest = latest_run_logs_dir()
+    if latest:
+        return _collect_from_directory(latest, lines=lines)
+
+    return _collect_legacy_root(lines=lines)

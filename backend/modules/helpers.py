@@ -121,9 +121,6 @@ def get_log_path():
         return log_file_path(LEGACY_BOT_LOG)
 
 
-__logs_file_path = get_log_path()
-
-
 def print_lg(
     *msgs: str | dict,
     end: str = "\n",
@@ -145,7 +142,7 @@ def print_lg(
             cloud_logger.info(combined_msg)
 
         # Still keep local file logging for redundancy/dev
-        with open(__logs_file_path, "a+", encoding="utf-8") as file:
+        with open(get_log_path(), "a+", encoding="utf-8") as file:
             file.write(combined_msg + end)
             
     except Exception as e:
