@@ -69,6 +69,19 @@ async def test_resolve_user_id_dev_mode_accepts_claimed(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_resolve_user_id_desktop_local_accepts_claimed(monkeypatch):
+    monkeypatch.delenv("REQUIRE_AUTH", raising=False)
+    monkeypatch.setenv("LINKDAPPLY_LOCAL_DATA", "true")
+
+    async def _session(_request):
+        return None
+
+    monkeypatch.setattr(ur, "_session_email", _session)
+    user = await ur.resolve_user_id(None, "desktop-user@example.com")
+    assert user == "desktop-user@example.com"
+
+
+@pytest.mark.asyncio
 async def test_resolve_user_id_requires_auth_when_no_session_or_claim(monkeypatch):
     monkeypatch.delenv("REQUIRE_AUTH", raising=False)
 

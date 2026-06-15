@@ -30,9 +30,13 @@ fn inject_internal_key_from_desktop_env() {
             println!("cargo:warning=LINKDAPPLY_INTERNAL_KEY in desktop/.env is empty");
             continue;
         }
-        if value == "change-me-to-a-long-random-secret" {
+        const PLACEHOLDER_KEYS: &[&str] = &[
+            "change-me-to-a-long-random-secret",
+            "your-long-random-secret",
+        ];
+        if PLACEHOLDER_KEYS.contains(&value) {
             println!(
-                "cargo:warning=LINKDAPPLY_INTERNAL_KEY is the default placeholder — use a random secret in production when you can"
+                "cargo:warning=LINKDAPPLY_INTERNAL_KEY is a placeholder — set a random secret in desktop/.env (must match Render + Vercel)"
             );
         }
         println!("cargo:rustc-env=LINKDAPPLY_INTERNAL_KEY={value}");

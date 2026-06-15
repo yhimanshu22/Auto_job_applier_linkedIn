@@ -61,6 +61,24 @@ async def _session_email(request: Request) -> str | None:
     return None
 
 
+def _local_desktop_trust_claimed() -> bool:
+  return os.getenv("LINKDAPPLY_LOCAL_DATA", "").strip().lower() in ("1", "true", "yes")
+
+
+async def _claimed_user_id(request: Request, query_user_id: str | None = None) -> str | None:
+    claimed = (query_user_id or "").strip()
+    if not claimed:
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                raw = body.get("user_id")
+                if raw is not None and str(raw).strip():
+                    claimed = str(raw).strip()
+        except Exception:
+            pass
+    return claimed or None
+
+
 async def resolve_user_id(request: Request, claimed_user_id: str | None = None) -> str:
     """Return the user namespace for this request.
 
@@ -89,6 +107,9 @@ async def resolve_user_id(request: Request, claimed_user_id: str | None = None) 
                 detail="user_id does not match authenticated session",
             )
         return session_user
+
+    if claimed and _local_desktop_trust_claimed():
+        return claimed
 
     if _require_auth():
         raise HTTPException(status_code=401, detail="Not authenticated")

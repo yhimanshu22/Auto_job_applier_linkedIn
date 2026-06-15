@@ -19,14 +19,14 @@ from utils.debug_logs import (
     run_has_logs,
     scoped_log_path,
 )
-from utils.user_resolution import resolve_user_id
+from utils.user_resolution import _claimed_user_id, resolve_user_id
 
 router = APIRouter(prefix="/api/bot", tags=["bot"])
 
 
 @router.post("/start")
-async def start_bot(request: Request, payload: dict = None):
-    claimed = payload.get("user_id") if payload else None
+async def start_bot(request: Request, user_id: str | None = None):
+    claimed = await _claimed_user_id(request, user_id)
     user_id = await resolve_user_id(request, claimed)
 
     assert_can_start_bot(user_id)
@@ -79,7 +79,8 @@ async def start_bot(request: Request, payload: dict = None):
 
 @router.post("/stop")
 async def stop_bot(request: Request, user_id: str | None = None):
-    await resolve_user_id(request, user_id)
+    claimed = await _claimed_user_id(request, user_id)
+    await resolve_user_id(request, claimed)
     try:
         was_running = stop_supervisor(reason="dashboard")
         if sv.current_run_id:

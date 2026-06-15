@@ -21,6 +21,18 @@ def test_load_bot_config_includes_chrome_settings(monkeypatch, test_db):
     assert cfg["password"] == "secret123"
 
 
+def test_load_bot_config_includes_personals_defaults(monkeypatch, test_db):
+    uid = "bot-config-user@test.com"
+    monkeypatch.setenv("USER_ID", uid)
+
+    cfg = config_bridge._load_bot_config()
+
+    assert cfg["middle_name"] == ""
+    assert cfg["first_name"] == ""
+    assert cfg["desired_salary"] == 0
+    assert cfg["search_terms"] == []
+
+
 def test_load_bot_config_requires_user_id(monkeypatch):
     monkeypatch.delenv("USER_ID", raising=False)
     with pytest.raises(RuntimeError, match="USER_ID"):

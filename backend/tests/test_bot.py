@@ -28,6 +28,17 @@ def test_bot_stop_when_not_running(client, monkeypatch):
     assert response.status_code == 200
     assert response.json()["status"] == "not_running"
 
+
+def test_bot_stop_accepts_json_body_user_id(client, monkeypatch):
+    import subprocess
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: None)
+
+    response = client.post(
+        "/api/bot/stop",
+        json={"user_id": "test@example.com"},
+    )
+    assert response.status_code == 200
+
 def test_bot_logs_availability(client):
     response = client.get("/api/bot/logs?user_id=test@example.com")
     assert response.status_code == 200
