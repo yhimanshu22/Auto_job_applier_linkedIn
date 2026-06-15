@@ -14,10 +14,14 @@ SENSITIVE_KEYS = [
     "gemini_api_key",
     "grok_api_key",
     "groq_api_key",
-    "password",
-    "username",
-    "linkedin_extra_accounts",  # JSON list of {username, password}
+    "LINKEDIN_PASSWORD",
 ]
+
+
+def _is_sensitive_key(key: str) -> bool:
+    if key in SENSITIVE_KEYS:
+        return True
+    return key.startswith("LINKEDIN_PASSWORD_")
 
 # Legacy namespace used only when upgrading pre-multi-tenant DB schemas.
 _LEGACY_MIGRATION_OWNER = "local-user"
@@ -179,7 +183,7 @@ class DatabaseManager:
         return self.SessionLocal()
 
     def set_config(self, key, value, category, *, user_id: str):
-        is_encrypted = 1 if key in SENSITIVE_KEYS else 0
+        is_encrypted = 1 if _is_sensitive_key(key) else 0
         val_str = json.dumps(value)
         
         if is_encrypted:

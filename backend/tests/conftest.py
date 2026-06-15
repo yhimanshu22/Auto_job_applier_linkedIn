@@ -62,9 +62,11 @@ def setup_test_db():
 
 @pytest.fixture(autouse=True)
 def isolate_env(monkeypatch):
-    """Clear LinkedIn env vars so bot-limit tests stay deterministic."""
+    """Clear LinkedIn env vars so tests use DB-only credential discovery."""
     for key in list(os.environ.keys()):
-        if key.startswith("LINKEDIN_USERNAME_"):
+        if key == "LINKEDIN_USERNAME" or key == "LINKEDIN_PASSWORD":
+            monkeypatch.delenv(key, raising=False)
+        elif key.startswith("LINKEDIN_USERNAME_") or key.startswith("LINKEDIN_PASSWORD_"):
             monkeypatch.delenv(key, raising=False)
 
 

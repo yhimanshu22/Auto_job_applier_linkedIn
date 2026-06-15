@@ -8,7 +8,7 @@ import PersonalsForm from "@/components/PersonalsForm";
 import SearchForm from "@/components/SearchForm";
 import SettingsForm from "@/components/SettingsForm";
 import QuestionsForm from "@/components/QuestionsForm";
-import SecretsForm, { LINKEDIN_SECRET_KEYS, type SecretsFormHandle } from "@/components/SecretsForm";
+import SecretsForm from "@/components/SecretsForm";
 import { apiFetch, encodeUserId } from "@/lib/desktop-api";
 
 const CONFIG_FILES = ["personals.py", "search.py", "settings.py", "questions.py", "secrets.py"];
@@ -94,7 +94,6 @@ export default function Dashboard() {
   const [formData, setFormData] = useState<Record<string, any>>({});
   /** Skip content→form parse when form mode just wrote content (prevents focus loss). */
   const formWroteContentRef = useRef(false);
-  const secretsFormRef = useRef<SecretsFormHandle>(null);
   const [lastApplied, setLastApplied] = useState<ActivitySnapshot | null>(null);
   const [lastFailed, setLastFailed] = useState<ActivitySnapshot | null>(null);
   const [isStarting, setIsStarting] = useState(false);
@@ -121,12 +120,8 @@ export default function Dashboard() {
   const userId = session?.user?.email;
 
   const formEntriesForTab = useCallback(
-    (data: Record<string, any>) =>
-      Object.entries(data).filter(([key]) => {
-        if (activeTab === "secrets.py" && LINKEDIN_SECRET_KEYS.has(key)) return false;
-        return true;
-      }),
-    [activeTab]
+    (data: Record<string, any>) => Object.entries(data),
+    []
   );
 
   useEffect(() => {
@@ -429,14 +424,6 @@ export default function Dashboard() {
   const saveConfig = async () => {
     setIsSaving(true);
     setMessage(null);
-
-    if (activeTab === "secrets.py" && secretsFormRef.current?.hasLinkedInEdits()) {
-      const linkedInOk = await secretsFormRef.current.saveLinkedInAccounts();
-      if (!linkedInOk) {
-        setIsSaving(false);
-        return;
-      }
-    }
 
     let finalContent = content;
 
@@ -1224,7 +1211,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <button onClick={saveConfig} disabled={isSaving || isLoading} className="px-3 py-1 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-widest rounded hover:bg-blue-500 transition-all disabled:opacity-50">
-                  {isSaving ? "Saving..." : activeTab === "secrets.py" ? "Save all" : "Save"}
+                  {isSaving ? "Saving..." : "Save"}
                 </button>
               </div>
 
@@ -1236,16 +1223,7 @@ export default function Dashboard() {
                     {activeTab === "settings.py" && <SettingsForm data={formData} onChange={setFormData} />}
                     {activeTab === "questions.py" && <QuestionsForm data={formData} onChange={setFormData} />}
                     {activeTab === "secrets.py" && (
-                      <SecretsForm
-                        ref={secretsFormRef}
-                        data={formData}
-                        onChange={setFormData}
-                        isActive={activeTab === "secrets.py"}
-                        onNotify={(n) => {
-                          setMessage(n);
-                          setTimeout(() => setMessage(null), 3000);
-                        }}
-                      />
+                      <SecretsForm data={formData} onChange={setFormData} />
                     )}
                   </>
                 ) : (

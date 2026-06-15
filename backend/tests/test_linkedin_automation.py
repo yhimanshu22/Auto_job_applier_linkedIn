@@ -250,13 +250,15 @@ def test_cookie_store_ids_primary():
     assert ids == ["alice@example.com::linkedin::bob@linkedin.com"]
 
 
-def test_build_env_sets_user_id_for_automation_subprocess(monkeypatch):
+def test_build_env_sets_user_id_for_automation_subprocess(test_db, monkeypatch):
     from services import linkedin_automation as la_service
 
-    monkeypatch.setenv("LINKEDIN_USERNAME", "himu09854@gmail.com")
-    monkeypatch.setenv("LINKEDIN_PASSWORD", "pw-primary")
-    monkeypatch.setenv("LINKEDIN_USERNAME_1", "yhimanshu220456@gmail.com")
-    monkeypatch.setenv("LINKEDIN_PASSWORD_1", "pw-secondary")
+    test_db.set_config("LINKEDIN_USERNAME", "himu09854@gmail.com", "secrets", user_id="himu09854@gmail.com")
+    test_db.set_config("LINKEDIN_PASSWORD", "pw-primary", "secrets", user_id="himu09854@gmail.com")
+    test_db.set_config(
+        "LINKEDIN_USERNAME_1", "yhimanshu220456@gmail.com", "secrets", user_id="himu09854@gmail.com"
+    )
+    test_db.set_config("LINKEDIN_PASSWORD_1", "pw-secondary", "secrets", user_id="himu09854@gmail.com")
 
     env = la_service._build_env(
         account="yhimanshu220456@gmail.com", user_id="himu09854@gmail.com"
@@ -933,23 +935,25 @@ def test_dashboard_etag_per_user(client, test_db, clear_automation_tasks, auth_a
 
 @pytest.fixture
 def configured_accounts(test_db):
-    """Plant a primary + 2 extra LinkedIn accounts in the DB secrets category."""
-    test_db.set_config("username", "primary@example.com", category="secrets", user_id=TEST_USER)
-    test_db.set_config("password", "primary-pw", category="secrets", user_id=TEST_USER)
-    test_db.set_config(
-        "linkedin_extra_accounts",
-        [
-            {"username": "alice@example.com", "password": "alice-pw"},
-            {"username": "bob@example.com", "password": "bob-pw"},
-        ],
-        category="secrets",
-        user_id=TEST_USER,
-    )
+    """Plant a primary + 2 extra LinkedIn accounts as LINKEDIN_* DB keys."""
+    test_db.set_config("LINKEDIN_USERNAME", "primary@example.com", category="secrets", user_id=TEST_USER)
+    test_db.set_config("LINKEDIN_PASSWORD", "primary-pw", category="secrets", user_id=TEST_USER)
+    test_db.set_config("LINKEDIN_USERNAME_1", "alice@example.com", category="secrets", user_id=TEST_USER)
+    test_db.set_config("LINKEDIN_PASSWORD_1", "alice-pw", category="secrets", user_id=TEST_USER)
+    test_db.set_config("LINKEDIN_USERNAME_2", "bob@example.com", category="secrets", user_id=TEST_USER)
+    test_db.set_config("LINKEDIN_PASSWORD_2", "bob-pw", category="secrets", user_id=TEST_USER)
     yield
-    # Wipe so other tests stay isolated.
-    test_db.set_config("username", "", category="secrets", user_id=TEST_USER)
-    test_db.set_config("password", "", category="secrets", user_id=TEST_USER)
-    test_db.set_config("linkedin_extra_accounts", [], category="secrets", user_id=TEST_USER)
+    for key in (
+        "LINKEDIN_USERNAME",
+        "LINKEDIN_PASSWORD",
+        "LINKEDIN_USERNAME_1",
+        "LINKEDIN_PASSWORD_1",
+        "LINKEDIN_USERNAME_2",
+        "LINKEDIN_PASSWORD_2",
+        "LINKEDIN_USERNAME_3",
+        "LINKEDIN_PASSWORD_3",
+    ):
+        test_db.delete_config(key, "secrets", user_id=TEST_USER)
 
 
 def test_list_linkedin_accounts_returns_primary_and_extras(
@@ -1072,27 +1076,32 @@ def test_post_endpoint_400_for_unknown_account(
 
 
 # ---------------------------------------------------------------------------
-# Env-only accounts (loaded from .env: LINKEDIN_USERNAME_<n>)
+# Legacy DB keys (LINKEDIN_USERNAME_<n> rows in secrets category)
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
-def env_only_accounts(test_db, monkeypatch):
-    """No DB-side accounts; two env-only accounts loaded as if from .env."""
-    test_db.set_config("username", "", category="secrets", user_id=TEST_USER)
-    test_db.set_config("password", "", category="secrets", user_id=TEST_USER)
-    test_db.set_config("linkedin_extra_accounts", [], category="secrets", user_id=TEST_USER)
-    monkeypatch.setenv("LINKEDIN_USERNAME_1", "envuser1@example.com")
-    monkeypatch.setenv("LINKEDIN_PASSWORD_1", "env-pw-1")
-    monkeypatch.setenv("LINKEDIN_USERNAME_2", "envuser2@example.com")
-    monkeypatch.setenv("LINKEDIN_PASSWORD_2", "env-pw-2")
-    monkeypatch.delenv("LINKEDIN_USERNAME", raising=False)
-    monkeypatch.delenv("LINKEDIN_PASSWORD", raising=False)
+def db_legacy_accounts(test_db):
+    """Accounts stored as LINKEDIN_USERNAME_<n> DB keys (no LINKEDIN_USERNAME primary)."""
+    test_db.set_config(
+        "LINKEDIN_USERNAME_1", "envuser1@example.com", "secrets", user_id=TEST_USER
+    )
+    test_db.set_config("LINKEDIN_PASSWORD_1", "env-pw-1", "secrets", user_id=TEST_USER)
+    test_db.set_config(
+        "LINKEDIN_USERNAME_2", "envuser2@example.com", "secrets", user_id=TEST_USER
+    )
+    test_db.set_config("LINKEDIN_PASSWORD_2", "env-pw-2", "secrets", user_id=TEST_USER)
     yield
-    test_db.set_config("linkedin_extra_accounts", [], category="secrets", user_id=TEST_USER)
+    for key in (
+        "LINKEDIN_USERNAME_1",
+        "LINKEDIN_PASSWORD_1",
+        "LINKEDIN_USERNAME_2",
+        "LINKEDIN_PASSWORD_2",
+    ):
+        test_db.delete_config(key, "secrets", user_id=TEST_USER)
 
 
-def test_list_linkedin_accounts_includes_env_only_accounts(test_db, env_only_accounts):
+def test_list_linkedin_accounts_includes_legacy_db_keys(test_db, db_legacy_accounts):
     from services.linkedin_env import list_linkedin_accounts
 
     rows = list_linkedin_accounts(user_id=TEST_USER)
@@ -1100,15 +1109,11 @@ def test_list_linkedin_accounts_includes_env_only_accounts(test_db, env_only_acc
     assert usernames == ["envuser1@example.com", "envuser2@example.com"]
     for r in rows:
         assert r["has_password"] is True
-        # No DB primary, no LINKEDIN_USERNAME — neither env entry should be
-        # promoted to primary just because it's index 1.
         assert r["primary"] is False
 
 
-def test_accounts_endpoint_surfaces_env_only_accounts(client, test_db, env_only_accounts):
-    """Regression: the billing tile + dashboard selector showed 0 even when
-    the user had two LINKEDIN_USERNAME_<n> entries in their .env file."""
-    res = client.get(f"/api/linkedin-automation/accounts")
+def test_accounts_endpoint_surfaces_legacy_db_accounts(client, test_db, db_legacy_accounts):
+    res = client.get("/api/linkedin-automation/accounts")
     assert res.status_code == 200
     body = res.json()
     assert [a["username"] for a in body["accounts"]] == [
@@ -1117,47 +1122,47 @@ def test_accounts_endpoint_surfaces_env_only_accounts(client, test_db, env_only_
     ]
 
 
-def test_apply_linkedin_account_resolves_env_only_account(test_db, env_only_accounts):
+def test_apply_linkedin_account_resolves_legacy_db_account(test_db, db_legacy_accounts):
     from services.linkedin_env import apply_linkedin_account
 
-    env = {
-        "LINKEDIN_USERNAME_1": "envuser1@example.com",
-        "LINKEDIN_PASSWORD_1": "env-pw-1",
-        "LINKEDIN_USERNAME_2": "envuser2@example.com",
-        "LINKEDIN_PASSWORD_2": "env-pw-2",
-    }
+    env: dict = {}
+    apply_dashboard = __import__(
+        "services.linkedin_env", fromlist=["apply_dashboard_linkedin_credentials"]
+    ).apply_dashboard_linkedin_credentials
+    apply_dashboard(env, user_id=TEST_USER)
     resolved = apply_linkedin_account(env, "envuser2@example.com", user_id=TEST_USER)
     assert resolved == "envuser2@example.com"
     assert env["LINKEDIN_USERNAME"] == "envuser2@example.com"
     assert env["LINKEDIN_PASSWORD"] == "env-pw-2"
 
 
-def test_db_primary_takes_precedence_over_duplicate_env_entry(
-    test_db, monkeypatch
-):
-    """When the same username appears in both DB and env, the merged listing
-    keeps the DB entry (with its primary=True flag) and drops the env dup."""
+def test_list_linkedin_accounts_dedupes_duplicate_emails(test_db):
     from services.linkedin_env import list_linkedin_accounts
 
-    test_db.set_config("username", "alice@example.com", category="secrets", user_id=TEST_USER)
-    test_db.set_config("password", "db-pw", category="secrets", user_id=TEST_USER)
-    test_db.set_config("linkedin_extra_accounts", [], category="secrets", user_id=TEST_USER)
-    monkeypatch.setenv("LINKEDIN_USERNAME_1", "alice@example.com")
-    monkeypatch.setenv("LINKEDIN_PASSWORD_1", "env-pw")
-    monkeypatch.setenv("LINKEDIN_USERNAME_2", "bob@example.com")
-    monkeypatch.setenv("LINKEDIN_PASSWORD_2", "env-pw")
+    test_db.set_config("LINKEDIN_USERNAME", "alice@example.com", "secrets", user_id=TEST_USER)
+    test_db.set_config("LINKEDIN_PASSWORD", "pw-main", "secrets", user_id=TEST_USER)
+    test_db.set_config(
+        "LINKEDIN_USERNAME_1", "alice@example.com", "secrets", user_id=TEST_USER
+    )
+    test_db.set_config("LINKEDIN_PASSWORD_1", "pw-dup", "secrets", user_id=TEST_USER)
+    test_db.set_config(
+        "LINKEDIN_USERNAME_2", "bob@example.com", "secrets", user_id=TEST_USER
+    )
+    test_db.set_config("LINKEDIN_PASSWORD_2", "pw2", "secrets", user_id=TEST_USER)
 
     rows = list_linkedin_accounts(user_id=TEST_USER)
-    assert [r["username"] for r in rows] == [
-        "alice@example.com",
-        "bob@example.com",
-    ]
+    assert [r["username"] for r in rows] == ["alice@example.com", "bob@example.com"]
     assert rows[0]["primary"] is True
-    assert rows[1]["primary"] is False
 
-    # Cleanup
-    test_db.set_config("username", "", category="secrets", user_id=TEST_USER)
-    test_db.set_config("password", "", category="secrets", user_id=TEST_USER)
+    for key in (
+        "LINKEDIN_USERNAME",
+        "LINKEDIN_PASSWORD",
+        "LINKEDIN_USERNAME_1",
+        "LINKEDIN_PASSWORD_1",
+        "LINKEDIN_USERNAME_2",
+        "LINKEDIN_PASSWORD_2",
+    ):
+        test_db.delete_config(key, "secrets", user_id=TEST_USER)
 
 
 # ---------------------------------------------------------------------------
@@ -1565,16 +1570,8 @@ def test_dashboard_etag_changes_when_accounts_change(
     etag_before = first.headers["ETag"]
 
     # Add a new extra account and re-check.
-    test_db.set_config(
-        "linkedin_extra_accounts",
-        [
-            {"username": "alice@example.com", "password": "alice-pw"},
-            {"username": "bob@example.com", "password": "bob-pw"},
-            {"username": "charlie@example.com", "password": "charlie-pw"},
-        ],
-        category="secrets",
-        user_id=TEST_USER,
-    )
+    test_db.set_config("LINKEDIN_USERNAME_3", "charlie@example.com", category="secrets", user_id=TEST_USER)
+    test_db.set_config("LINKEDIN_PASSWORD_3", "charlie-pw", category="secrets", user_id=TEST_USER)
 
     second = client.get(
         f"/api/linkedin-automation/dashboard?user_id={TEST_USER}",

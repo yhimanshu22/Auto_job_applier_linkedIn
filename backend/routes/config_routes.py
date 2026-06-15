@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from db_manager import db
+from services.linkedin_env import migrate_canonical_linkedin_to_legacy
 from utils.user_resolution import resolve_user_id
 
 router = APIRouter(prefix="/api", tags=["config"])
@@ -22,6 +23,8 @@ async def read_config(category: str, request: Request, user_id: str | None = Non
         raise HTTPException(status_code=400, detail="Invalid config category")
 
     uid = await resolve_user_id(request, user_id)
+    if category == "secrets":
+        migrate_canonical_linkedin_to_legacy(user_id=uid)
     config_data = db.get_all_by_category(category, user_id=uid)
 
     content = f"################ {category.upper()} CONFIGURATION ################\n\n"
@@ -78,5 +81,8 @@ async def write_config(
                 db.set_config(key, value, category, user_id=uid)
             except Exception as e:
                 print(f"Error parsing line: {line} - {e}")
+
+    if category == "secrets":
+        migrate_canonical_linkedin_to_legacy(user_id=uid)
 
     return {"status": "success"}

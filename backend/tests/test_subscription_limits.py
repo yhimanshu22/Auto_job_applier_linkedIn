@@ -4,9 +4,9 @@ from datetime import datetime, timedelta
 
 
 def test_free_trial_user_can_start_bot(client, test_db, monkeypatch, auth_as):
-    monkeypatch.setenv("LINKEDIN_USERNAME", "trial@test.com")
-    monkeypatch.setenv("LINKEDIN_PASSWORD", "secret")
     auth_as("trial-user")
+    test_db.set_config("LINKEDIN_USERNAME", "trial@test.com", "secrets", user_id="trial-user")
+    test_db.set_config("LINKEDIN_PASSWORD", "secret", "secrets", user_id="trial-user")
 
     # Mock a trial subscription that expires in 1 hour
     expiry = datetime.utcnow() + timedelta(hours=1)
@@ -52,12 +52,11 @@ def test_expired_trial_cannot_start_bot(client, test_db, auth_as):
     assert "expired" in response.json()["detail"].lower()
 
 def test_plan_limits_enforcement(client, test_db, monkeypatch, auth_as):
-    # Trial allows only 1 LinkedIn account — simulate two (primary + extra) with passwords.
-    monkeypatch.setenv("LINKEDIN_USERNAME", "primary@test.com")
-    monkeypatch.setenv("LINKEDIN_PASSWORD", "secret")
-    monkeypatch.setenv("LINKEDIN_USERNAME_1", "extra@test.com")
-    monkeypatch.setenv("LINKEDIN_PASSWORD_1", "secret")
     auth_as("limit-user")
+    test_db.set_config("LINKEDIN_USERNAME", "primary@test.com", "secrets", user_id="limit-user")
+    test_db.set_config("LINKEDIN_PASSWORD", "secret", "secrets", user_id="limit-user")
+    test_db.set_config("LINKEDIN_USERNAME_1", "extra@test.com", "secrets", user_id="limit-user")
+    test_db.set_config("LINKEDIN_PASSWORD_1", "secret", "secrets", user_id="limit-user")
 
     test_db.upsert_subscription("limit-user", plan="free_trial", status="trialing")
     
@@ -85,9 +84,9 @@ def test_subscription_status_includes_cycle(client, test_db, auth_as):
     assert data["billing_cycle"] == "yearly"
 
 def test_monthly_limit_enforcement(client, test_db, monkeypatch, auth_as):
-    monkeypatch.setenv("LINKEDIN_USERNAME", "starter@test.com")
-    monkeypatch.setenv("LINKEDIN_PASSWORD", "secret")
     auth_as("starter-user")
+    test_db.set_config("LINKEDIN_USERNAME", "starter@test.com", "secrets", user_id="starter-user")
+    test_db.set_config("LINKEDIN_PASSWORD", "secret", "secrets", user_id="starter-user")
 
     # Starter allows 100 applications (based on PLAN_LIMITS)
     test_db.upsert_subscription("starter-user", plan="starter", status="active")

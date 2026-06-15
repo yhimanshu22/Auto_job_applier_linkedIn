@@ -44,68 +44,23 @@ class BotSupervisor:
                 pass
 
     def _get_accounts(self):
-        """Load LinkedIn accounts for this user from local DB, with env fallback."""
+        """Load LinkedIn accounts for this user from local DB only."""
         user_id = (os.getenv("USER_ID") or "").strip()
-        if user_id:
-            try:
-                accounts = list_supervisor_accounts(user_id=user_id)
-                if accounts:
-                    logger.info(
-                        f"Identified {len(accounts)} accounts from local DB for {user_id}: "
-                        f"{[a['id'] for a in accounts]}"
-                    )
-                    return accounts
-                logger.warning(
-                    f"No LinkedIn accounts in local DB for USER_ID={user_id}; "
-                    "falling back to LINKEDIN_* environment variables"
-                )
-            except Exception as exc:
-                logger.warning(
-                    f"Could not load LinkedIn accounts from DB for USER_ID={user_id}: {exc}; "
-                    "falling back to LINKEDIN_* environment variables"
-                )
-
-        accounts = []
-        seen_usernames: set[str] = set()
-
-        def _add(account_id: str, username: str, password: str) -> None:
-            key = username.strip().lower()
-            if not key or key in seen_usernames:
-                return
-            seen_usernames.add(key)
-            accounts.append({
-                "id": account_id,
-                "username": username.strip(),
-                "password": password,
-            })
-
-        default_user = os.getenv("LINKEDIN_USERNAME")
-        default_pass = os.getenv("LINKEDIN_PASSWORD")
-
-        if default_user and default_pass:
-            _add("main", default_user, default_pass)
-
-        indexed: list[tuple[str, str, str]] = []
-        for key, value in os.environ.items():
-            if key.startswith("LINKEDIN_USERNAME_") and key[18:]:
-                suffix = key[18:]
-                password = os.getenv(f"LINKEDIN_PASSWORD_{suffix}")
-                if password and value:
-                    indexed.append((suffix, value, password))
-
-        def _suffix_sort(item: tuple[str, str, str]) -> tuple[int, object]:
-            s = item[0]
-            try:
-                return (0, int(s))
-            except ValueError:
-                return (1, s)
-
-        indexed.sort(key=_suffix_sort)
-        for suffix, username, password in indexed:
-            _add(suffix, username, password)
-
-        logger.info(f"Identified {len(accounts)} accounts: {[a['id'] for a in accounts]}")
-        return accounts
+        if not user_id:
+            logger.warning("USER_ID not set; no LinkedIn accounts to run")
+            return []
+        try:
+            accounts = list_supervisor_accounts(user_id=user_id)
+            logger.info(
+                f"Identified {len(accounts)} accounts from local DB for {user_id}: "
+                f"{[a['id'] for a in accounts]}"
+            )
+            return accounts
+        except Exception as exc:
+            logger.warning(
+                f"Could not load LinkedIn accounts from DB for USER_ID={user_id}: {exc}"
+            )
+            return []
 
     def start_bot(self, account):
         """Starts the runAiBot.py process for a specific account."""

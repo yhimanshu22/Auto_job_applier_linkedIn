@@ -1,19 +1,13 @@
 from services.linkedin_env import list_supervisor_accounts
 
 
-def test_list_supervisor_accounts_from_db(test_db):
+def test_list_supervisor_accounts_from_legacy_keys(test_db):
     uid = "supervisor-user@test.com"
-    test_db.set_config("username", "primary@test.com", "secrets", user_id=uid)
-    test_db.set_config("password", "secret1", "secrets", user_id=uid)
-    test_db.set_config(
-        "linkedin_extra_accounts",
-        [
-            {"username": "extra@test.com", "password": "secret2"},
-            {"username": "no-password@test.com"},
-        ],
-        "secrets",
-        user_id=uid,
-    )
+    test_db.set_config("LINKEDIN_USERNAME", "primary@test.com", "secrets", user_id=uid)
+    test_db.set_config("LINKEDIN_PASSWORD", "secret1", "secrets", user_id=uid)
+    test_db.set_config("LINKEDIN_USERNAME_1", "extra@test.com", "secrets", user_id=uid)
+    test_db.set_config("LINKEDIN_PASSWORD_1", "secret2", "secrets", user_id=uid)
+    test_db.set_config("LINKEDIN_USERNAME_2", "no-password@test.com", "secrets", user_id=uid)
 
     accounts = list_supervisor_accounts(user_id=uid)
     assert len(accounts) == 2
@@ -45,6 +39,29 @@ def test_list_supervisor_accounts_legacy_code_mode_keys(test_db):
 
 def test_list_supervisor_accounts_empty_without_password(test_db):
     uid = "empty-user@test.com"
-    test_db.set_config("username", "only@test.com", "secrets", user_id=uid)
+    test_db.set_config("LINKEDIN_USERNAME", "only@test.com", "secrets", user_id=uid)
 
     assert list_supervisor_accounts(user_id=uid) == []
+
+
+def test_migrate_canonical_to_legacy_on_read(test_db):
+    uid = "migrate-user@test.com"
+    test_db.set_config("username", "old@test.com", "secrets", user_id=uid)
+    test_db.set_config("password", "pw1", "secrets", user_id=uid)
+    test_db.set_config(
+        "linkedin_extra_accounts",
+        [{"username": "extra@test.com", "password": "pw2"}],
+        "secrets",
+        user_id=uid,
+    )
+
+    accounts = list_supervisor_accounts(user_id=uid)
+    assert len(accounts) == 2
+    secrets = test_db.get_all_by_category("secrets", user_id=uid)
+    assert "username" not in secrets
+    assert "password" not in secrets
+    assert "linkedin_extra_accounts" not in secrets
+    assert secrets.get("LINKEDIN_USERNAME") == "old@test.com"
+    assert secrets.get("LINKEDIN_PASSWORD") == "pw1"
+    assert secrets.get("LINKEDIN_USERNAME_1") == "extra@test.com"
+    assert secrets.get("LINKEDIN_PASSWORD_1") == "pw2"

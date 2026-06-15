@@ -48,7 +48,6 @@ from routes.applications import router as applications_router
 from routes.bot import router as bot_router
 from routes.config_routes import router as config_router
 from routes.health import router as health_router
-from routes.linkedin_accounts import router as linkedin_accounts_router
 from routes.linkedin_automation import router as linkedin_automation_router
 from routes.uploads import router as uploads_router
 
@@ -93,7 +92,6 @@ app.include_router(applications_router, prefix="/api/applications")
 app.include_router(bot_router)
 app.include_router(config_router)
 app.include_router(health_router)
-app.include_router(linkedin_accounts_router)
 app.include_router(linkedin_automation_router)
 app.include_router(uploads_router)
 

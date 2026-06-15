@@ -66,9 +66,7 @@ def _health_snapshot(user_id: str) -> dict[str, Any]:
 
     framework_dir = la.get_framework_dir()
     entrypoint = os.path.join(framework_dir, "__main__.py")
-    active = get_active_linkedin_account(
-        preview_env_with_dashboard_credentials(user_id=user_id)
-    )
+    active = get_active_linkedin_account(user_id=user_id)
     has_db_session = bool(
         load_linkedin_cookies(user_id=user_id, linkedin_username=active)
         if active
@@ -90,9 +88,7 @@ def _health_snapshot(user_id: str) -> dict[str, Any]:
 def _accounts_snapshot(user_id: str) -> dict[str, Any]:
     """Available LinkedIn accounts and which one is currently the default."""
     accounts = list_linkedin_accounts(user_id=user_id)
-    active = get_active_linkedin_account(
-        preview_env_with_dashboard_credentials(user_id=user_id)
-    )
+    active = get_active_linkedin_account(user_id=user_id)
     return {
         "accounts": accounts,
         "active": active,

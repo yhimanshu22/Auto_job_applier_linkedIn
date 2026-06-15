@@ -11,7 +11,6 @@ from services.cloud_billing import get_subscription_for_gating, uses_cloud_subsc
 from services.linkedin_env import (
     count_linkedin_accounts,
     list_supervisor_accounts,
-    preview_env_with_dashboard_credentials,
 )
 
 PLAN_LIMITS = {
@@ -90,8 +89,7 @@ def assert_can_start_bot(user_id: str) -> None:
     plan = subscription.get("plan", "free_trial")
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free_trial"])
 
-    probe_env = preview_env_with_dashboard_credentials(user_id=user_id)
-    account_total = count_linkedin_accounts(probe_env, user_id=user_id)
+    account_total = count_linkedin_accounts(user_id=user_id)
     runnable_total = len(list_supervisor_accounts(user_id=user_id))
 
     if account_total > limits["max_accounts"]:

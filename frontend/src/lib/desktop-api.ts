@@ -8,7 +8,6 @@ const LOCAL_API_PREFIXES = [
   "/api/bot",
   "/api/config",
   "/api/linkedin-automation",
-  "/api/linkedin-accounts",
   "/api/applications",
   "/api/upload",
   "/api/health",

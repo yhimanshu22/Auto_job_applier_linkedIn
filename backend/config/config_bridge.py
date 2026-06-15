@@ -9,6 +9,11 @@ load_dotenv()
 # Ensure we can import db_manager from parent dir if needed
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db_manager import db
+from services.linkedin_env import (
+    _iter_linkedin_key_accounts,
+    _legacy_linkedin_keys_from_secrets,
+    migrate_canonical_linkedin_to_legacy,
+)
 
 
 def _apply_config_normalizations(config_dict: dict) -> dict:
@@ -87,22 +92,45 @@ def _apply_env_secret_fallbacks(config_dict: dict) -> None:
                 config_dict[config_key] = env_val
 
 
+def _apply_linkedin_db_to_bot_credentials(config_dict: dict) -> None:
+    """Map LINKEDIN_USERNAME* DB keys to username/password for validate_secrets."""
+    if config_dict.get("username") and config_dict.get("password"):
+        return
+    legacy = _legacy_linkedin_keys_from_secrets(config_dict)
+    accounts = _iter_linkedin_key_accounts(legacy)
+    if not accounts:
+        return
+    username, password, _ = accounts[0]
+    if not config_dict.get("username"):
+        config_dict["username"] = username
+    if not config_dict.get("password") and password:
+        config_dict["password"] = password
+
+
 def _load_bot_config() -> dict:
     user_id = _bot_user_id()
+    migrate_canonical_linkedin_to_legacy(user_id=user_id)
     config_dict = _base_config_defaults()
 
     for cat in ["personals", "search", "settings", "questions", "secrets"]:
         config_dict.update(db.get_all_by_category(cat, user_id=user_id))
 
     _apply_env_secret_fallbacks(config_dict)
-
-    if os.getenv("LINKEDIN_USERNAME"):
-        config_dict["username"] = os.getenv("LINKEDIN_USERNAME")
-    if os.getenv("LINKEDIN_PASSWORD"):
-        config_dict["password"] = os.getenv("LINKEDIN_PASSWORD")
+    _apply_linkedin_db_to_bot_credentials(config_dict)
 
     _apply_config_normalizations(config_dict)
     _apply_headless_server_defaults(config_dict)
+
+    # Supervisor-spawned workers inject per-account LINKEDIN_* into this process env.
+    # Do not read credentials from backend/.env — only from that injection.
+    if os.getenv("BOT_ID"):
+        injected_user = os.getenv("LINKEDIN_USERNAME")
+        injected_pass = os.getenv("LINKEDIN_PASSWORD")
+        if injected_user and str(injected_user).strip():
+            config_dict["username"] = str(injected_user).strip()
+        if injected_pass is not None and str(injected_pass).strip() != "":
+            config_dict["password"] = str(injected_pass)
+
     return config_dict
 
 
