@@ -11,6 +11,30 @@ import os
 from db_manager import db
 
 
+def _legacy_linkedin_keys_from_secrets(secrets_cfg: dict) -> dict[str, str]:
+    """``LINKEDIN_USERNAME*`` / ``LINKEDIN_PASSWORD*`` rows saved via secrets.py code mode."""
+    out: dict[str, str] = {}
+    for key, value in secrets_cfg.items():
+        if not isinstance(key, str) or value is None:
+            continue
+        if key == "LINKEDIN_USERNAME" or key.startswith("LINKEDIN_USERNAME_"):
+            s = str(value).strip()
+            if s:
+                out[key] = s
+        elif key == "LINKEDIN_PASSWORD" or key.startswith("LINKEDIN_PASSWORD_"):
+            s = str(value).strip()
+            if s:
+                out[key] = s
+    return out
+
+
+def _merge_env_keys(env: dict, extra: dict[str, str]) -> None:
+    """Set env keys from ``extra`` when missing or empty in ``env``."""
+    for key, value in extra.items():
+        if value and not str(env.get(key, "")).strip():
+            env[key] = value
+
+
 def apply_dashboard_linkedin_credentials(env: dict, *, user_id: str) -> None:
     """
     Inject LinkedIn credentials from DB (dashboard) into env for the supervisor / bot:
@@ -40,6 +64,8 @@ def apply_dashboard_linkedin_credentials(env: dict, *, user_id: str) -> None:
                 continue
             env[f"LINKEDIN_USERNAME_{i}"] = u
             env[f"LINKEDIN_PASSWORD_{i}"] = str(p)
+
+    _merge_env_keys(env, _legacy_linkedin_keys_from_secrets(secrets_cfg))
 
 
 def preview_env_with_dashboard_credentials(*, user_id: str) -> dict:
@@ -224,8 +250,9 @@ def get_linkedin_password_for_email(user_id: str, linkedin_email: str) -> str:
 def list_supervisor_accounts(*, user_id: str) -> list[dict]:
     """LinkedIn accounts with passwords for the local job-applier supervisor.
 
-    Loaded from the per-user secrets row in the desktop SQLite DB (same store as
-    Dashboard → secrets → Save LinkedIn accounts). Passwords never leave this process.
+    Loaded from the per-user secrets row in the desktop SQLite DB (dashboard form,
+    ``username`` / ``linkedin_extra_accounts``, or legacy ``LINKEDIN_USERNAME_*`` keys
+    saved via secrets.py code mode).
     """
     secrets_cfg = _load_secrets(user_id=user_id)
     accounts: list[dict] = []
@@ -256,6 +283,22 @@ def list_supervisor_accounts(*, user_id: str) -> list[dict]:
             p = row.get("password")
             if u and p is not None:
                 _add(str(i), u, str(p))
+
+    legacy_env = _legacy_linkedin_keys_from_secrets(secrets_cfg)
+    for username, password, is_primary in _iter_env_accounts(legacy_env):
+        if not password or not str(password).strip():
+            continue
+        account_id = "main"
+        if not is_primary:
+            account_id = "1"
+            for env_key, env_val in legacy_env.items():
+                if (
+                    env_key.startswith("LINKEDIN_USERNAME_")
+                    and str(env_val).strip().lower() == username.lower()
+                ):
+                    account_id = env_key[len("LINKEDIN_USERNAME_") :]
+                    break
+        _add(account_id, username, str(password))
 
     return accounts
 

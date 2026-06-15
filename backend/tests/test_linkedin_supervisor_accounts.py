@@ -26,6 +26,23 @@ def test_list_supervisor_accounts_from_db(test_db):
     assert accounts[1]["password"] == "secret2"
 
 
+def test_list_supervisor_accounts_legacy_code_mode_keys(test_db):
+    """secrets.py code mode stores LINKEDIN_USERNAME_1 / LINKEDIN_PASSWORD_1 in DB."""
+    uid = "legacy-user@test.com"
+    test_db.set_config(
+        "LINKEDIN_USERNAME_1", "yhimanshu220456@gmail.com", "secrets", user_id=uid
+    )
+    test_db.set_config("LINKEDIN_PASSWORD_1", "secret1", "secrets", user_id=uid)
+    test_db.set_config("LINKEDIN_USERNAME_2", "himu09854@gmail.com", "secrets", user_id=uid)
+    test_db.set_config("LINKEDIN_PASSWORD_2", "secret2", "secrets", user_id=uid)
+
+    accounts = list_supervisor_accounts(user_id=uid)
+    assert len(accounts) == 2
+    emails = {a["username"] for a in accounts}
+    assert "yhimanshu220456@gmail.com" in emails
+    assert "himu09854@gmail.com" in emails
+
+
 def test_list_supervisor_accounts_empty_without_password(test_db):
     uid = "empty-user@test.com"
     test_db.set_config("username", "only@test.com", "secrets", user_id=uid)
