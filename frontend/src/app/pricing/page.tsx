@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 
 import PricingCard from '@/components/PricingCard';
+import { parseApiJson } from '@/lib/api-json';
 
 type PlanType = "free_trial" | "starter" | "pro" | "agency";
 type BillingCycle = "monthly" | "yearly";
@@ -143,7 +144,7 @@ function PricingPageContent() {
         body: JSON.stringify({ user_id: email }),
       });
 
-      const data = await res.json();
+      const data = await parseApiJson<{ detail?: string; status?: string }>(res);
       if (res.status === 401 || res.status === 403) {
         redirectToLogin();
         return;
@@ -220,12 +221,13 @@ function PricingPageContent() {
         }),
       });
 
-      const data = await res.json();
+      const data = await parseApiJson<{ detail?: string; url?: string }>(res);
       if (res.status === 401 || res.status === 403) {
         redirectToLogin(PRICING_LOGIN_URL);
         return;
       }
       if (!res.ok) throw new Error(data.detail || "Failed to start checkout");
+      if (!data.url) throw new Error("Checkout URL missing from server.");
       window.location.href = data.url;
     } catch (error: unknown) {
       console.error(error);
