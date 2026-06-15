@@ -1,9 +1,19 @@
+import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
+
+import { resolveAuthSecret } from "@/lib/auth-secret";
 
 const BACKEND_URL = (process.env.BACKEND_URL || "http://127.0.0.1:8000").replace(
   /\/$/,
   ""
 );
+
+/** Stripe/PayU server callbacks — no browser session; must not require NextAuth. */
+const PUBLIC_BILLING_PATHS = new Set([
+  "webhook",
+  "payu/callback/success",
+  "payu/callback/failure",
+]);
 
 const FORWARD_HEADERS = [
   "cookie",
@@ -11,7 +21,23 @@ const FORWARD_HEADERS = [
   "authorization",
   "accept",
   "accept-language",
+  "stripe-signature",
 ];
+
+async function sessionEmail(req: NextRequest): Promise<string | null> {
+  const secret = resolveAuthSecret();
+  if (!secret) return null;
+  const token = await getToken({ req, secret });
+  const email = typeof token?.email === "string" ? token.email.trim() : "";
+  return email || null;
+}
+
+function attachTrustedIdentity(headers: Headers, email: string): void {
+  const internalKey = process.env.LINKDAPPLY_INTERNAL_KEY?.trim();
+  if (!internalKey) return;
+  headers.set("X-LinkdApply-Key", internalKey);
+  headers.set("X-LinkdApply-User", email);
+}
 
 async function proxyBilling(
   req: NextRequest,
@@ -28,6 +54,10 @@ async function proxyBilling(
   }
 
   const subpath = pathSegments.join("/");
+  const isPublic = PUBLIC_BILLING_PATHS.has(subpath);
+  const isMutation =
+    req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS";
+
   const target = `${BACKEND_URL}/api/billing/${subpath}${req.nextUrl.search}`;
 
   const headers = new Headers();
@@ -36,8 +66,15 @@ async function proxyBilling(
     if (value) headers.set(name, value);
   }
 
+  const email = await sessionEmail(req);
+  if (email) {
+    attachTrustedIdentity(headers, email);
+  } else if (isMutation && !isPublic) {
+    return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
+  }
+
   let body: string | undefined;
-  if (req.method !== "GET" && req.method !== "HEAD") {
+  if (isMutation) {
     body = await req.text();
   }
 

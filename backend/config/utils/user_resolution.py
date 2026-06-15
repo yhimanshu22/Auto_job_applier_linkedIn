@@ -28,6 +28,18 @@ def _session_url() -> str:
     )
 
 
+def _trusted_proxy_email(request: Request) -> str | None:
+    """Identity attested by the Vercel billing proxy (split frontend/backend)."""
+    expected = os.getenv("LINKDAPPLY_INTERNAL_KEY", "").strip()
+    if not expected:
+        return None
+    key = (request.headers.get("x-linkdapply-key") or "").strip()
+    if key != expected:
+        return None
+    email = (request.headers.get("x-linkdapply-user") or "").strip()
+    return email or None
+
+
 async def _session_email(request: Request) -> str | None:
     """Return the verified session email, or None when unauthenticated."""
     cookie = request.headers.get("cookie")
@@ -57,8 +69,18 @@ async def resolve_user_id(request: Request, claimed_user_id: str | None = None) 
     Raises 403 when the client supplies a user_id that does not match the
     authenticated session.
     """
-    session_user = await _session_email(request)
     claimed = (claimed_user_id or "").strip()
+
+    proxy_user = _trusted_proxy_email(request)
+    if proxy_user:
+        if claimed and claimed != proxy_user:
+            raise HTTPException(
+                status_code=403,
+                detail="user_id does not match authenticated session",
+            )
+        return proxy_user
+
+    session_user = await _session_email(request)
 
     if session_user:
         if claimed and claimed != session_user:

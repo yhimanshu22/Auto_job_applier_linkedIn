@@ -5,6 +5,37 @@ from utils import user_resolution as ur
 
 
 @pytest.mark.asyncio
+async def test_resolve_user_id_accepts_trusted_proxy(monkeypatch):
+    monkeypatch.setenv("LINKDAPPLY_INTERNAL_KEY", "test-internal-key")
+    monkeypatch.setenv("REQUIRE_AUTH", "true")
+
+    class _Req:
+        headers = {
+            "x-linkdapply-key": "test-internal-key",
+            "x-linkdapply-user": "alice@example.com",
+        }
+
+    user = await ur.resolve_user_id(_Req(), "alice@example.com")
+    assert user == "alice@example.com"
+
+
+@pytest.mark.asyncio
+async def test_resolve_user_id_rejects_spoofed_trusted_proxy(monkeypatch):
+    monkeypatch.setenv("LINKDAPPLY_INTERNAL_KEY", "test-internal-key")
+    monkeypatch.setenv("REQUIRE_AUTH", "true")
+
+    class _Req:
+        headers = {
+            "x-linkdapply-key": "test-internal-key",
+            "x-linkdapply-user": "alice@example.com",
+        }
+
+    with pytest.raises(HTTPException) as exc:
+        await ur.resolve_user_id(_Req(), "victim@example.com")
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_resolve_user_id_uses_session_email(monkeypatch):
     async def _session(_request):
         return "alice@example.com"
