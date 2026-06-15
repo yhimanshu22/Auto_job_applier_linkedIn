@@ -21,6 +21,7 @@ import subprocess
 import importlib.metadata
 import hashlib
 import os
+import sys
 
 
 def is_chrome_running():
@@ -56,13 +57,22 @@ def log_versions():
 
 
 try:
+    _resume_dir = default_resume_path
+except NameError:
+    _resume_dir = "all resumes/default_resume.pdf"
+try:
+    _generated_resume_dir = generated_resume_path
+except NameError:
+    _generated_resume_dir = "all resumes/generated"
+
+try:
     make_directories(
         [
             file_name,
             failed_file_name,
             os.path.join(get_logs_dir(), "screenshots"),
-            default_resume_path,
-            generated_resume_path + "/temp",
+            _resume_dir,
+            _generated_resume_dir + "/temp",
         ]
     )
 
@@ -164,4 +174,4 @@ except Exception as e:
     try:
         driver.quit()
     except NameError:
-        exit()
+        sys.exit(1)

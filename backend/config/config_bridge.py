@@ -42,6 +42,8 @@ def _base_config_defaults() -> dict:
         "file_name": "all excels/all_applied_applications_history.csv",
         "failed_file_name": "all excels/all_failed_applications_history.csv",
         "logs_folder_path": "logs/",
+        "generated_resume_path": "all resumes/generated",
+        "default_resume_path": "all resumes/default_resume.pdf",
         "daily_apply_limit": 50,
         "run_in_background": False,
         "use_AI": True,
@@ -52,6 +54,20 @@ def _base_config_defaults() -> dict:
         "llm_model": "llama-3.3-70b-versatile",
         "llm_spec": "openai",
         "llm_api_key": "",
+        # settings.py — required by open_chrome / validator when DB rows are missing
+        "close_tabs": True,
+        "follow_companies": False,
+        "run_non_stop": False,
+        "alternate_sortby": False,
+        "cycle_date_posted": False,
+        "stop_date_cycle_at_24hr": False,
+        "click_gap": 0,
+        "bot_speed": 5,
+        "disable_extensions": False,
+        "safe_mode": False,
+        "smooth_scroll": True,
+        "keep_screen_awake": False,
+        "stealth_mode": False,
     }
 
 
@@ -98,8 +114,18 @@ def load_config_to_module(module_name):
         setattr(current_module, k, v)
     return config_dict
 
+def _ensure_module_exports() -> dict:
+    """Populate module-level config for ``from config.config_bridge import *``."""
+    if os.getenv("USER_ID", "").strip():
+        try:
+            return _load_bot_config()
+        except Exception:
+            pass
+    return _base_config_defaults()
+
+
 # Initial load into this module so it can be imported with *
-config_data = _load_bot_config()
+config_data = _ensure_module_exports()
 
 # Export all keys to this module
 for k, v in config_data.items():
