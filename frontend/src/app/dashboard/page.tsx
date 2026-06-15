@@ -121,7 +121,9 @@ export default function Dashboard() {
     setLogsLoading(true);
     setLogsPayload(null);
     try {
-      const res = await apiFetch("/api/bot/logs?lines=200");
+      const res = await apiFetch(
+        `/api/bot/logs?lines=200&user_id=${encodeUserId(userId)}`
+      );
       if (res.ok) {
         setLogsPayload(await res.json());
       } else {
@@ -132,7 +134,7 @@ export default function Dashboard() {
     } finally {
       setLogsLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -478,7 +480,11 @@ export default function Dashboard() {
     setConnectionError(null);
     setMessage(null);
     try {
-      const res = await apiFetch(`/api/bot/stop`, { method: "POST" });
+      const res = await apiFetch(`/api/bot/stop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId }),
+      });
       if (!res.ok) {
         setConnectionError(await parseApiError(res));
         return;

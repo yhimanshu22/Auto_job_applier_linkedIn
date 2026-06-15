@@ -6,11 +6,14 @@ import { useSession } from "next-auth/react";
 
 import { apiFetch, isDesktopApp } from "@/lib/desktop-api";
 
-/** Ask the backend to stop the job bot (tab close, navigate away, or layout unmount). */
-function requestStopJobBot() {
+/** Ask the backend to stop the job bot when leaving the dashboard. */
+function requestStopJobBot(userId: string | null | undefined) {
+  if (!userId) return;
   try {
     apiFetch("/api/bot/stop", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId }),
       credentials: "include",
       keepalive: true,
     }).catch(() => {});
@@ -24,8 +27,9 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
+  const userId = session?.user?.email;
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -38,14 +42,13 @@ export default function DashboardLayout({
     }
   }, [status, router]);
 
+  // Stop the bot only when navigating away from the dashboard (not on tab hide /
+  // alt-tab — pagehide was stopping a running bot in the desktop app).
   useEffect(() => {
-    const onPageHide = () => requestStopJobBot();
-    window.addEventListener("pagehide", onPageHide);
     return () => {
-      window.removeEventListener("pagehide", onPageHide);
-      requestStopJobBot();
+      requestStopJobBot(userId);
     };
-  }, []);
+  }, [userId]);
 
   if (status !== "authenticated") {
     return (
