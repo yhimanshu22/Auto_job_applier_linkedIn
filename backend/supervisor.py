@@ -5,6 +5,7 @@ import os
 import signal
 
 from app_paths import get_runtime_writable_root, load_env_files, subprocess_env
+from services.linkedin_env import list_supervisor_accounts
 from utils.debug_logs import (
     SUPERVISOR_LOG,
     append_session_marker,
@@ -43,7 +44,27 @@ class BotSupervisor:
                 pass
 
     def _get_accounts(self):
-        """Identifies all LinkedIn accounts from environment variables."""
+        """Load LinkedIn accounts for this user from local DB, with env fallback."""
+        user_id = (os.getenv("USER_ID") or "").strip()
+        if user_id:
+            try:
+                accounts = list_supervisor_accounts(user_id=user_id)
+                if accounts:
+                    logger.info(
+                        f"Identified {len(accounts)} accounts from local DB for {user_id}: "
+                        f"{[a['id'] for a in accounts]}"
+                    )
+                    return accounts
+                logger.warning(
+                    f"No LinkedIn accounts in local DB for USER_ID={user_id}; "
+                    "falling back to LINKEDIN_* environment variables"
+                )
+            except Exception as exc:
+                logger.warning(
+                    f"Could not load LinkedIn accounts from DB for USER_ID={user_id}: {exc}; "
+                    "falling back to LINKEDIN_* environment variables"
+                )
+
         accounts = []
         seen_usernames: set[str] = set()
 

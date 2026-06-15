@@ -10,6 +10,7 @@ from services.admin import is_admin
 from services.cloud_billing import get_subscription_for_gating, uses_cloud_subscription
 from services.linkedin_env import (
     count_linkedin_accounts,
+    list_supervisor_accounts,
     preview_env_with_dashboard_credentials,
 )
 
@@ -52,6 +53,12 @@ PLAN_LIMITS = {
 
 def assert_can_start_bot(user_id: str) -> None:
     if is_admin(user_id):
+        runnable = len(list_supervisor_accounts(user_id=user_id))
+        if runnable == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="No LinkedIn accounts saved. Open Dashboard → secrets, enter email and password, then click Save LinkedIn accounts.",
+            )
         return
 
     subscription = get_subscription_for_gating(user_id)
@@ -85,6 +92,7 @@ def assert_can_start_bot(user_id: str) -> None:
 
     probe_env = preview_env_with_dashboard_credentials(user_id=user_id)
     account_total = count_linkedin_accounts(probe_env, user_id=user_id)
+    runnable_total = len(list_supervisor_accounts(user_id=user_id))
 
     if account_total > limits["max_accounts"]:
         raise HTTPException(
@@ -92,10 +100,10 @@ def assert_can_start_bot(user_id: str) -> None:
             detail=f"Your '{plan}' plan allows only {limits['max_accounts']} LinkedIn account(s). You have {account_total} configured.",
         )
 
-    if account_total == 0:
+    if runnable_total == 0:
         raise HTTPException(
             status_code=400,
-            detail="No LinkedIn accounts configured. Save credentials under Dashboard → secrets (LinkedIn) or set LINKEDIN_* in your environment.",
+            detail="No LinkedIn accounts saved with a password. Open Dashboard → secrets, enter email and password, then click Save LinkedIn accounts.",
         )
 
     applied_this_month = db.get_monthly_application_count(user_id)

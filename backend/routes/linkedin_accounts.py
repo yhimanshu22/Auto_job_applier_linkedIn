@@ -95,10 +95,21 @@ async def save_linkedin_accounts(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    db.set_config("username", body.primary_username.strip(), "secrets", user_id=uid)
+    primary_user = body.primary_username.strip()
+    if not primary_user:
+        raise HTTPException(status_code=400, detail="LinkedIn email is required.")
+
+    db.set_config("username", primary_user, "secrets", user_id=uid)
 
     if body.primary_password.strip():
         db.set_config("password", body.primary_password, "secrets", user_id=uid)
+    else:
+        existing_pw = existing.get("password")
+        if not existing_pw or not str(existing_pw).strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Password required for a new LinkedIn account.",
+            )
 
     old_extras = existing.get("linkedin_extra_accounts")
     if not isinstance(old_extras, list):

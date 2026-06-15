@@ -94,3 +94,24 @@ def test_account_count_matches_deduplicated_accounts(client, test_db, auth_as, m
         "extra@test.com",
         "primary@test.com",
     ]
+
+
+def test_save_linkedin_requires_primary_email(client, test_db, auth_as):
+    auth_as("save-user@test.com")
+    res = client.post(
+        "/api/linkedin-accounts",
+        json={"primary_username": "", "primary_password": "secret", "extras": []},
+    )
+    assert res.status_code == 400
+    assert "email" in res.json()["detail"].lower()
+
+
+def test_save_linkedin_requires_password_for_new_account(client, test_db, auth_as):
+    auth_as("new-user@test.com")
+    res = client.post(
+        "/api/linkedin-accounts",
+        json={"primary_username": "new@test.com", "primary_password": "", "extras": []},
+    )
+    assert res.status_code == 400
+    assert "password" in res.json()["detail"].lower()
+

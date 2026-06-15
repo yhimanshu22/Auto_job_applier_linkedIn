@@ -8,7 +8,7 @@ import PersonalsForm from "@/components/PersonalsForm";
 import SearchForm from "@/components/SearchForm";
 import SettingsForm from "@/components/SettingsForm";
 import QuestionsForm from "@/components/QuestionsForm";
-import SecretsForm from "@/components/SecretsForm";
+import SecretsForm, { LINKEDIN_SECRET_KEYS, type SecretsFormHandle } from "@/components/SecretsForm";
 import { apiFetch, encodeUserId } from "@/lib/desktop-api";
 
 const CONFIG_FILES = ["personals.py", "search.py", "settings.py", "questions.py", "secrets.py"];
@@ -94,6 +94,7 @@ export default function Dashboard() {
   const [formData, setFormData] = useState<Record<string, any>>({});
   /** Skip content→form parse when form mode just wrote content (prevents focus loss). */
   const formWroteContentRef = useRef(false);
+  const secretsFormRef = useRef<SecretsFormHandle>(null);
   const [lastApplied, setLastApplied] = useState<ActivitySnapshot | null>(null);
   const [lastFailed, setLastFailed] = useState<ActivitySnapshot | null>(null);
   const [isStarting, setIsStarting] = useState(false);
@@ -114,9 +115,19 @@ export default function Dashboard() {
 
   const userId = session?.user?.email;
 
+  const formEntriesForTab = useCallback(
+    (data: Record<string, any>) =>
+      Object.entries(data).filter(([key]) => {
+        if (activeTab === "secrets.py" && LINKEDIN_SECRET_KEYS.has(key)) return false;
+        return true;
+      }),
+    [activeTab]
+  );
+
   useEffect(() => {
+    if (!userId) return;
     fetchConfig(activeTab);
-  }, [activeTab]);
+  }, [activeTab, userId]);
 
   const openLogsModal = useCallback(async () => {
     setShowLogsModal(true);
@@ -323,7 +334,7 @@ export default function Dashboard() {
     
     const category = activeTab.split('.')[0].toUpperCase();
     let newContent = `################ ${category} CONFIGURATION ################\n\n`;
-    Object.entries(formData).forEach(([key, value]) => {
+    formEntriesForTab(formData).forEach(([key, value]) => {
       if (typeof value === "string") {
         const escaped = value.replace(/\n/g, "\\n").replace(/"/g, '\\"');
         newContent += `${key} = "${escaped}"\n`;
@@ -385,13 +396,22 @@ export default function Dashboard() {
   const saveConfig = async () => {
     setIsSaving(true);
     setMessage(null);
+
+    if (activeTab === "secrets.py" && secretsFormRef.current?.hasLinkedInEdits()) {
+      const linkedInOk = await secretsFormRef.current.saveLinkedInAccounts();
+      if (!linkedInOk) {
+        setIsSaving(false);
+        return;
+      }
+    }
+
     let finalContent = content;
 
     // If we are in form mode, we need to regenerate the content string
     if (isFormMode) {
       const category = activeTab.split('.')[0].toUpperCase();
       finalContent = `################ ${category} CONFIGURATION ################\n\n`;
-      Object.entries(formData).forEach(([key, value]) => {
+      formEntriesForTab(formData).forEach(([key, value]) => {
         if (typeof value === "string") {
           const escaped = value.replace(/\n/g, "\\n").replace(/"/g, '\\"');
           finalContent += `${key} = "${escaped}"\n`;
@@ -1132,7 +1152,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <button onClick={saveConfig} disabled={isSaving || isLoading} className="px-3 py-1 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-widest rounded hover:bg-blue-500 transition-all disabled:opacity-50">
-                  {isSaving ? "Saving..." : "Save"}
+                  {isSaving ? "Saving..." : activeTab === "secrets.py" ? "Save all" : "Save"}
                 </button>
               </div>
 
@@ -1145,10 +1165,10 @@ export default function Dashboard() {
                     {activeTab === "questions.py" && <QuestionsForm data={formData} onChange={setFormData} />}
                     {activeTab === "secrets.py" && (
                       <SecretsForm
+                        ref={secretsFormRef}
                         data={formData}
                         onChange={setFormData}
                         isActive={activeTab === "secrets.py"}
-                        onAccountsSaved={() => fetchConfig("secrets.py")}
                         onNotify={(n) => {
                           setMessage(n);
                           setTimeout(() => setMessage(null), 3000);

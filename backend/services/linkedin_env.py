@@ -221,6 +221,45 @@ def get_linkedin_password_for_email(user_id: str, linkedin_email: str) -> str:
     return ""
 
 
+def list_supervisor_accounts(*, user_id: str) -> list[dict]:
+    """LinkedIn accounts with passwords for the local job-applier supervisor.
+
+    Loaded from the per-user secrets row in the desktop SQLite DB (same store as
+    Dashboard → secrets → Save LinkedIn accounts). Passwords never leave this process.
+    """
+    secrets_cfg = _load_secrets(user_id=user_id)
+    accounts: list[dict] = []
+    seen: set[str] = set()
+
+    def _add(account_id: str, username: str, password: str) -> None:
+        u = username.strip()
+        p = str(password or "").strip()
+        if not u or not p:
+            return
+        key = u.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        accounts.append({"id": account_id, "username": u, "password": p})
+
+    primary = (secrets_cfg.get("username") or "").strip()
+    primary_pw = secrets_cfg.get("password")
+    if primary and primary_pw is not None:
+        _add("main", primary, str(primary_pw))
+
+    extras = secrets_cfg.get("linkedin_extra_accounts")
+    if isinstance(extras, list):
+        for i, row in enumerate(extras, start=1):
+            if not isinstance(row, dict):
+                continue
+            u = (row.get("username") or "").strip()
+            p = row.get("password")
+            if u and p is not None:
+                _add(str(i), u, str(p))
+
+    return accounts
+
+
 def list_linkedin_accounts(env: dict | None = None, *, user_id: str) -> list[dict]:
     """Return all configured LinkedIn accounts from BOTH the DB ``secrets``
     category and the process environment (``LINKEDIN_USERNAME`` /
