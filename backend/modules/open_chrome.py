@@ -1,3 +1,5 @@
+import time
+
 from app_paths import get_logs_dir, get_runtime_writable_root
 from modules.helpers import make_directories
 from config.config_bridge import *
@@ -141,14 +143,30 @@ try:
         # except (FileNotFoundError, PermissionError) as e:
         #     print_lg("(Undetected Mode) Got '{}' when using pre-installed ChromeDriver.".format(type(e).__name__))
 
-        if chrome_ver:
-            print_lg(f"Initializing UC with version_main={chrome_ver}...")
-            driver = uc.Chrome(options=options, version_main=chrome_ver)
-        else:
+        def _launch_uc():
+            if chrome_ver:
+                print_lg(f"Initializing UC with version_main={chrome_ver}...")
+                return uc.Chrome(options=options, version_main=chrome_ver)
             print_lg(
                 "Downloading Chrome Driver... This may take some time. Undetected mode requires download every run!"
             )
-            driver = uc.Chrome(options=options)
+            return uc.Chrome(options=options)
+
+        driver = None
+        last_err = None
+        for attempt in range(4):
+            try:
+                driver = _launch_uc()
+                break
+            except OSError as e:
+                last_err = e
+                # Parallel bot workers can race patching the shared UC driver binary.
+                if getattr(e, "winerror", None) == 183 or "already exists" in str(e).lower():
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+                raise
+        if driver is None and last_err is not None:
+            raise last_err
     else:
         driver = webdriver.Chrome(
             options=options

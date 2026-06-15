@@ -20,7 +20,36 @@ def _apply_config_normalizations(config_dict: dict) -> dict:
     """Migrate legacy settings (e.g. removed providers) before export to the bot."""
     if config_dict.get("ai_provider") == "openclaw":
         config_dict["ai_provider"] = "openai"
+    _coerce_config_types(config_dict)
     return config_dict
+
+
+_INT_CONFIG_KEYS = (
+    "desired_salary",
+    "notice_period",
+    "current_ctc",
+    "switch_number",
+    "current_experience",
+    "click_gap",
+    "bot_speed",
+    "daily_apply_limit",
+)
+
+
+def _coerce_config_types(config_dict: dict) -> None:
+    """SQLite/JSON often yields floats (e.g. -1.0); validator expects strict ints."""
+    for key in _INT_CONFIG_KEYS:
+        if key not in config_dict:
+            continue
+        val = config_dict[key]
+        if isinstance(val, bool):
+            continue
+        if isinstance(val, int):
+            continue
+        if isinstance(val, float) and val == int(val):
+            config_dict[key] = int(val)
+        elif isinstance(val, str) and val.strip().lstrip("-").isdigit():
+            config_dict[key] = int(val.strip())
 
 
 def _apply_headless_server_defaults(config_dict: dict) -> dict:

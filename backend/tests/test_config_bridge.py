@@ -33,6 +33,20 @@ def test_load_bot_config_includes_personals_defaults(monkeypatch, test_db):
     assert cfg["search_terms"] == []
 
 
+def test_load_bot_config_coerces_float_integers(monkeypatch, test_db):
+    uid = "bot-config-user@test.com"
+    monkeypatch.setenv("USER_ID", uid)
+    test_db.set_config("current_experience", -1.0, "search", user_id=uid)
+    test_db.set_config("bot_speed", 5.0, "settings", user_id=uid)
+
+    cfg = config_bridge._load_bot_config()
+
+    assert cfg["current_experience"] == -1
+    assert isinstance(cfg["current_experience"], int)
+    assert cfg["bot_speed"] == 5
+    assert isinstance(cfg["bot_speed"], int)
+
+
 def test_load_bot_config_requires_user_id(monkeypatch):
     monkeypatch.delenv("USER_ID", raising=False)
     with pytest.raises(RuntimeError, match="USER_ID"):
