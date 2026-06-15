@@ -8,6 +8,22 @@ use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 
+mod production;
+mod runtime_config;
+
+use runtime_config::RuntimeConfig;
+
+/// Set once at startup; used for dashboard URL, auth callbacks, and sidecar env.
+static RUNTIME_CONFIG: Mutex<Option<RuntimeConfig>> = Mutex::new(None);
+
+fn runtime_config() -> RuntimeConfig {
+    RUNTIME_CONFIG
+        .lock()
+        .ok()
+        .and_then(|g| g.clone())
+        .expect("runtime config not initialized")
+}
+
 struct BackendProcess(Mutex<Option<CommandChild>>);
 
 fn user_data_dir() -> PathBuf {
@@ -40,15 +56,12 @@ fn local_api_url(port: u16) -> String {
 }
 
 fn dashboard_url() -> String {
-    let mut url = std::env::var("LINKDAPPLY_FRONTEND_URL").unwrap_or_else(|_| {
-        "https://frontend-pink-phi-37.vercel.app/login?desktop=1&callbackUrl=%2Fdashboard%3Fdesktop%3D1"
-            .to_string()
-    });
+    let mut url = runtime_config().dashboard_login_url;
 
     // Legacy installs that still point at /dashboard get sent to login first.
     if url.contains("/dashboard") && !url.contains("/login") {
         let origin = frontend_origin_from_dashboard_url(&url)
-            .unwrap_or_else(|| "https://frontend-pink-phi-37.vercel.app".to_string());
+            .unwrap_or_else(|| production::FRONTEND_URL.to_string());
         url = format!(
             "{origin}/login?desktop=1&callbackUrl=%2Fdashboard%3Fdesktop%3D1"
         );
@@ -120,7 +133,7 @@ fn complete_auth_url(origin: &str, token: &str) -> String {
 
 fn navigate_main_to_auth_complete(window: &WebviewWindow, token: &str) {
     let origin = frontend_origin_from_dashboard_url(&dashboard_url())
-        .unwrap_or_else(|| "https://frontend-pink-phi-37.vercel.app".to_string());
+        .unwrap_or_else(|| production::FRONTEND_URL.to_string());
     let target = complete_auth_url(&origin, token);
     if let Ok(parsed) = target.parse() {
         let _ = window.navigate(parsed);
@@ -162,6 +175,7 @@ fn sidecar_env(
     user_data: &PathBuf,
     host: &str,
     port_str: &str,
+    config: &RuntimeConfig,
 ) -> tauri_plugin_shell::process::Command {
     // Drop inherited VIRTUAL_ENV (wrong project venv breaks `uv run`).
     let envs: Vec<(String, String)> = std::env::vars()
@@ -174,34 +188,14 @@ fn sidecar_env(
         .env("LINKDAPPLY_USER_DATA", user_data.as_os_str())
         .env("LINKDAPPLY_LOCAL_DATA", "true")
         .env("LINKDAPPLY_API_HOST", host)
-        .env("LINKDAPPLY_API_PORT", port_str);
+        .env("LINKDAPPLY_API_PORT", port_str)
+        .env("FRONTEND_URL", config.frontend_url.as_str())
+        .env("EXTRA_CORS_ORIGINS", config.extra_cors_origins.as_str())
+        .env("NEXTAUTH_SESSION_URL", config.session_url.as_str())
+        .env("CLOUD_API_URL", config.cloud_api_url.as_str());
 
-    if let Ok(cloud) = std::env::var("CLOUD_API_URL") {
-        if !cloud.trim().is_empty() {
-            cmd = cmd.env("CLOUD_API_URL", cloud.trim());
-        }
-    }
-    if let Ok(key) = std::env::var("LINKDAPPLY_INTERNAL_KEY") {
-        if !key.trim().is_empty() {
-            cmd = cmd.env("LINKDAPPLY_INTERNAL_KEY", key.trim());
-        }
-    }
-
-    // When the webview loads a hosted dashboard, the sidecar must verify sessions
-    // and allow CORS against that origin (unless already set in desktop/.env).
-    if std::env::var("FRONTEND_URL").is_err() {
-        if let Ok(dashboard) = std::env::var("LINKDAPPLY_FRONTEND_URL") {
-            if let Some(origin) = frontend_origin_from_dashboard_url(&dashboard) {
-                cmd = cmd.env("FRONTEND_URL", origin.trim());
-                if std::env::var("EXTRA_CORS_ORIGINS").is_err() {
-                    cmd = cmd.env("EXTRA_CORS_ORIGINS", origin.trim());
-                }
-                if std::env::var("NEXTAUTH_SESSION_URL").is_err() {
-                    let session = format!("{}/api/auth/session", origin.trim().trim_end_matches('/'));
-                    cmd = cmd.env("NEXTAUTH_SESSION_URL", session);
-                }
-            }
-        }
+    if let Some(key) = config.internal_key.as_deref() {
+        cmd = cmd.env("LINKDAPPLY_INTERNAL_KEY", key);
     }
 
     cmd
@@ -213,7 +207,12 @@ fn spawn_child(cmd: tauri_plugin_shell::process::Command) -> Result<CommandChild
         .map_err(|e| e.to_string())
 }
 
-fn spawn_backend(app: &tauri::AppHandle, user_data: &PathBuf, port: u16) -> Result<CommandChild, String> {
+fn spawn_backend(
+    app: &tauri::AppHandle,
+    user_data: &PathBuf,
+    port: u16,
+    config: &RuntimeConfig,
+) -> Result<CommandChild, String> {
     let shell = app.shell();
     let host = "127.0.0.1";
     let port_str = port.to_string();
@@ -240,6 +239,7 @@ fn spawn_backend(app: &tauri::AppHandle, user_data: &PathBuf, port: u16) -> Resu
                 user_data,
                 host,
                 &port_str,
+                config,
             );
 
             if let Ok(child) = spawn_child(uv) {
@@ -262,6 +262,7 @@ fn spawn_backend(app: &tauri::AppHandle, user_data: &PathBuf, port: u16) -> Resu
                 user_data,
                 host,
                 &port_str,
+                config,
             ));
         }
     }
@@ -271,6 +272,7 @@ fn spawn_backend(app: &tauri::AppHandle, user_data: &PathBuf, port: u16) -> Resu
         user_data,
         host,
         &port_str,
+        config,
     ))
 }
 
@@ -284,11 +286,13 @@ fn stop_backend(state: &State<'_, BackendProcess>) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let _ = dotenvy::from_path(manifest.join("../.env"));
-
     let port = api_port();
     let user_data = user_data_dir();
+    runtime_config::write_env_template_if_missing(&user_data);
+    let config = runtime_config::load(&user_data);
+    if let Ok(mut guard) = RUNTIME_CONFIG.lock() {
+        *guard = Some(config.clone());
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -297,7 +301,7 @@ pub fn run() {
         .manage(BackendProcess(Mutex::new(None)))
         .setup(move |app| {
             let handle = app.handle().clone();
-            let child = spawn_backend(&handle, &user_data, port).map_err(|e| {
+            let child = spawn_backend(&handle, &user_data, port, &config).map_err(|e| {
                 std::io::Error::new(
                     std::io::ErrorKind::Other,
                     format!("Failed to start local backend: {e}"),
