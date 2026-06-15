@@ -26,11 +26,14 @@ fn inject_internal_key_from_desktop_env() {
             .trim()
             .trim_matches('"')
             .trim_matches('\'');
-        if value.is_empty() || value == "change-me-to-a-long-random-secret" {
-            println!(
-                "cargo:warning=LINKDAPPLY_INTERNAL_KEY in desktop/.env is unset or still the placeholder"
-            );
+        if value.is_empty() {
+            println!("cargo:warning=LINKDAPPLY_INTERNAL_KEY in desktop/.env is empty");
             continue;
+        }
+        if value == "change-me-to-a-long-random-secret" {
+            println!(
+                "cargo:warning=LINKDAPPLY_INTERNAL_KEY is the default placeholder — use a random secret in production when you can"
+            );
         }
         println!("cargo:rustc-env=LINKDAPPLY_INTERNAL_KEY={value}");
         found = true;
