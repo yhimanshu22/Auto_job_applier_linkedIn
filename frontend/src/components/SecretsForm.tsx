@@ -13,11 +13,18 @@ interface ApiLinkedInAccount {
 }
 
 interface AccountRow {
+  id: string;
   username: string;
   password: string;
   passwordSet: boolean;
   saved: boolean;
   deletable: boolean;
+}
+
+function newRowId(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `row-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 interface SecretsFormProps {
@@ -38,6 +45,7 @@ function apiAccountsToRows(accounts: ApiLinkedInAccount[]): AccountRow[] {
     : accounts;
 
   return ordered.map((a) => ({
+    id: a.username ? `saved-${a.username}` : newRowId(),
     username: a.username || "",
     password: "",
     passwordSet: a.has_password,
@@ -48,6 +56,7 @@ function apiAccountsToRows(accounts: ApiLinkedInAccount[]): AccountRow[] {
 
 function emptyPrimaryRow(): AccountRow {
   return {
+    id: newRowId(),
     username: "",
     password: "",
     passwordSet: false,
@@ -98,6 +107,7 @@ export default function SecretsForm({
       if (rows.length === 0 && d.primary_username) {
         rows = [
           {
+            id: `saved-${String(d.primary_username)}`,
             username: String(d.primary_username),
             password: "",
             passwordSet: !!d.primary_password_set,
@@ -118,6 +128,7 @@ export default function SecretsForm({
         data.username
           ? [
               {
+                id: newRowId(),
                 username: String(data.username),
                 password: "",
                 passwordSet: false,
@@ -149,7 +160,14 @@ export default function SecretsForm({
   const addAccount = () => {
     setAccountRows((rows) => [
       ...rows,
-      { username: "", password: "", passwordSet: false, saved: false, deletable: true },
+      {
+        id: newRowId(),
+        username: "",
+        password: "",
+        passwordSet: false,
+        saved: false,
+        deletable: true,
+      },
     ]);
   };
 
@@ -280,7 +298,7 @@ export default function SecretsForm({
             <div className="space-y-3 mb-4">
               {accountRows.map((row, i) => (
                 <div
-                  key={`${row.username}-${i}`}
+                  key={row.id}
                   className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end p-3 rounded-lg border border-zinc-900 bg-zinc-950/50"
                 >
                   <div className="space-y-1">

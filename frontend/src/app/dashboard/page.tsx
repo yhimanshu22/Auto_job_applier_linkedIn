@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -92,6 +92,8 @@ export default function Dashboard() {
   const [history, setHistory] = useState<any[]>([]);
   const [isFormMode, setIsFormMode] = useState(true);
   const [formData, setFormData] = useState<Record<string, any>>({});
+  /** Skip content→form parse when form mode just wrote content (prevents focus loss). */
+  const formWroteContentRef = useRef(false);
   const [lastApplied, setLastApplied] = useState<ActivitySnapshot | null>(null);
   const [lastFailed, setLastFailed] = useState<ActivitySnapshot | null>(null);
   const [isStarting, setIsStarting] = useState(false);
@@ -240,6 +242,10 @@ export default function Dashboard() {
   // Live sync: Parse code content into formData whenever content changes
   useEffect(() => {
     if (!content) return;
+    if (formWroteContentRef.current) {
+      formWroteContentRef.current = false;
+      return;
+    }
     
     const parsed: Record<string, any> = {};
     
@@ -331,6 +337,7 @@ export default function Dashboard() {
     });
     
     if (newContent !== content) {
+      formWroteContentRef.current = true;
       setContent(newContent);
     }
   }, [formData, isFormMode, activeTab]);
