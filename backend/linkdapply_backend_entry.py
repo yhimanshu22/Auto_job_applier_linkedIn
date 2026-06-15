@@ -23,7 +23,24 @@ import uvicorn  # noqa: E402
 
 from server import app  # noqa: E402
 
-if __name__ == "__main__":
+
+def main() -> None:
+    """CLI modes for the packaged sidecar (API server, supervisor, bot worker)."""
+    if "--bot" in sys.argv:
+        from runAiBot import main as bot_main
+
+        bot_main()
+        return
+    if "--supervisor" in sys.argv:
+        from supervisor import main as supervisor_main
+
+        supervisor_main()
+        return
+
     host = os.getenv("LINKDAPPLY_API_HOST", "127.0.0.1")
     port = int(os.getenv("LINKDAPPLY_API_PORT", "8000"))
     uvicorn.run(app, host=host, port=port, log_level="info")
+
+
+if __name__ == "__main__":
+    main()
