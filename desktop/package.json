@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "node scripts/ensure-dev-sidecar.js && tauri dev",
-    "build": "tauri build",
+    "build": "node scripts/build-backend.js && tauri build",
     "build:backend": "node scripts/build-backend.js",
     "icon": "node scripts/make-icon.js && tauri icon assets/source-icon.png"
   },

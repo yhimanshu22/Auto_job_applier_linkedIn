@@ -87,6 +87,7 @@ export default function Dashboard() {
   const [isBackendHealthy, setIsBackendHealthy] = useState(true);
   const [showConfirm, setShowConfirm] = useState(false);
   const [subscription, setSubscription] = useState<any>(null);
+  const [subscriptionKnown, setSubscriptionKnown] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [isFormMode, setIsFormMode] = useState(true);
@@ -164,6 +165,7 @@ export default function Dashboard() {
     };
 
     const fetchSubscription = async () => {
+      const inactive = { plan: "free", status: "inactive", limit: 0 };
       try {
         const res = await fetch(
           `/api/billing/subscription?user_id=${encodeUserId(userId)}`,
@@ -172,9 +174,15 @@ export default function Dashboard() {
         if (res.ok) {
           const data = await res.json();
           setSubscription(data);
+        } else {
+          // Still show upgrade/trial UI when billing API errors (desktop, 401, etc.)
+          setSubscription(inactive);
         }
       } catch {
         console.error("Failed to fetch subscription");
+        setSubscription(inactive);
+      } finally {
+        setSubscriptionKnown(true);
       }
     };
 
@@ -669,8 +677,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Upgrade banner — only when no active trial or paid plan */}
-      {subscription && subAccess.needsUpgrade && (
+      {/* Upgrade banner — when no active trial or paid plan */}
+      {subscriptionKnown && !subAccess.canApply && !subAccess.isTrial && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
           <div className="bg-indigo-600/20 border border-indigo-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -683,24 +691,30 @@ export default function Dashboard() {
                 <h4 className="text-white font-bold">
                   {subAccess.isExpiredTrial
                     ? "Trial Expired"
-                    : subscription.plan === "free"
+                    : subscription?.plan === "free" || !subscription?.plan
                       ? "Start Your Free Trial"
                       : "Reactivate Your Plan"}
                 </h4>
                 <p className="text-sm text-indigo-200/80">
                   {subAccess.isExpiredTrial
                     ? "Your 24-hour free trial has ended. Upgrade to keep applying automatically."
-                    : subscription.plan === "free"
+                    : subscription?.plan === "free" || !subscription?.plan
                       ? "Try LinkdApply free for 24 hours — 10 applications, no credit card required."
                       : "You need an active subscription to launch the bot and automate your applications."}
                 </p>
               </div>
             </div>
             <Link
-              href={subscription.plan === "free" || subAccess.isExpiredTrial ? "/pricing?trial=1" : "/pricing"}
+              href={
+                subscription?.plan === "free" || subAccess.isExpiredTrial || !subscription?.plan
+                  ? "/pricing?trial=1"
+                  : "/pricing"
+              }
               className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shrink-0"
             >
-              {subscription.plan === "free" || subAccess.isExpiredTrial ? "Start Free Trial" : "View Plans"}
+              {subscription?.plan === "free" || subAccess.isExpiredTrial || !subscription?.plan
+                ? "Start Free Trial"
+                : "View Plans"}
             </Link>
           </div>
         </div>
@@ -828,7 +842,7 @@ export default function Dashboard() {
                     }
                     setShowConfirm(true);
                   }}
-                  disabled={startDisabled}
+                  disabled={startDisabled && subActive}
                   title={
                     !isBackendHealthy
                       ? "Backend offline"
@@ -838,8 +852,10 @@ export default function Dashboard() {
                           : "Start a free trial or subscribe to apply"
                         : undefined
                   }
-                  className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-                    subActive ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"
+                  className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
+                    startDisabled ? "opacity-40 cursor-not-allowed" : ""
+                  } ${
+                    subActive ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
                   }`}
                 >
                   Start

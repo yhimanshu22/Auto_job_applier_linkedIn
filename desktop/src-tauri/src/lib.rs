@@ -366,5 +366,32 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running LinkdApply desktop");
+        .unwrap_or_else(|e| {
+            #[cfg(windows)]
+            show_startup_error(&e.to_string());
+            #[cfg(not(windows))]
+            eprintln!("LinkdApply failed to start: {e}");
+            std::process::exit(1);
+        });
+}
+
+#[cfg(windows)]
+fn show_startup_error(message: &str) {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    fn wide(s: &str) -> Vec<u16> {
+        OsStr::new(s).encode_wide().chain(Some(0)).collect()
+    }
+
+    let text = format!("LinkdApply could not start:\n\n{message}");
+    unsafe {
+        windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW(
+            std::ptr::null_mut(),
+            wide(&text).as_ptr(),
+            wide("LinkdApply").as_ptr(),
+            windows_sys::Win32::UI::WindowsAndMessaging::MB_ICONERROR
+                | windows_sys::Win32::UI::WindowsAndMessaging::MB_OK,
+        );
+    }
 }
