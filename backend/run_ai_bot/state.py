@@ -11,10 +11,6 @@ user_id = (os.getenv("USER_ID") or "").strip()
 if not user_id:
     raise RuntimeError("USER_ID environment variable is required")
 
-_ln_user = os.getenv("LINKEDIN_USERNAME", "").strip()
-linkedin_cookie_store_id = (
-    f"{user_id}::linkedin::{_ln_user.lower()}" if _ln_user else user_id
-)
 is_admin_user = is_admin(user_id) or is_admin(os.getenv("USER_EMAIL"))
 
 if run_in_background == True:

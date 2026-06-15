@@ -6,6 +6,7 @@ import signal
 
 from app_paths import get_runtime_writable_root, load_env_files, subprocess_env
 from services.linkedin_env import list_supervisor_accounts
+from services.smart_rate_limit import load_rate_settings_from_db, supervisor_stagger_sleep
 from utils.debug_logs import (
     SUPERVISOR_LOG,
     append_session_marker,
@@ -34,6 +35,10 @@ class BotSupervisor:
         self._bot_log_handles = {}  # Keep stdout log files open while children run
         self.accounts = self._get_accounts()
         self.is_running = True
+        uid = (os.getenv("USER_ID") or "").strip()
+        self.rate_settings = (
+            load_rate_settings_from_db(user_id=uid) if uid else None
+        )
 
     def _close_bot_stdio(self, bot_id):
         h = self._bot_log_handles.pop(bot_id, None)
@@ -73,6 +78,7 @@ class BotSupervisor:
             env["LINKEDIN_USERNAME"] = account["username"]
             env["LINKEDIN_PASSWORD"] = account["password"]
             env["BOT_ID"] = bot_id
+            env["CHROME_DEBUG_PORT"] = str(account["account_port"])
             if os.getenv("USER_ID"):
                 env["USER_ID"] = os.getenv("USER_ID")
             if os.getenv("BOT_RUN_ID"):
@@ -105,7 +111,7 @@ class BotSupervisor:
                 stderr=subprocess.STDOUT,
                 creationflags=_nt_background_creationflags(),
             )
-            logger.info(f"Bot {bot_id} started (PID: {self.bot_processes[bot_id].pid})")
+            logger.info(f"Bot {bot_id} started (PID: {self.bot_processes[bot_id].pid}, debug port: {account['account_port']})")
         except Exception as e:
             logger.error(f"Failed to start Bot {bot_id}: {e}")
 
@@ -149,8 +155,17 @@ class BotSupervisor:
                     
                     # Stagger startup to avoid Chrome initialization conflicts
                     if len(self.accounts) > 1:
-                        logger.info("Waiting 15 seconds before checking next account for staggered startup...")
-                        time.sleep(15)
+                        if self.rate_settings:
+                            delay = supervisor_stagger_sleep(self.rate_settings)
+                            logger.info(
+                                f"Smart stagger: waiting {delay:.1f}s before next account..."
+                            )
+                            time.sleep(delay)
+                        else:
+                            logger.info(
+                                "Waiting 15 seconds before checking next account for staggered startup..."
+                            )
+                            time.sleep(15)
 
             if not self.accounts:
                 logger.info("All bot workers have exited. Supervisor stopping.")

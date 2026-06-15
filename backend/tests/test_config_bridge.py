@@ -53,6 +53,27 @@ def test_load_bot_config_requires_user_id(monkeypatch):
         config_bridge._load_bot_config()
 
 
+def test_load_bot_config_resolves_uploaded_resume_path(monkeypatch, test_db):
+    uid = "bot-config-user@test.com"
+    monkeypatch.setenv("USER_ID", uid)
+    resume_path = os.path.join(
+        os.getcwd(), "all resumes", uid, "Himanshu_Yadav_Resume.pdf"
+    )
+    os.makedirs(os.path.dirname(resume_path), exist_ok=True)
+    with open(resume_path, "wb") as fh:
+        fh.write(b"%PDF-1.4 test")
+    test_db.upsert_resume_metadata(
+        uid, "Himanshu_Yadav_Resume.pdf", resume_path, is_default=True
+    )
+    test_db.set_config(
+        "default_resume_path", "Himanshu_Yadav_Resume.pdf", "questions", user_id=uid
+    )
+
+    cfg = config_bridge._load_bot_config()
+
+    assert cfg["default_resume_path"] == resume_path
+
+
 def test_bot_worker_uses_injected_linkedin_env(monkeypatch, test_db):
     uid = "bot-config-user@test.com"
     monkeypatch.setenv("USER_ID", uid)

@@ -85,8 +85,9 @@ def _build_env(account: str | None = None, *, user_id: str) -> dict[str, str]:
     username/password are used for this run. When ``account`` is ``None`` or
     empty, the primary account stays in place.
 
-    LinkedIn cookies are loaded/saved via SQLite ``user_sessions`` (see
-    ``services.linkedin_session``), keyed by ``USER_ID`` + ``LINKEDIN_USERNAME``.
+    LinkedIn cookies for the automation framework are loaded/saved via SQLite
+    ``user_sessions`` (see ``services.linkedin_session``). The job-applier bot
+    uses per-account Chrome profiles instead.
     """
     env = os.environ.copy()
     env["USER_ID"] = user_id

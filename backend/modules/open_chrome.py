@@ -21,9 +21,10 @@ from modules.helpers import (
 )
 import subprocess
 import importlib.metadata
-import hashlib
 import os
 import sys
+
+from services.chrome_ports import resolve_chrome_debug_port
 
 
 def is_chrome_running():
@@ -116,26 +117,29 @@ try:
 
     if safe_mode:
         print_lg(
-            "SAFE MODE: Will login with a guest profile, browsing history will not be saved in the browser!"
+            "SAFE MODE: ephemeral Chrome session (no profile persistence between runs)"
         )
+        _port = resolve_chrome_debug_port()
+        options.add_argument(f"--remote-debugging-port={_port}")
+        print_lg(f"Chrome remote-debugging-port (account_port): {_port}")
     else:
-        # User requested to remove persistent chrome_profile and use pickle for sessions instead
-        # UC/Selenium will use a default temporary profile if no user-data-dir is provided
-        print_lg("Using default/temporary browser profile (session persistence via cookies/pickle)")
+        print_lg(
+            "Using persistent Chrome profile per account (cookies, local storage, session)"
+        )
 
-    # One Chrome user-data-dir per supervisor bot so parallel runs do not share disk locks / state.
-    _bot_tag = os.getenv("BOT_ID") or os.getenv("LINKEDIN_USERNAME", "default") or "default"
-    _safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in str(_bot_tag))[:120]
-    profile_dir = os.path.normpath(
-        os.path.join(get_runtime_writable_root(), "chrome_profiles", _safe)
-    )
-    os.makedirs(profile_dir, exist_ok=True)
-    _clear_chrome_profile_locks(profile_dir)
-    options.add_argument(f"--user-data-dir={profile_dir}")
-    _port = 9222 + (int(hashlib.md5(_safe.encode("utf-8")).hexdigest(), 16) % 800)
-    options.add_argument(f"--remote-debugging-port={_port}")
-    print_lg(f"Chrome profile dir (BOT_ID/account): {profile_dir}")
-    print_lg(f"Chrome remote-debugging-port: {_port}")
+        # One Chrome user-data-dir per supervisor bot so parallel runs do not share disk locks / state.
+        _bot_tag = os.getenv("BOT_ID") or os.getenv("LINKEDIN_USERNAME", "default") or "default"
+        _safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in str(_bot_tag))[:120]
+        profile_dir = os.path.normpath(
+            os.path.join(get_runtime_writable_root(), "chrome_profiles", _safe)
+        )
+        os.makedirs(profile_dir, exist_ok=True)
+        _clear_chrome_profile_locks(profile_dir)
+        options.add_argument(f"--user-data-dir={profile_dir}")
+        _port = resolve_chrome_debug_port()
+        options.add_argument(f"--remote-debugging-port={_port}")
+        print_lg(f"Chrome profile dir (BOT_ID/account): {profile_dir}")
+        print_lg(f"Chrome remote-debugging-port (account_port): {_port}")
 
     if stealth_mode:
         # try:

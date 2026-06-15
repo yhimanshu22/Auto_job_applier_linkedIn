@@ -1,7 +1,7 @@
-"""Shared LinkedIn session cookies in SQLite (``user_sessions`` table).
+"""LinkedIn session cookies in SQLite (``user_sessions`` table).
 
-Both the job-applier bot and the LinkedIn automation framework read/write
-cookies here so a login from either feature is reused by the other.
+Used by the LinkedIn automation framework (calendar / outreach UI). The job-applier
+bot persists login in per-account Chrome profiles instead (``--user-data-dir``).
 """
 
 from __future__ import annotations

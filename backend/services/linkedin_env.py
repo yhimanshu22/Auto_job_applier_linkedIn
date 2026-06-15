@@ -13,6 +13,7 @@ import logging
 import os
 
 from db_manager import db
+from services.chrome_ports import account_port_for_slot
 
 CANONICAL_LINKEDIN_KEYS = ("username", "password", "linkedin_extra_accounts")
 
@@ -326,6 +327,9 @@ def list_supervisor_accounts(*, user_id: str) -> list[dict]:
                     account_id = env_key[len("LINKEDIN_USERNAME_") :]
                     break
         _add(account_id, username, str(password))
+
+    for slot, account in enumerate(accounts, start=1):
+        account["account_port"] = account_port_for_slot(slot)
 
     return accounts
 

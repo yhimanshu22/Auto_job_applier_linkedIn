@@ -176,8 +176,42 @@ def submitted_jobs(
         )
 
 
+def is_easy_apply_modal_open() -> bool:
+    try:
+        for selector in (
+            "[data-test-modal-id='easy-apply-modal']",
+            ".jobs-easy-apply-modal",
+        ):
+            for modal in driver.find_elements(By.CSS_SELECTOR, selector):
+                if modal.is_displayed():
+                    return True
+    except Exception:
+        pass
+    return False
+
+
 # Function to discard the job application
 def discard_job() -> None:
-    actions.send_keys(Keys.ESCAPE).perform()
-    wait_span_click(driver, "Discard", 2)
+    try:
+        actions.send_keys(Keys.ESCAPE).perform()
+        buffer(0.5)
+    except Exception:
+        pass
+    for label in ("Discard", "Discard application", "Dismiss"):
+        try:
+            if wait_span_click(driver, label, 1):
+                return
+        except Exception:
+            pass
+    try:
+        from modules.clickers_and_finders import robust_click
+
+        if robust_click(driver, ["Discard", "Dismiss", "Close"], 1):
+            return
+    except Exception:
+        pass
+    try:
+        actions.send_keys(Keys.ESCAPE).perform()
+    except Exception:
+        pass
 

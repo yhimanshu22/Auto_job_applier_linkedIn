@@ -34,9 +34,8 @@ def external_apply(
         
         if not limit_reached_msg:
             print_lg("Job is not an Easy Apply job. Skipping as per easy_apply_only=True.")
-            
-        if pagination_element != None:
-            return True, application_link, tabs_count
+
+        return True, application_link, tabs_count
     try:
         apply_btn = wait.until(
             EC.element_to_be_clickable(

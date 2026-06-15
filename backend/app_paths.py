@@ -45,6 +45,35 @@ def get_config_path(filename: str) -> str:
     return os.path.join(get_base_path(), "config", filename)
 
 
+# Secrets the packaged desktop app must share with supervisor/bot subprocesses.
+_RUNTIME_SECRET_KEYS = (
+    "ENCRYPTION_KEY",
+    "LLM_API_KEY",
+    "LLM_API_URL",
+    "LLM_MODEL",
+    "LLM_SPEC",
+    "AI_PROVIDER",
+    "USE_AI",
+)
+
+
+def _parse_env_file(path: str) -> dict[str, str]:
+    """Read KEY=value lines from a dotenv file (no interpolation)."""
+    out: dict[str, str] = {}
+    if not os.path.isfile(path):
+        return out
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, _, value = stripped.partition("=")
+            key = key.strip()
+            if key:
+                out[key] = value.strip().strip("'\"")
+    return out
+
+
 def load_env_files() -> None:
     """Load backend/.env then optional ``LINKDAPPLY_USER_DATA/.env`` override."""
     from dotenv import load_dotenv
@@ -54,6 +83,48 @@ def load_env_files() -> None:
     user_data = os.getenv("LINKDAPPLY_USER_DATA", "").strip()
     if user_data:
         load_dotenv(os.path.join(user_data, ".env"), override=True)
+
+
+def persist_runtime_secrets_to_user_env() -> bool:
+    """
+    Copy critical secrets from the current process env into ``LINKDAPPLY_USER_DATA/.env``.
+
+    Packaged installs run the API and bot from ``%APPDATA%\\LinkdApply`` but only load
+    secrets from that folder's ``.env``. Dev machines often keep keys in ``backend/.env``
+    instead — this bridges them so bot workers can decrypt DB secrets and call the LLM.
+    """
+    user_data = os.getenv("LINKDAPPLY_USER_DATA", "").strip()
+    if not user_data:
+        return False
+
+    env_path = os.path.join(user_data, ".env")
+    on_disk = _parse_env_file(env_path)
+    additions: list[str] = []
+    for key in _RUNTIME_SECRET_KEYS:
+        value = os.getenv(key, "").strip()
+        if not value:
+            continue
+        if on_disk.get(key) == value:
+            continue
+        if on_disk.get(key):
+            continue
+        additions.append(f"{key}={value}")
+
+    if not additions:
+        return False
+
+    os.makedirs(user_data, exist_ok=True)
+    header = (
+        "# Auto-synced from backend/.env — required for bot workers in the packaged app.\n"
+        if not os.path.isfile(env_path)
+        else ""
+    )
+    with open(env_path, "a", encoding="utf-8") as fh:
+        if header:
+            fh.write(header)
+        fh.write("\n".join(additions))
+        fh.write("\n")
+    return True
 
 
 def subprocess_env(base: dict | None = None) -> dict[str, str]:

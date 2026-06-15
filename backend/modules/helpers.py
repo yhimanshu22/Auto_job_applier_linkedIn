@@ -230,7 +230,7 @@ def manual_login_retry(is_logged_in: callable, limit: int = 2) -> None:
     if not HAS_DISPLAY:
         print_lg(
             "Headless server cannot complete interactive login. "
-            "Save LinkedIn session cookies or verify credentials."
+            "Log in once via the desktop app (Chrome profile) or verify credentials."
         )
         return
 

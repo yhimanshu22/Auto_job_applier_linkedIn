@@ -23,7 +23,7 @@ async def upload_resume(
 
         db.upsert_resume_metadata(uid, file.filename, storage_path, is_default=True)
 
-        db.set_config("default_resume_path", file.filename, "questions", user_id=uid)
+        db.set_config("default_resume_path", storage_path, "questions", user_id=uid)
 
         return {"status": "success", "filename": file.filename, "storage_path": storage_path}
     except Exception as e:

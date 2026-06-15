@@ -1,10 +1,10 @@
 import sys
 import os
 
-from dotenv import load_dotenv
+from app_paths import get_runtime_writable_root, load_env_files
 
 # Bot subprocesses and early imports need env-backed secrets before DB is read.
-load_dotenv()
+load_env_files()
 
 # Ensure we can import db_manager from parent dir if needed
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,6 +33,10 @@ _INT_CONFIG_KEYS = (
     "click_gap",
     "bot_speed",
     "daily_apply_limit",
+    "max_applications_per_day",
+    "rate_limit_delay_min_sec",
+    "rate_limit_delay_max_sec",
+    "rate_limit_daily_jitter",
 )
 
 
@@ -79,6 +83,11 @@ def _base_config_defaults() -> dict:
         "generated_resume_path": "all resumes/generated",
         "default_resume_path": "all resumes/default_resume.pdf",
         "daily_apply_limit": 50,
+        "smart_rate_limiting": True,
+        "max_applications_per_day": 40,
+        "rate_limit_delay_min_sec": 12,
+        "rate_limit_delay_max_sec": 44,
+        "rate_limit_daily_jitter": 12,
         "run_in_background": False,
         "use_AI": True,
         "stream_output": True,
@@ -196,7 +205,36 @@ def _apply_linkedin_db_to_bot_credentials(config_dict: dict) -> None:
         config_dict["password"] = password
 
 
-def _load_bot_config() -> dict:
+def _resolve_default_resume_path(config_dict: dict, user_id: str) -> None:
+    """Map dashboard uploads (filename or DB metadata) to a path the bot can open."""
+    try:
+        resumes = db.get_user_resumes(user_id)
+        default = next((r for r in resumes if r.get("is_default")), None)
+        if not default and resumes:
+            default = resumes[0]
+        if default:
+            storage_path = (default.get("storage_path") or "").strip()
+            if storage_path and os.path.isfile(storage_path):
+                config_dict["default_resume_path"] = storage_path
+                return
+    except Exception:
+        pass
+
+    path = (config_dict.get("default_resume_path") or "").strip()
+    if not path:
+        return
+    if os.path.isfile(path):
+        return
+
+    root = get_runtime_writable_root()
+    if not os.path.dirname(path):
+        candidate = os.path.join(root, "all resumes", user_id, path)
+        if os.path.isfile(candidate):
+            config_dict["default_resume_path"] = candidate
+
+
+def fetch_bot_config_from_db() -> dict:
+    """Read bot configuration from SQLite (single load; use cache during job runs)."""
     user_id = _bot_user_id()
     migrate_canonical_linkedin_to_legacy(user_id=user_id)
     config_dict = _base_config_defaults()
@@ -209,6 +247,7 @@ def _load_bot_config() -> dict:
 
     _apply_config_normalizations(config_dict)
     _apply_headless_server_defaults(config_dict)
+    _resolve_default_resume_path(config_dict, user_id)
 
     # Supervisor-spawned workers inject per-account LINKEDIN_* into this process env.
     # Do not read credentials from backend/.env — only from that injection.
@@ -223,8 +262,15 @@ def _load_bot_config() -> dict:
     return config_dict
 
 
+def _load_bot_config() -> dict:
+    """Fresh DB read (tests, explicit reload). Prefer ``warm_bot_config_cache()`` in bots."""
+    return fetch_bot_config_from_db()
+
+
 def load_config_to_module(module_name):
-    config_dict = _load_bot_config()
+    from services.bot_config_cache import warm_bot_config_cache
+
+    config_dict = warm_bot_config_cache()
 
     current_module = sys.modules[module_name]
     for k, v in config_dict.items():
@@ -235,7 +281,9 @@ def _ensure_module_exports() -> dict:
     """Populate module-level config for ``from config.config_bridge import *``."""
     if os.getenv("USER_ID", "").strip():
         try:
-            return _load_bot_config()
+            from services.bot_config_cache import warm_bot_config_cache
+
+            return warm_bot_config_cache()
         except Exception:
             pass
     return _base_config_defaults()

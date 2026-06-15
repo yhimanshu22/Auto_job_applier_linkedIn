@@ -1,7 +1,6 @@
 """LinkedIn login / session checks."""
 
 from run_ai_bot.bootstrap_env import *
-from run_ai_bot.session import load_cookies, save_cookies
 from run_ai_bot.state import *
 
 from modules.human_actions import human_move_and_click, human_type_text
@@ -113,14 +112,12 @@ def login_LN() -> None:
 
     try:
         wait.until(EC.url_to_be("https://www.linkedin.com/feed/"))
-        save_cookies()
-        print_lg("Login successful!")
+        print_lg("Login successful! Session saved in Chrome profile.")
         return
     except Exception:
         try:
             wait.until(EC.url_contains("/feed"))
-            save_cookies()
-            print_lg("Login successful!")
+            print_lg("Login successful! Session saved in Chrome profile.")
             return
         except Exception:
             pass
@@ -129,4 +126,4 @@ def login_LN() -> None:
         )
         manual_login_retry(is_logged_in_LN, 2)
         if is_logged_in_LN():
-            save_cookies()
+            print_lg("Manual login OK — session saved in Chrome profile.")

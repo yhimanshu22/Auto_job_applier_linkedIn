@@ -25,6 +25,9 @@ hiddenimports = [
     "undetected_chromedriver",
     "stripe",
     "multipart",
+    "services.bot_config_cache",
+    "services.smart_rate_limit",
+    "services.chrome_ports",
 ] + collect_submodules("cryptography")
 
 a = Analysis(

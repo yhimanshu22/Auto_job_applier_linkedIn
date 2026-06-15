@@ -8,19 +8,29 @@ from modules import gui_safe as pyautogui
 from run_ai_bot.bootstrap_env import *
 from run_ai_bot.login import is_logged_in_LN, login_LN
 from run_ai_bot.pipeline import run
-from run_ai_bot.session import load_cookies
 from run_ai_bot.state import *
+from services.bot_config_cache import warm_bot_config_cache, get_cached_user_resumes
 
 
 def main() -> None:
     try:
+        warm_bot_config_cache()
         global linkedIn_tab, tabs_count, useNewResume, aiClient
         alert_title = "Error Occurred. Closing Browser!"
         total_runs = 1
         validate_config()
 
-        # Check for Resume existence
-        if not os.path.exists(default_resume_path):
+        # Check for Resume existence (dashboard upload may store only filename in DB)
+        resume_ready = os.path.exists(default_resume_path)
+        if not resume_ready:
+            try:
+                resumes = get_cached_user_resumes()
+                resume_ready = any(
+                    os.path.isfile((r.get("storage_path") or "")) for r in resumes
+                )
+            except Exception:
+                pass
+        if not resume_ready:
             pyautogui.alert(
                 text=f'Your default resume "{default_resume_path}" is missing! Please update "default_resume_path" in config.py\n\nOR\n\nAdd a resume with exact name and path (check for spelling mistakes including cases).\n\n\nFor now the bot will continue using your previous upload from LinkedIn!',
                 title="Missing Resume",
@@ -28,24 +38,20 @@ def main() -> None:
             )
             useNewResume = False
 
-        # --- Login Logic ---
+        # --- Login Logic (session persisted in per-account Chrome profile) ---
         tabs_count = len(driver.window_handles)
 
-        # 1. Open LinkedIn Homepage to set domain context for cookies
-        driver.get("https://www.linkedin.com")
+        driver.get("https://www.linkedin.com/feed/")
 
-        # 2. Attempt to restore session from cookies
-        load_cookies()
-
-        # 3. Verify login status
         if not is_logged_in_LN():
-            print_lg("Cookie login failed or first run. Logging in manually...")
+            print_lg(
+                "Not logged in via Chrome profile (first run or expired). Logging in..."
+            )
             login_LN()
-            # Note: login_LN() saves cookies internally upon success, so we don't need to call it again here.
         else:
-            print_lg("Restored previous session successfully!")
+            print_lg("Restored previous session from Chrome profile!")
 
-        # 4. Final Safety Check before starting
+        # Final safety check before starting
         if not is_logged_in_LN():
             raise Exception(
                 "Failed to login! Please check your credentials or internet connection."
@@ -126,8 +132,30 @@ def main() -> None:
                 print_lg("Daily limit reached. Stopping run loop.")
                 break
 
-    except (NoSuchWindowException, WebDriverException) as e:
+    except StaleElementReferenceException as e:
+        print_lg(
+            "Stale element ended this run; closing any open apply modal.",
+            e,
+        )
+        try:
+            from run_ai_bot.reporting import discard_job
+
+            discard_job()
+        except Exception:
+            pass
+    except (NoSuchWindowException, InvalidSessionIdException) as e:
         print_lg("Browser window closed or session is invalid. Exiting.", e)
+    except WebDriverException as e:
+        if "invalid session id" in str(e).lower():
+            print_lg("Browser window closed or session is invalid. Exiting.", e)
+        else:
+            print_lg("WebDriver error ended this run.", e)
+            try:
+                from run_ai_bot.reporting import discard_job
+
+                discard_job()
+            except Exception:
+                pass
     except Exception as e:
         critical_error_log("In Applier Main", e)
         pyautogui.alert(str(e), alert_title)

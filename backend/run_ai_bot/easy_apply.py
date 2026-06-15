@@ -9,13 +9,18 @@ from run_ai_bot.form_answer_helpers import (
 from run_ai_bot.session import log_to_db
 from run_ai_bot.state import *
 
+from services.bot_config_cache import (
+    get_cached_default_resume_asset,
+    get_cached_user_resumes,
+)
+
 from modules.human_actions import human_move_and_click, human_type_text
 
 
 def upload_resume(modal: WebElement, resume: str) -> tuple[bool, str]:
     try:
         # 1. Attempt to get default resume metadata from database
-        resumes = db.get_user_resumes(user_id)
+        resumes = get_cached_user_resumes()
         default_resume = next((r for r in resumes if r['is_default']), None)
         
         if default_resume:
@@ -34,7 +39,7 @@ def upload_resume(modal: WebElement, resume: str) -> tuple[bool, str]:
                 return True, default_resume["file_name"]
 
         # 2. Legacy Fallback: Try the Asset BLOB (backwards compatibility)
-        asset = db.get_asset("default_resume")
+        asset = get_cached_default_resume_asset()
         if asset:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                 tmp.write(asset["content"])
@@ -85,6 +90,7 @@ def answer_questions(
     # all_questions = all_questions + all_list_questions + all_single_line_questions
 
     for Question in all_questions:
+        do_actions = False
         # Check if it's a select Question
         select = try_xp(Question, ".//select", False)
         if select:
@@ -294,7 +300,6 @@ def answer_questions(
         # Check if it's a text question
         text = try_xp(Question, ".//input[@type='text']", False)
         if text:
-            do_actions = False
             label = try_xp(Question, ".//label[@for]", False)
             try:
                 label = label.find_element(By.CLASS_NAME, "visually-hidden")

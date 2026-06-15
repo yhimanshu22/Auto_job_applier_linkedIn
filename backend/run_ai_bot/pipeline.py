@@ -11,11 +11,56 @@ from run_ai_bot.job_details import (
     get_job_description,
     get_job_main_details,
 )
-from run_ai_bot.reporting import discard_job, failed_job, screenshot, submitted_jobs
-from run_ai_bot.search_filters import get_applied_job_ids, get_page_info
+from run_ai_bot.reporting import (
+    discard_job,
+    failed_job,
+    screenshot,
+    submitted_jobs,
+)
+from run_ai_bot.search_filters import (
+    get_applied_job_ids,
+    get_page_info,
+    scroll_job_results_list,
+)
 from run_ai_bot.state import *
 
+from services.bot_config_cache import get_cached_user_resumes, get_rate_settings
+from services.smart_rate_limit import (
+    effective_daily_limit,
+    sleep_random_delay,
+)
 from modules.human_actions import human_move_and_click
+
+_rate_settings = None
+_account_daily_cap = None
+
+
+def _get_rate_settings():
+    global _rate_settings
+    if _rate_settings is None:
+        _rate_settings = get_rate_settings()
+    return _rate_settings
+
+
+def _get_account_daily_cap() -> int:
+    global _account_daily_cap
+    if _account_daily_cap is None:
+        settings = _get_rate_settings()
+        _account_daily_cap = effective_daily_limit(
+            settings,
+            user_id=user_id,
+            bot_id=os.getenv("BOT_ID"),
+        )
+        bot_tag = os.getenv("BOT_ID") or os.getenv("LINKEDIN_USERNAME") or "default"
+        if settings.smart_rate_limiting:
+            print_lg(
+                f"Smart rate limit: account {bot_tag} daily cap = {_account_daily_cap} "
+                f"(base {settings.max_applications_per_day}, "
+                f"delays {settings.rate_limit_delay_min_sec}-{settings.rate_limit_delay_max_sec}s)"
+            )
+        else:
+            print_lg(f"Daily Easy Apply limit: {_account_daily_cap}")
+    return _account_daily_cap
 
 
 def run(total_runs: int) -> int:
@@ -30,6 +75,7 @@ def run(total_runs: int) -> int:
         f"Currently looking for jobs posted within '{date_posted}' and sorting them by '{sort_by}'"
     )
     apply_to_jobs(search_terms)
+    _get_account_daily_cap()
     print_lg(
         "########################################################################################################################\n"
     )
@@ -143,7 +189,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     By.XPATH, "//li[@data-occludable-job-id]"
                 )
 
-                for job in job_listings:
+                for job_index, _ in enumerate(job_listings):
                     if keep_screen_awake:
                         pyautogui.press("shiftright")
                     if current_count >= switch_number:
@@ -151,9 +197,25 @@ def apply_to_jobs(search_terms: list[str]) -> None:
 
                     print_lg("\n-@-\n")
 
-                    job_id, title, company, work_location, work_style, skip = (
-                        get_job_main_details(job, blacklisted_companies, rejected_jobs)
-                    )
+                    try:
+                        fresh_listings = driver.find_elements(
+                            By.XPATH, "//li[@data-occludable-job-id]"
+                        )
+                        if job_index >= len(fresh_listings):
+                            break
+                        job = fresh_listings[job_index]
+                        job_id, title, company, work_location, work_style, skip = (
+                            get_job_main_details(
+                                job, blacklisted_companies, rejected_jobs
+                            )
+                        )
+                    except StaleElementReferenceException:
+                        print_lg(
+                            "Stale job listing after UI update; closing modal and retrying."
+                        )
+                        discard_job()
+                        buffer(1)
+                        continue
 
                     if skip:
                         continue
@@ -264,6 +326,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     # AI is used only for Easy Apply question answers (see answer_questions), not job/skill parsing.
 
                     uploaded = False
+                    applied_successfully = False
                     # Case 1: Easy Apply Button
                     xpath_easy_apply = ".//button[contains(@class,'jobs-apply-button') and contains(@class, 'artdeco-button--3') and contains(@aria-label, 'Easy')]"
                     is_easy_apply = False
@@ -361,17 +424,21 @@ def apply_to_jobs(search_terms: list[str]) -> None:
 
                             follow_company(modal)
 
-                            if wait_span_click(
+                            submitted = wait_span_click(
                                 driver, "Submit application", 2, scrollTop=True
-                            ) or robust_click(driver, ["Submit application"], 2):
-                                date_applied = datetime.now()
-                                if not (
-                                    wait_span_click(driver, "Done", 2)
-                                    or robust_click(driver, ["Done"], 2)
-                                ):
-                                    actions.send_keys(Keys.ESCAPE).perform()
-                            else:
+                            ) or robust_click(
+                                driver, ["Submit application", "Submit"], 2
+                            )
+                            if not submitted:
                                 raise Exception("Failed to click Submit")
+
+                            date_applied = datetime.now()
+                            applied_successfully = True
+                            if not (
+                                wait_span_click(driver, "Done", 2)
+                                or robust_click(driver, ["Done"], 2)
+                            ):
+                                discard_job()
 
                         except Exception as e:
                             print_lg("Failed to Easy apply!", e)
@@ -403,6 +470,11 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                             return
                         if skip:
                             continue
+                        applied_successfully = True
+
+                    if is_easy_apply and not applied_successfully:
+                        discard_job()
+                        continue
 
                     submitted_jobs(
                         job_id,
@@ -430,15 +502,28 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     current_count += 1
                     if application_link == "Easy Applied":
                         easy_applied_count += 1
-                        if not is_admin_user and easy_applied_count >= daily_apply_limit:
-                            print_lg(f"Daily Easy Apply limit reached: {daily_apply_limit}")
+                        daily_cap = _get_account_daily_cap()
+                        if easy_applied_count >= daily_cap:
+                            print_lg(
+                                f"Daily Easy Apply limit reached for this account: {easy_applied_count}/{daily_cap}"
+                            )
                             dailyEasyApplyLimitReached = True
                             return
                     else:
                         external_jobs_count += 1
                     applied_jobs.add(job_id)
 
-                if pagination_element == None:
+                    settings = _get_rate_settings()
+                    if settings.smart_rate_limiting:
+                        sleep_random_delay(
+                            settings,
+                            reason="before next job",
+                            log=print_lg,
+                        )
+
+                if pagination_element is None:
+                    if scroll_job_results_list():
+                        continue
                     break
                 try:
                     next_page_btn = pagination_element.find_element(
@@ -450,8 +535,16 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                 except NoSuchElementException:
                     break
 
-        except (NoSuchWindowException, WebDriverException) as e:
+        except StaleElementReferenceException as e:
+            print_lg("Stale element in job listings loop; closing modal.", e)
+            discard_job()
+        except (NoSuchWindowException, InvalidSessionIdException) as e:
             raise e
+        except WebDriverException as e:
+            if "invalid session id" in str(e).lower():
+                raise e
+            print_lg("WebDriver error in job listings loop.", e)
+            discard_job()
         except Exception as e:
             print_lg("Failed to find Job listings!", e)
 

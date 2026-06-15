@@ -1,12 +1,14 @@
-"""Seed a LinkedIn session into the DB by logging in manually, locally.
+"""Seed LinkedIn automation cookies in the DB by logging in manually, locally.
 
 Opens a visible Chrome window at the LinkedIn login page. Log in by hand
 (solve any captcha / OTP). The script polls until the feed loads, then saves
-the cookies into the ``user_sessions`` table — pointed at production when
-DATABASE_URL is set — under the same store id the server bot uses.
+cookies into ``user_sessions`` for the **LinkedIn automation** feature.
+
+The job-applier bot does not use this table; it keeps sessions in
+``chrome_profiles/{BOT_ID}`` via ``--user-data-dir``.
 
 Usage:
-    USER_ID=you@gmail.com DATABASE_URL=postgres://... \
+    USER_ID=you@gmail.com DATABASE_URL=postgres://... \\
         uv run python manual_login_seed.py linkedin-account@email.com
 """
 

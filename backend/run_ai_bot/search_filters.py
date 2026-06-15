@@ -130,28 +130,87 @@ def apply_filters() -> None:
         # print_lg(e)
 
 
+def scroll_job_results_list() -> bool:
+    """
+    LinkedIn often uses infinite scroll in the left job list instead of page buttons.
+    Returns True if more job cards appear after scrolling.
+    """
+    listings = driver.find_elements(By.XPATH, "//li[@data-occludable-job-id]")
+    if not listings:
+        return False
+
+    before_count = len(listings)
+    scroll_to_view(driver, listings[-1])
+
+    for selector in (
+        "div.scaffold-layout__list div[role='list']",
+        "div.jobs-search-results-list",
+        "div.scaffold-layout__list",
+        "div.jobs-search-two-pane__results",
+    ):
+        try:
+            container = driver.find_element(By.CSS_SELECTOR, selector)
+            driver.execute_script(
+                "arguments[0].scrollTop = arguments[0].scrollTop + arguments[0].clientHeight;",
+                container,
+            )
+            break
+        except Exception:
+            continue
+
+    buffer(1)
+    random_sleep(2, 3)
+    after_count = len(
+        driver.find_elements(By.XPATH, "//li[@data-occludable-job-id]")
+    )
+    if after_count > before_count:
+        print_lg(f"Scrolled job list: {before_count} -> {after_count} listings visible")
+        return True
+    print_lg("Job list scroll did not load more listings (likely at end).")
+    return False
+
+
 def get_page_info() -> tuple[WebElement | None, int | None]:
     """
     Function to get pagination element and current page number
     """
+    pagination_element = None
+    current_page = 1
     try:
-        pagination_element = try_find_by_classes(
-            driver,
-            [
-                "jobs-search-pagination__pages",
-                "artdeco-pagination",
-                "artdeco-pagination__pages",
-            ],
-        )
+        for locator in (
+            (By.CLASS_NAME, "jobs-search-pagination__pages"),
+            (By.CLASS_NAME, "artdeco-pagination"),
+            (By.CLASS_NAME, "artdeco-pagination__pages"),
+            (By.XPATH, "//div[contains(@class,'jobs-search-pagination')]"),
+            (By.XPATH, "//nav[contains(@aria-label,'Pagination')]"),
+        ):
+            try:
+                pagination_element = driver.find_element(*locator)
+                break
+            except NoSuchElementException:
+                continue
+
+        if pagination_element is None:
+            return None, 1
+
         scroll_to_view(driver, pagination_element)
-        current_page = int(
-            pagination_element.find_element(
-                By.XPATH, "//button[contains(@class, 'active')]"
-            ).text
-        )
+        for xpath in (
+            ".//button[@aria-current='true']",
+            ".//button[contains(@class, 'active')]",
+            ".//li[contains(@class, 'active')]//button",
+            ".//li[contains(@class,'active')]//span",
+        ):
+            try:
+                current_page = int(
+                    pagination_element.find_element(By.XPATH, xpath).text.strip()
+                )
+                break
+            except (NoSuchElementException, ValueError):
+                continue
     except Exception as e:
-        print_lg("Failed to find Pagination element, hence couldn't scroll till end!")
-        pagination_element = None
-        current_page = None
+        print_lg(
+            "Failed to read pagination controls; will scroll the job list instead."
+        )
         print_lg(e)
+        return None, 1
     return pagination_element, current_page

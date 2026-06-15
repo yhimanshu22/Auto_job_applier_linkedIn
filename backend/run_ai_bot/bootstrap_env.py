@@ -30,6 +30,8 @@ from selenium.common.exceptions import (
     NoSuchWindowException,
     ElementNotInteractableException,
     WebDriverException,
+    StaleElementReferenceException,
+    InvalidSessionIdException,
 )
 
 from config.config_bridge import *

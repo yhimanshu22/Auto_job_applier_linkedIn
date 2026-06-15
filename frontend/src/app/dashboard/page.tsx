@@ -10,6 +10,10 @@ import SettingsForm from "@/components/SettingsForm";
 import QuestionsForm from "@/components/QuestionsForm";
 import SecretsForm from "@/components/SecretsForm";
 import { apiFetch, encodeUserId } from "@/lib/desktop-api";
+import {
+  formatConfigContent,
+  parseConfigContent,
+} from "@/lib/config-parse";
 
 const CONFIG_FILES = ["personals.py", "search.py", "settings.py", "questions.py", "secrets.py"];
 
@@ -285,71 +289,8 @@ export default function Dashboard() {
       formWroteContentRef.current = false;
       return;
     }
-    
-    const parsed: Record<string, any> = {};
-    
-    // Improved parser using regex to capture key-value pairs even with multi-line strings
-    // This looks for "key = value" where value can be a quoted string spanning lines
-    const regex = /^([a-zA-Z0-9_]+)\s*=\s*(.*)$/gm;
-    let match;
-    const rawContent = content;
 
-    // We'll iterate through matches, but for multi-line values, we need a better approach
-    // Let's use a simpler but more robust line-by-line with "state"
-    const lines = content.split("\n");
-    let currentKey = "";
-    let currentValue = "";
-    let inQuotedString = false;
-
-    lines.forEach((line) => {
-      const trimmed = line.trim();
-
-      if (!inQuotedString) {
-        if (!trimmed || trimmed.startsWith("#")) return;
-        if (line.includes("=")) {
-          const [key, ...valParts] = line.split("=");
-          currentKey = key.trim();
-          let val = valParts.join("=").trim();
-          
-          if (val.startsWith('"') || val.startsWith("'")) {
-            const quote = val[0];
-            inQuotedString = true;
-            currentValue = val.slice(1);
-            
-            // Check if it ends on same line
-            if (currentValue.endsWith(quote) && currentValue.length > 0) {
-              inQuotedString = false;
-              parsed[currentKey] = currentValue.slice(0, -1).replace(/\\n/g, "\n");
-            }
-          } else {
-            // Booleans, Numbers, Lists (single line)
-            if (val.toLowerCase() === "true") parsed[currentKey] = true;
-            else if (val.toLowerCase() === "false") parsed[currentKey] = false;
-            else if (!isNaN(Number(val)) && val !== "") parsed[currentKey] = Number(val);
-            else if (val.startsWith("[") && val.endsWith("]")) {
-              try { parsed[currentKey] = JSON.parse(val.replace(/'/g, '"')); } catch (e) { parsed[currentKey] = val; }
-            } else {
-              parsed[currentKey] = val;
-            }
-          }
-        }
-      } else {
-        // We are inside a quoted string
-        const quote = content.includes(`${currentKey} = "`) ? '"' : "'";
-        if (line.endsWith(quote)) {
-          inQuotedString = false;
-          currentValue += "\n" + line.slice(0, -1);
-          parsed[currentKey] = currentValue.replace(/\\n/g, "\n").replace(/\\"/g, '"');
-        } else {
-          currentValue += "\n" + line;
-        }
-      }
-    });
-
-    // Final fallback for open strings
-    if (inQuotedString && currentKey) {
-        parsed[currentKey] = currentValue.replace(/\\n/g, "\n");
-    }
+    const parsed = parseConfigContent(content);
 
     if (JSON.stringify(parsed) !== JSON.stringify(formData)) {
       setFormData(parsed);
@@ -360,20 +301,8 @@ export default function Dashboard() {
   useEffect(() => {
     if (!isFormMode || !activeTab) return;
     
-    const category = activeTab.split('.')[0].toUpperCase();
-    let newContent = `################ ${category} CONFIGURATION ################\n\n`;
-    formEntriesForTab(formData).forEach(([key, value]) => {
-      if (typeof value === "string") {
-        const escaped = value.replace(/\n/g, "\\n").replace(/"/g, '\\"');
-        newContent += `${key} = "${escaped}"\n`;
-      } else if (typeof value === "boolean") {
-        newContent += `${key} = ${value ? "True" : "False"}\n`;
-      } else if (Array.isArray(value)) {
-        newContent += `${key} = ${JSON.stringify(value).replace(/"/g, "'")}\n`;
-      } else {
-        newContent += `${key} = ${value}\n`;
-      }
-    });
+    const category = activeTab.split(".")[0];
+    let newContent = formatConfigContent(category, formData);
     
     if (newContent !== content) {
       formWroteContentRef.current = true;
@@ -390,29 +319,7 @@ export default function Dashboard() {
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setContent(data.content || "");
-      
-      // Parse for form mode
-      const parsed: Record<string, any> = {};
-      const lines = (data.content || "").split("\n");
-      lines.forEach((line: string) => {
-        if (line.includes("=") && !line.startsWith("#")) {
-          const [key, valStr] = line.split("=").map(s => s.trim());
-          let val: any = valStr;
-          
-          if (valStr.startsWith('"') || valStr.startsWith("'")) {
-            val = valStr.replace(/^["']|["']$/g, "").replace(/\\n/g, "\n").replace(/\\"/g, '"');
-          } else if (valStr.toLowerCase() === "true") val = true;
-          else if (valStr.toLowerCase() === "false") val = false;
-          else if (!isNaN(Number(valStr)) && valStr !== "") val = Number(valStr);
-          else if (valStr.startsWith("[") && valStr.endsWith("]")) {
-            try {
-              val = JSON.parse(valStr.replace(/'/g, '"'));
-            } catch (e) { val = valStr; }
-          }
-          parsed[key] = val;
-        }
-      });
-      setFormData(parsed);
+      setFormData(parseConfigContent(data.content || ""));
     } catch (err: any) {
       setMessage({ type: 'error', text: 'Error loading configuration. Ensure backend is running.' });
       setContent("");
@@ -429,21 +336,8 @@ export default function Dashboard() {
 
     // If we are in form mode, we need to regenerate the content string
     if (isFormMode) {
-      const category = activeTab.split('.')[0].toUpperCase();
-      finalContent = `################ ${category} CONFIGURATION ################\n\n`;
-      formEntriesForTab(formData).forEach(([key, value]) => {
-        if (typeof value === "string") {
-          const escaped = value.replace(/\n/g, "\\n").replace(/"/g, '\\"');
-          finalContent += `${key} = "${escaped}"\n`;
-        } else if (typeof value === "boolean") {
-          finalContent += `${key} = ${value ? "True" : "False"}\n`;
-        } else if (Array.isArray(value)) {
-          finalContent += `${key} = ${JSON.stringify(value).replace(/"/g, "'")}\n`;
-        } else {
-          finalContent += `${key} = ${value}\n`;
-        }
-      });
-    }
+      const category = activeTab.split(".")[0];
+      finalContent = formatConfigContent(category, formData);
 
     try {
       const cleanName = activeTab.split('.')[0];

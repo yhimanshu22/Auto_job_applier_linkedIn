@@ -7,6 +7,8 @@ __validation_file_path = ""
 def check_int(
     var: int, var_name: str, min_value: int = 0
 ) -> bool | TypeError | ValueError:
+    if isinstance(var, float) and not isinstance(var, bool) and var == int(var):
+        var = int(var)
     if not isinstance(var, int):
         raise TypeError(
             f'The variable "{var_name}" in "{__validation_file_path}" must be an Integer!\nReceived "{var}" of type "{type(var)}" instead!\n\nSolution:\nPlease open "{__validation_file_path}" and update "{var_name}" to be an Integer.\nExample: `{var_name} = 10`\n\nNOTE: Do NOT surround Integer values in quotes ("10")X !\n\n'
@@ -285,6 +287,19 @@ def validate_settings() -> None | ValueError | TypeError:
 
     check_int(click_gap, "click_gap", 0)
     check_int(bot_speed, "bot_speed", 1)
+
+    if "smart_rate_limiting" in globals():
+        check_boolean(smart_rate_limiting, "smart_rate_limiting")
+    if "max_applications_per_day" in globals():
+        check_int(max_applications_per_day, "max_applications_per_day", 1)
+    if "rate_limit_delay_min_sec" in globals():
+        check_int(rate_limit_delay_min_sec, "rate_limit_delay_min_sec", 1)
+    if "rate_limit_delay_max_sec" in globals():
+        check_int(rate_limit_delay_max_sec, "rate_limit_delay_max_sec", 1)
+    if "rate_limit_daily_jitter" in globals():
+        check_int(rate_limit_daily_jitter, "rate_limit_daily_jitter", 0)
+    if "daily_apply_limit" in globals():
+        check_int(daily_apply_limit, "daily_apply_limit", 1)
 
     check_boolean(run_in_background, "run_in_background")
     check_boolean(disable_extensions, "disable_extensions")

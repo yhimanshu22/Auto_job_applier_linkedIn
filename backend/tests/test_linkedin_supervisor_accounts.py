@@ -15,9 +15,11 @@ def test_list_supervisor_accounts_from_legacy_keys(test_db):
         "id": "main",
         "username": "primary@test.com",
         "password": "secret1",
+        "account_port": 9222,
     }
     assert accounts[1]["username"] == "extra@test.com"
     assert accounts[1]["password"] == "secret2"
+    assert accounts[1]["account_port"] == 9223
 
 
 def test_list_supervisor_accounts_legacy_code_mode_keys(test_db):

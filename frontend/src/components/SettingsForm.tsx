@@ -67,16 +67,6 @@ export default function SettingsForm({ data, onChange }: SettingsFormProps) {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Daily Easy Apply limit</label>
-            <input
-              type="number"
-              min={1}
-              value={data.daily_apply_limit ?? 50}
-              onChange={(e) => patch("daily_apply_limit", parseInt(e.target.value, 10) || 1)}
-              className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-blue-600"
-            />
-          </div>
-          <div className="space-y-1">
             <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Bot speed (1–10)</label>
             <input
               type="number"
@@ -94,6 +84,92 @@ export default function SettingsForm({ data, onChange }: SettingsFormProps) {
               min={0}
               value={data.click_gap ?? 0}
               onChange={(e) => patch("click_gap", parseInt(e.target.value, 10) || 0)}
+              className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-blue-600"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest border-b border-zinc-900 pb-1.5">
+          Smart rate limiting
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <Toggle
+            k="smart_rate_limiting"
+            label="Smart rate limiting"
+            desc="Per-account daily caps + random delays between jobs"
+          />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">
+              Max applications / day (base)
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={data.max_applications_per_day ?? 40}
+              onChange={(e) =>
+                patch("max_applications_per_day", parseInt(e.target.value, 10) || 1)
+              }
+              className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-blue-600"
+            />
+            <p className="text-[9px] text-zinc-600">
+              Each account gets base ± jitter per day (e.g. 40 → 37, 43, 51)
+            </p>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">
+              Daily cap jitter (±)
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={data.rate_limit_daily_jitter ?? 12}
+              onChange={(e) =>
+                patch("rate_limit_daily_jitter", parseInt(e.target.value, 10) || 0)
+              }
+              className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-blue-600"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">
+              Random delay min (sec)
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={data.rate_limit_delay_min_sec ?? 12}
+              onChange={(e) =>
+                patch("rate_limit_delay_min_sec", parseInt(e.target.value, 10) || 1)
+              }
+              className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-blue-600"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">
+              Random delay max (sec)
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={data.rate_limit_delay_max_sec ?? 44}
+              onChange={(e) =>
+                patch("rate_limit_delay_max_sec", parseInt(e.target.value, 10) || 1)
+              }
+              className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-blue-600"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">
+              Legacy daily limit (if smart off)
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={data.daily_apply_limit ?? 50}
+              onChange={(e) => patch("daily_apply_limit", parseInt(e.target.value, 10) || 1)}
               className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-blue-600"
             />
           </div>
