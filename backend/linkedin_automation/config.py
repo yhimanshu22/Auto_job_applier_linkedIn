@@ -343,5 +343,6 @@ def configure_logging(log_level=None):
     logging.info(f"Log file: {log_file}")
 
 
-# Initialize logging with default configuration
-configure_logging()
+# Initialize logging with default configuration (skip when parent task log is wired).
+if not os.getenv("LINKDAPPLY_AUTOMATION_LOG", "").strip():
+    configure_logging()

@@ -13,6 +13,28 @@ from app_paths import get_runtime_writable_root, load_env_files
 
 load_env_files()
 
+
+def _bootstrap_automation_logging() -> None:
+    """Packaged subprocesses must log to the task file (stdout pipe is unreliable on Windows)."""
+    import logging
+
+    task_log = os.getenv("LINKDAPPLY_AUTOMATION_LOG", "").strip()
+    if not task_log:
+        return
+    handlers: list[logging.Handler] = [
+        logging.FileHandler(task_log, mode="a", encoding="utf-8"),
+    ]
+    try:
+        handlers.append(logging.StreamHandler(sys.stdout))
+    except Exception:
+        pass
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=handlers,
+        force=True,
+    )
+
 if getattr(sys, "frozen", False):
     os.chdir(get_runtime_writable_root())
 
@@ -36,6 +58,7 @@ def main() -> None:
     if "--automation" in sys.argv:
         idx = sys.argv.index("--automation")
         sys.argv = ["linkedin_automation", *sys.argv[idx + 1 :]]
+        _bootstrap_automation_logging()
         from linkedin_automation.__main__ import main as automation_main
 
         sys.exit(automation_main())

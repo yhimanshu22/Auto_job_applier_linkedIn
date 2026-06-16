@@ -27,11 +27,18 @@ _BROWSER_FREE_COMMANDS = frozenset({"generate-calendar"})
 
 def setup_logging(debug: bool = False) -> None:
     """Configure logging based on debug flag."""
+    import os
+
     level = logging.DEBUG if debug else logging.INFO
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    task_log = os.getenv("LINKDAPPLY_AUTOMATION_LOG", "").strip()
+    if task_log:
+        handlers.append(logging.FileHandler(task_log, mode="a", encoding="utf-8"))
     logging.basicConfig(
         level=level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler()],
+        handlers=handlers,
+        force=True,
     )
 
 
@@ -83,6 +90,8 @@ def main() -> int:
             logging.info(f"Engagement results: {json.dumps(results, indent=2)}")
             if not results.get("success", True):
                 exit_code = 1
+                err = results.get("error") or results
+                logging.error("Engage finished unsuccessfully: %s", err)
 
         elif args.command == "pursue":
             results = bot.pursue_investor(

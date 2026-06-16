@@ -222,6 +222,8 @@ def start_task(
     account_username = (user_id or "").strip() or None
 
     log_handle = open(log_path, "a", encoding="utf-8", buffering=1)
+    env["LINKDAPPLY_AUTOMATION_LOG"] = log_path
+    env["PYTHONUNBUFFERED"] = "1"
     ts = _now_iso()
     log_handle.write(f"\n{'=' * 60}\n[{ts}] Task {task_id} started\n")
     log_handle.write(f"Action: {action}\nCommand: {' '.join(cmd)}\nCWD: {framework_dir}\n")
