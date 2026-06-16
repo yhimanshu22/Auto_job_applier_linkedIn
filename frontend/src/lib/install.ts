@@ -53,7 +53,7 @@ export function getAssetPattern(os: InstallOs): RegExp {
 
 export function getInstallerLabel(os: InstallOs): string {
   if (os === "windows") return "Windows .msi";
-  if (os === "mac") return "macOS .dmg";
+  if (os === "mac") return "macOS .dmg (Apple Silicon)";
   return "Linux .AppImage";
 }
 

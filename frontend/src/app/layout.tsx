@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, EB_Garamond } from "next/font/google";
 import "./globals.css";
+import { SITE_URL } from "@/lib/company";
 
 const interSizeAdjust = Inter({
   variable: "--font-inter",
@@ -13,7 +14,7 @@ const ebGaramond = EB_Garamond({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://linkdapply.duckdns.org'),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "LinkdApply | #1 AI LinkedIn Job Application Automation Bot",
     template: "%s | LinkdApply"
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://linkdapply.duckdns.org",
+    url: SITE_URL,
     siteName: "LinkdApply",
     title: "LinkdApply | AI-Powered LinkedIn Job Automation",
     description: "Land your dream job faster. Automate applications with the world's most human-like AI bot.",
@@ -54,7 +55,7 @@ export const metadata: Metadata = {
     },
   },
   alternates: {
-    canonical: 'https://linkdapply.duckdns.org',
+    canonical: SITE_URL,
   },
   icons: {
     icon: "/icon.png",

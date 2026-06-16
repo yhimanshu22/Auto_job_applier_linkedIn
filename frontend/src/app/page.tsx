@@ -42,8 +42,8 @@ export default function LandingPage() {
                 </span>
               </div>
               <p className="max-w-2xl mx-auto text-lg lg:text-xl text-zinc-500 leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
-                LinkdApply takes care of the tedious job search. It manages applications, 
-                tailors cover letters, and tracks updates—all while remaining completely undetectable.
+                LinkdApply takes care of the tedious job search. Download the desktop app for Windows,
+                macOS, or Linux — then automate applications while staying completely undetectable.
               </p>
             </div>
 
@@ -130,8 +130,8 @@ export default function LandingPage() {
               {[
                 {
                   step: "01",
-                  title: "Add credentials",
-                  description: "Enter your LinkedIn email and password in the dashboard secrets tab."
+                  title: "Install & sign in",
+                  description: "Download the desktop app for your OS, install it, and sign in with your account."
                 },
                 {
                   step: "02",

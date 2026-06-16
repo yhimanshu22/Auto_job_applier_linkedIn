@@ -1,7 +1,8 @@
 import { MetadataRoute } from 'next'
+import { SITE_URL } from '@/lib/company'
  
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://linkdapply.duckdns.org'
+  const baseUrl = SITE_URL
   
   return [
     {

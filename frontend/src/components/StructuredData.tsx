@@ -1,14 +1,20 @@
 import React from 'react';
-import { GITHUB_RELEASES_URL } from '@/lib/install';
+import { SITE_URL } from '@/lib/company';
+import { DEFAULT_WINDOWS_INSTALLER_URL, DESKTOP_VERSION, getDesktopDownloadUrl } from '@/lib/install';
 
 export default function StructuredData() {
   const softwareSchema = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "LinkdApply",
-    "operatingSystem": "Windows, MacOS, Linux",
-    "downloadUrl": GITHUB_RELEASES_URL,
-    "installUrl": GITHUB_RELEASES_URL,
+    "operatingSystem": "Windows 10+, macOS (Apple Silicon), Linux",
+    "downloadUrl": [
+      DEFAULT_WINDOWS_INSTALLER_URL,
+      getDesktopDownloadUrl("mac"),
+      getDesktopDownloadUrl("linux"),
+    ],
+    "installUrl": DEFAULT_WINDOWS_INSTALLER_URL,
+    "softwareVersion": DESKTOP_VERSION,
     "applicationCategory": "BusinessApplication",
     "aggregateRating": {
       "@type": "AggregateRating",
@@ -26,7 +32,7 @@ export default function StructuredData() {
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "LinkdApply",
-    "url": "https://linkdapply.duckdns.org",
+    "url": SITE_URL,
     "sameAs": [
       "https://twitter.com/linkdapply",
       "https://linkedin.com/company/linkdapply"
