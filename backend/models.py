@@ -142,11 +142,7 @@ class CommunityPost(Base):
     __tablename__ = "community_posts"
     id = Column(Integer, primary_key=True, autoincrement=True)
     author_name = Column(String, nullable=False)
-    author_email = Column(String, nullable=False)
-    title = Column(String, nullable=False)
     body = Column(Text, nullable=False)
-    post_type = Column(String, nullable=False, default="feedback")  # feedback | question
-    rating = Column(Integer)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (Index("ix_community_posts_created", "created_at"),)
@@ -158,7 +154,6 @@ class CommunityReply(Base):
     post_id = Column(Integer, nullable=False)
     parent_reply_id = Column(Integer)
     author_name = Column(String, nullable=False)
-    author_email = Column(String, nullable=False)
     body = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

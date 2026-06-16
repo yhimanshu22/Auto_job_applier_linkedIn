@@ -145,6 +145,138 @@ class DatabaseManager:
             conn.exec_driver_sql("DROP TABLE configs")
             conn.exec_driver_sql("ALTER TABLE configs_new RENAME TO configs")
 
+        DatabaseManager._migrate_community_tables(conn, dialect="sqlite")
+
+    @staticmethod
+    def _migrate_community_tables(conn, *, dialect: str) -> None:
+        """Rebuild community tables when legacy columns (title, email, etc.) are present."""
+        if dialect == "sqlite":
+            post_cols = {
+                row[1]
+                for row in conn.exec_driver_sql(
+                    "PRAGMA table_info(community_posts)"
+                ).fetchall()
+            }
+            if post_cols and ("author_email" in post_cols or "title" in post_cols):
+                conn.exec_driver_sql(
+                    "CREATE TABLE community_posts_new ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "author_name TEXT NOT NULL, "
+                    "body TEXT NOT NULL, "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+                conn.exec_driver_sql(
+                    "INSERT INTO community_posts_new (id, author_name, body, created_at) "
+                    "SELECT id, author_name, body, created_at FROM community_posts"
+                )
+                conn.exec_driver_sql("DROP TABLE community_posts")
+                conn.exec_driver_sql(
+                    "ALTER TABLE community_posts_new RENAME TO community_posts"
+                )
+                conn.exec_driver_sql(
+                    "CREATE INDEX IF NOT EXISTS ix_community_posts_created "
+                    "ON community_posts (created_at)"
+                )
+
+            reply_cols = {
+                row[1]
+                for row in conn.exec_driver_sql(
+                    "PRAGMA table_info(community_replies)"
+                ).fetchall()
+            }
+            if reply_cols and "author_email" in reply_cols:
+                conn.exec_driver_sql(
+                    "CREATE TABLE community_replies_new ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "post_id INTEGER NOT NULL, "
+                    "parent_reply_id INTEGER, "
+                    "author_name TEXT NOT NULL, "
+                    "body TEXT NOT NULL, "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+                conn.exec_driver_sql(
+                    "INSERT INTO community_replies_new "
+                    "(id, post_id, parent_reply_id, author_name, body, created_at) "
+                    "SELECT id, post_id, parent_reply_id, author_name, body, created_at "
+                    "FROM community_replies"
+                )
+                conn.exec_driver_sql("DROP TABLE community_replies")
+                conn.exec_driver_sql(
+                    "ALTER TABLE community_replies_new RENAME TO community_replies"
+                )
+                conn.exec_driver_sql(
+                    "CREATE INDEX IF NOT EXISTS ix_community_replies_post "
+                    "ON community_replies (post_id, created_at)"
+                )
+            return
+
+        post_cols = {
+            r[0]
+            for r in conn.exec_driver_sql(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'community_posts'"
+            ).fetchall()
+        }
+        if post_cols and ("author_email" in post_cols or "title" in post_cols):
+            conn.exec_driver_sql(
+                "CREATE TABLE community_posts_new ("
+                "id SERIAL PRIMARY KEY, "
+                "author_name VARCHAR NOT NULL, "
+                "body TEXT NOT NULL, "
+                "created_at TIMESTAMPTZ DEFAULT NOW())"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO community_posts_new (id, author_name, body, created_at) "
+                "SELECT id, author_name, body, created_at FROM community_posts"
+            )
+            conn.exec_driver_sql("DROP TABLE community_posts CASCADE")
+            conn.exec_driver_sql(
+                "ALTER TABLE community_posts_new RENAME TO community_posts"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX ix_community_posts_created ON community_posts (created_at)"
+            )
+            conn.exec_driver_sql(
+                "SELECT setval(pg_get_serial_sequence('community_posts', 'id'), "
+                "COALESCE((SELECT MAX(id) FROM community_posts), 1))"
+            )
+
+        reply_cols = {
+            r[0]
+            for r in conn.exec_driver_sql(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'community_replies'"
+            ).fetchall()
+        }
+        if reply_cols and "author_email" in reply_cols:
+            conn.exec_driver_sql(
+                "CREATE TABLE community_replies_new ("
+                "id SERIAL PRIMARY KEY, "
+                "post_id INTEGER NOT NULL, "
+                "parent_reply_id INTEGER, "
+                "author_name VARCHAR NOT NULL, "
+                "body TEXT NOT NULL, "
+                "created_at TIMESTAMPTZ DEFAULT NOW())"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO community_replies_new "
+                "(id, post_id, parent_reply_id, author_name, body, created_at) "
+                "SELECT id, post_id, parent_reply_id, author_name, body, created_at "
+                "FROM community_replies"
+            )
+            conn.exec_driver_sql("DROP TABLE community_replies")
+            conn.exec_driver_sql(
+                "ALTER TABLE community_replies_new RENAME TO community_replies"
+            )
+            conn.exec_driver_sql(
+                "CREATE INDEX ix_community_replies_post "
+                "ON community_replies (post_id, created_at)"
+            )
+            conn.exec_driver_sql(
+                "SELECT setval(pg_get_serial_sequence('community_replies', 'id'), "
+                "COALESCE((SELECT MAX(id) FROM community_replies), 1))"
+            )
+
     @staticmethod
     def _postgres_migrations(conn):
         sub_cols = {
@@ -178,6 +310,8 @@ class DatabaseManager:
             )
             conn.exec_driver_sql("ALTER TABLE configs DROP CONSTRAINT configs_pkey")
             conn.exec_driver_sql("ALTER TABLE configs ADD PRIMARY KEY (user_id, key)")
+
+        DatabaseManager._migrate_community_tables(conn, dialect="postgres")
 
     def get_session(self) -> Session:
         return self.SessionLocal()
@@ -740,11 +874,7 @@ class DatabaseManager:
             for thread in COMMUNITY_SEED_THREADS:
                 post = CommunityPost(
                     author_name=thread["author_name"],
-                    author_email=thread["author_email"],
-                    title=thread["title"],
                     body=thread["body"],
-                    post_type=thread["post_type"],
-                    rating=thread.get("rating"),
                 )
                 session.add(post)
                 session.flush()
@@ -761,7 +891,6 @@ class DatabaseManager:
                         post_id=post.id,
                         parent_reply_id=parent_id,
                         author_name=reply_data["author_name"],
-                        author_email=reply_data["author_email"],
                         body=reply_data["body"],
                     )
                     session.add(reply)
@@ -786,10 +915,7 @@ class DatabaseManager:
         return {
             "id": row.id,
             "author_name": row.author_name,
-            "title": row.title,
             "body": row.body,
-            "post_type": row.post_type,
-            "rating": row.rating,
             "reply_count": len(replies),
             "created_at": _ts_to_utc_iso(row.created_at),
             "replies": replies,
@@ -839,20 +965,12 @@ class DatabaseManager:
         self,
         *,
         author_name: str,
-        author_email: str,
-        title: str,
         body: str,
-        post_type: str,
-        rating: int | None = None,
     ) -> dict:
         with self.SessionLocal() as session:
             row = CommunityPost(
                 author_name=author_name,
-                author_email=author_email,
-                title=title,
                 body=body,
-                post_type=post_type,
-                rating=rating,
             )
             session.add(row)
             session.commit()
@@ -864,7 +982,6 @@ class DatabaseManager:
         *,
         post_id: int,
         author_name: str,
-        author_email: str,
         body: str,
         parent_reply_id: int | None = None,
     ) -> dict:
@@ -882,7 +999,6 @@ class DatabaseManager:
                 post_id=post_id,
                 parent_reply_id=parent_reply_id,
                 author_name=author_name,
-                author_email=author_email,
                 body=body,
             )
             session.add(row)

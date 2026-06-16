@@ -20,6 +20,39 @@ def _smtp_configured() -> bool:
     )
 
 
+def send_community_notification(*, name: str, message: str) -> bool:
+    """Notify the team about a new community post. Returns False when SMTP is not configured."""
+    if not _smtp_configured():
+        log.info("SMTP not configured; community post stored only (from %s)", name)
+        return False
+
+    to_addr = os.getenv("FEEDBACK_NOTIFY_EMAIL", DEFAULT_NOTIFY_EMAIL).strip()
+    from_addr = os.getenv("SMTP_FROM", os.getenv("SMTP_USER", "")).strip()
+    host = os.getenv("SMTP_HOST", "").strip()
+    port = int(os.getenv("SMTP_PORT", "587"))
+    user = os.getenv("SMTP_USER", "").strip()
+    password = os.getenv("SMTP_PASSWORD", "").strip()
+
+    subject = f"LinkdApply community post from {name}"
+    body = f"New community post\n\nName: {name}\n\nMessage:\n{message}\n"
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_addr
+    msg.set_content(body)
+
+    try:
+        with smtplib.SMTP(host, port, timeout=30) as smtp:
+            smtp.starttls()
+            smtp.login(user, password)
+            smtp.send_message(msg)
+        return True
+    except Exception:
+        log.exception("Failed to send community notification from %s", name)
+        raise
+
+
 def send_feedback_email(
     *,
     name: str,

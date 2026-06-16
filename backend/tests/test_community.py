@@ -8,12 +8,13 @@ def test_list_community_posts_seeds_defaults(client: TestClient):
     assert response.status_code == 200
     posts = response.json()["posts"]
     assert len(posts) >= 3
-    assert posts[0]["title"]
+    assert posts[0]["body"]
+    assert "title" not in posts[0]
     assert isinstance(posts[0]["replies"], list)
 
 
 def test_create_post_and_reply(client: TestClient):
-    with patch("routes.community.send_feedback_email", return_value=False):
+    with patch("routes.community.send_community_notification", return_value=False):
         post_res = client.post(
             "/api/community/posts",
             json={
