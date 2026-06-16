@@ -783,3 +783,49 @@ class LinkedInBot:
             results["errors"].append(error_msg)
             logging.error(error_msg, exc_info=True)
             return results
+
+    def connect_with_people(
+        self,
+        query: str,
+        max_connects: int = 10,
+        note: Optional[str] = None,
+        bio_keywords: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Search people by keyword and send connection requests."""
+        results: Dict[str, Any] = {
+            "query": query,
+            "sent": 0,
+            "skipped": 0,
+            "errors": [],
+            "success": False,
+        }
+
+        try:
+            logging.info("Connecting with people matching: %s", query)
+            if bio_keywords:
+                logging.info(
+                    "Filtering results for bio keywords: %s",
+                    ", ".join(bio_keywords),
+                )
+
+            connect_results = self.linkedin.connect_people(
+                query=query,
+                max_connects=max_connects,
+                note=note,
+                bio_keywords=bio_keywords,
+            )
+            results.update(connect_results)
+            results["success"] = results["sent"] > 0
+            logging.info(
+                "Connect summary: sent=%s skipped=%s errors=%s",
+                results["sent"],
+                results["skipped"],
+                len(results["errors"]),
+            )
+            return results
+
+        except Exception as e:
+            error_msg = f"Error connecting with people for {query}: {str(e)}"
+            results["errors"].append(error_msg)
+            logging.error(error_msg, exc_info=True)
+            return results

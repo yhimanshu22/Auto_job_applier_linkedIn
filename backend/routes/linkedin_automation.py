@@ -161,6 +161,15 @@ class PursueRequest(_CommonOpts):
     should_comment: bool = True
 
 
+class ConnectRequest(_CommonOpts):
+    query: str = Field(description="People search keywords, e.g. IIT Kanpur")
+    max_connects: int = Field(default=10, ge=1, le=50)
+    note: Optional[str] = Field(
+        default=None, description="Optional connection invitation note (max 300 chars)"
+    )
+    bio_keywords: Optional[list[str]] = None
+
+
 class CalendarRequest(_CommonOpts):
     niche: str
     total_posts: int = 30
@@ -208,6 +217,12 @@ async def engage_feed(req: EngageRequest, request: Request):
 async def pursue_profile(req: PursueRequest, request: Request):
     """Pursue a specific profile (follow / like / comment)."""
     return await _start("pursue", req.model_dump(exclude_none=True), request)
+
+
+@router.post("/connect")
+async def connect_people(req: ConnectRequest, request: Request):
+    """Search people by keyword and send connection requests."""
+    return await _start("connect", req.model_dump(exclude_none=True), request)
 
 
 @router.post("/calendar")
@@ -545,6 +560,11 @@ ALLOWED_FORM_KEYS: frozenset[str] = frozenset({
     "pursue_do_follow",
     "pursue_do_like",
     "pursue_do_comment",
+    # connect
+    "connect_query",
+    "connect_max_connects",
+    "connect_note",
+    "connect_bio_keywords",
     # calendar
     "calendar_niche",
     "calendar_total_posts",

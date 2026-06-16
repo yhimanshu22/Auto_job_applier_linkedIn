@@ -179,6 +179,18 @@ def _build_command(action: str, params: dict[str, Any]) -> list[str]:
             if params.get(flag) is False:
                 cmd.append(f"--no-{flag.replace('_', '-').replace('should-', '')}")
 
+    elif action == "connect":
+        query = params.get("query")
+        if not query:
+            raise ValueError("connect requires 'query'")
+        cmd.append(str(query))
+        if params.get("max_connects") is not None:
+            cmd += ["--max-connects", str(int(params["max_connects"]))]
+        if params.get("note"):
+            cmd += ["--note", str(params["note"])]
+        if params.get("bio_keywords"):
+            cmd += ["--bio-keywords", *map(str, params["bio_keywords"])]
+
     elif action == "generate-calendar":
         if not params.get("niche"):
             raise ValueError("generate-calendar requires 'niche'")

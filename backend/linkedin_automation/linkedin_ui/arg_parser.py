@@ -32,9 +32,15 @@ def setup_argument_parser() -> argparse.ArgumentParser:
     # New: Pursue command
     pursue_parser = subparsers.add_parser('pursue', help='Pursue and engage with a specific person\'s profile')
     _setup_pursue_parser(pursue_parser)
+
+    # Connect command — search people and send connection requests
+    connect_parser = subparsers.add_parser(
+        'connect', help='Search people by keyword and send connection requests'
+    )
+    _setup_connect_parser(connect_parser)
     
     # Add common arguments
-    for p in [post_parser, calendar_parser, engage_parser, pursue_parser]:
+    for p in [post_parser, calendar_parser, engage_parser, pursue_parser, connect_parser]:
         p.add_argument('--debug', action='store_true', help='Enable debug logging')
         p.add_argument('--headless', action='store_true', help='Run browser in headless mode')
         p.add_argument('--no-ai', action='store_true', help='Disable AI generation')
@@ -149,4 +155,28 @@ def _setup_pursue_parser(parser: argparse.ArgumentParser) -> None:
         nargs="+", 
         default=None,
         help="List of keywords to look for in the profile bio"
+    )
+
+def _setup_connect_parser(parser: argparse.ArgumentParser) -> None:
+    """Set up arguments for the 'connect' command."""
+    parser.add_argument(
+        "query",
+        help="Search keywords (e.g. IIT Kanpur, software engineer Bangalore)",
+    )
+    parser.add_argument(
+        "--max-connects",
+        type=int,
+        default=10,
+        help="Maximum number of connection requests to send",
+    )
+    parser.add_argument(
+        "--note",
+        default=None,
+        help="Optional personalized note for the connection invitation",
+    )
+    parser.add_argument(
+        "--bio-keywords",
+        nargs="+",
+        default=None,
+        help="Only connect with people whose result card mentions these keywords",
     )

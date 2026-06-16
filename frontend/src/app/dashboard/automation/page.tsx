@@ -8,7 +8,7 @@ import { apiFetch, encodeUserId } from "@/lib/desktop-api";
 
 const API = "/api/linkedin-automation";
 const BILLING_API = "/api/billing";
-const TABS = ["post", "engage", "pursue", "calendar", "settings"] as const;
+const TABS = ["post", "connect", "engage", "pursue", "calendar", "settings"] as const;
 type Tab = (typeof TABS)[number];
 
 type Subscription = {
@@ -99,6 +99,11 @@ type FormDefaults = {
   post_topics_file?: string;
   post_schedule_date?: string;
   post_schedule_time?: string;
+  // connect
+  connect_query?: string;
+  connect_max_connects?: number;
+  connect_note?: string;
+  connect_bio_keywords?: string;
   // engage
   engage_action?: "like" | "comment" | "both";
   engage_max_actions?: number;
@@ -372,6 +377,102 @@ function ClearDefaultsButton({ onClear }: { onClear: () => void }) {
     >
       Clear saved defaults
     </button>
+  );
+}
+
+function ConnectForm({
+  common,
+  setCommon,
+  onSubmit,
+  busy,
+  defaults,
+  patchDefaults,
+  onClearDefaults,
+}: FormPersistenceProps) {
+  const [query, setQuery] = useState(defaults.connect_query ?? "");
+  const [maxConnects, setMaxConnects] = useState(defaults.connect_max_connects ?? 10);
+  const [note, setNote] = useState(defaults.connect_note ?? "");
+  const [bioKeywords, setBioKeywords] = useState(defaults.connect_bio_keywords ?? "");
+
+  useEffect(() => {
+    patchDefaults({
+      connect_query: query,
+      connect_max_connects: maxConnects,
+      connect_note: note,
+      connect_bio_keywords: bioKeywords,
+    });
+  }, [query, maxConnects, note, bioKeywords, patchDefaults]);
+
+  const splitList = (s: string) =>
+    s
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+  return (
+    <div className="space-y-4">
+      <Field
+        label="Search keywords"
+        hint="School, company, role, or location — e.g. IIT Kanpur"
+      >
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="IIT Kanpur"
+          className={inputCls}
+        />
+      </Field>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label="Max connections">
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={maxConnects}
+            onChange={(e) => setMaxConnects(parseInt(e.target.value) || 1)}
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Bio keywords" hint="Optional, comma-separated">
+          <input
+            value={bioKeywords}
+            onChange={(e) => setBioKeywords(e.target.value)}
+            placeholder="alumni, software engineer"
+            className={inputCls}
+          />
+        </Field>
+      </div>
+      <Field label="Invitation note" hint="Optional — leave empty to send without a note">
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={3}
+          maxLength={300}
+          placeholder="Hi, I noticed we share a similar background…"
+          className={`${inputCls} resize-none`}
+        />
+      </Field>
+      <CommonOptions v={common} onChange={setCommon} />
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          disabled={busy || !query.trim()}
+          onClick={() =>
+            onSubmit({
+              query: query.trim(),
+              max_connects: maxConnects,
+              note: note.trim() || undefined,
+              bio_keywords: bioKeywords ? splitList(bioKeywords) : undefined,
+              ...common,
+            })
+          }
+          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
+        >
+          {busy ? "Launching…" : "Find & connect"}
+        </button>
+        <ClearDefaultsButton onClear={onClearDefaults} />
+      </div>
+    </div>
   );
 }
 
@@ -1058,6 +1159,7 @@ export default function AutomationPage() {
   const endpoint = useMemo<Record<Tab, string>>(
     () => ({
       post: "/post",
+      connect: "/connect",
       engage: "/engage",
       pursue: "/pursue",
       calendar: "/calendar",
@@ -1580,6 +1682,17 @@ export default function AutomationPage() {
                   defaults={formDefaults}
                   patchDefaults={patchDefaults}
                   onClearDefaults={() => clearDefaults("post_")}
+                />
+              )}
+              {tab === "connect" && (
+                <ConnectForm
+                  common={common}
+                  setCommon={setCommonPersisted}
+                  onSubmit={submit}
+                  busy={busy}
+                  defaults={formDefaults}
+                  patchDefaults={patchDefaults}
+                  onClearDefaults={() => clearDefaults("connect_")}
                 />
               )}
               {tab === "engage" && (

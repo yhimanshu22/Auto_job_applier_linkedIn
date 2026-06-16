@@ -226,6 +226,32 @@ def test_build_command_pursue_boolean_flags_and_lists():
     assert "--no-like" not in cmd
 
 
+def test_build_command_connect_query_and_options():
+    from services import linkedin_automation as la_service
+
+    cmd = la_service._build_command(
+        "connect",
+        {
+            "query": "IIT Kanpur",
+            "max_connects": 5,
+            "note": "Hi there",
+            "bio_keywords": ["alumni"],
+        },
+    )
+    assert cmd[3] == "connect"
+    assert cmd[4] == "IIT Kanpur"
+    assert cmd[cmd.index("--max-connects") + 1] == "5"
+    assert cmd[cmd.index("--note") + 1] == "Hi there"
+    assert cmd[cmd.index("--bio-keywords") + 1] == "alumni"
+
+
+def test_build_command_connect_requires_query():
+    from services import linkedin_automation as la_service
+
+    with pytest.raises(ValueError):
+        la_service._build_command("connect", {})
+
+
 def test_build_command_calendar_requires_niche():
     from services import linkedin_automation as la_service
 
@@ -792,6 +818,30 @@ def test_pursue_endpoint_requires_profile_name(client, fake_popen):
         json={"user_id": TEST_USER, "max_posts": 2},
     )
     # Pydantic returns 422 for missing required `profile_name`.
+    assert res.status_code == 422
+
+
+def test_connect_endpoint_launches_task(client, fake_popen, clear_automation_tasks, auth_as):
+    auth_as(TEST_USER)
+    res = client.post(
+        "/api/linkedin-automation/connect",
+        json={
+            "query": "IIT Kanpur",
+            "max_connects": 3,
+            "user_id": TEST_USER,
+        },
+    )
+    assert res.status_code == 200
+    spawned = fake_popen.instances[-1]
+    assert "connect" in spawned.cmd
+    assert "IIT Kanpur" in spawned.cmd
+
+
+def test_connect_endpoint_requires_query(client, fake_popen):
+    res = client.post(
+        "/api/linkedin-automation/connect",
+        json={"user_id": TEST_USER, "max_connects": 2},
+    )
     assert res.status_code == 422
 
 

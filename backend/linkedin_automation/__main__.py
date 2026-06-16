@@ -3,7 +3,7 @@
 
 Run via ``python -m linkedin_automation <action> [...]`` from a directory where
 ``linkedin_automation`` is importable (typically the backend root). Mirrors the
-original standalone ``main.py``: dispatches to post / engage / pursue /
+original standalone ``main.py``: dispatches to post / engage / pursue / connect /
 generate-calendar commands, returns a process exit code.
 
 Heavy imports (``LinkedInBot`` and its Selenium / Gemini / OpenAI dependency
@@ -105,6 +105,23 @@ def main() -> int:
             )
             logging.info(f"Pursuit results: {json.dumps(results, indent=2)}")
             exit_code = 0 if not results.get("errors") else 1
+
+        elif args.command == "connect":
+            results = bot.connect_with_people(
+                query=args.query,
+                max_connects=args.max_connects,
+                note=args.note,
+                bio_keywords=args.bio_keywords,
+            )
+            logging.info(f"Connect results: {json.dumps(results, indent=2)}")
+            if not results.get("success", True):
+                exit_code = 1
+            elif results.get("sent", 0) == 0:
+                exit_code = 1
+                logging.error(
+                    "Connect finished with no invitations sent (skipped=%s)",
+                    results.get("skipped", 0),
+                )
 
         bot.close()
         if exit_code:
