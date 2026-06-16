@@ -30,7 +30,7 @@ export default function FeaturesSection() {
             </ol>
             <Link
               href="/login"
-              className="inline-flex items-center justify-center rounded-xl border border-zinc-300 bg-white px-6 py-3 text-sm font-semibold text-zinc-800 shadow-sm transition-all hover:bg-zinc-50 hover:border-zinc-400"
+              className="btn-on-light inline-flex items-center justify-center gap-2 px-10 py-4 text-sm font-semibold shadow-xl transition-all hover:scale-[1.02]"
             >
               Start today
             </Link>

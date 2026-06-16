@@ -133,7 +133,7 @@ export default function AboutPage() {
             <p className="mt-6 text-center">
               <Link
                 href="/pricing"
-                className="inline-flex items-center justify-center rounded-full px-8 py-3 text-sm font-semibold text-white purple-gradient-button hover:scale-[1.02] transition-all shadow-lg"
+                className="btn-on-light inline-flex items-center justify-center gap-2 px-10 py-4 text-sm font-semibold shadow-xl transition-all hover:scale-[1.02]"
               >
                 View Full Pricing &amp; Subscribe
               </Link>
@@ -212,13 +212,13 @@ export default function AboutPage() {
             <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
                 href="/contact"
-                className="inline-flex items-center justify-center rounded-full px-10 py-4 text-base font-semibold text-white purple-gradient-button hover:scale-[1.02] transition-all shadow-xl"
+                className="btn-on-light inline-flex items-center justify-center gap-2 px-10 py-4 text-base font-semibold shadow-xl transition-all hover:scale-[1.02]"
               >
                 Contact Us
               </Link>
               <Link
                 href="/pricing"
-                className="inline-flex items-center justify-center rounded-full px-10 py-4 text-base font-semibold text-zinc-900 border border-zinc-200 bg-white hover:border-accent/20 transition-all shadow-sm"
+                className="btn-secondary-light inline-flex items-center justify-center gap-2 px-10 py-4 text-base font-semibold transition-all hover:scale-[1.02]"
               >
                 View Pricing
               </Link>

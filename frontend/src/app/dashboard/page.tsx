@@ -658,7 +658,7 @@ export default function Dashboard() {
                   ? "/pricing?trial=1"
                   : "/pricing"
               }
-              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shrink-0"
+              className="btn-on-dark inline-flex items-center justify-center gap-2 px-10 py-4 font-bold shadow-xl transition-all shrink-0 hover:scale-[1.02]"
             >
               {subscription?.plan === "free" || subAccess.isExpiredTrial || !subscription?.plan
                 ? "Start Free Trial"

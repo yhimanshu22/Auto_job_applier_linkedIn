@@ -64,7 +64,7 @@ export default function BillingSettingsPage() {
                   type="button"
                   onClick={openBillingPortal}
                   disabled={loading || !userId}
-                  className="purple-gradient-button inline-flex items-center px-8 py-4 rounded-xl text-white font-semibold transition-all hover:scale-[1.02] disabled:opacity-50 shadow-lg"
+                  className="btn-on-light inline-flex items-center justify-center gap-2 px-10 py-4 font-semibold shadow-xl transition-all hover:scale-[1.02] disabled:opacity-50"
                 >
                   {loading ? "Opening Portal..." : "Manage Billing"}
                 </button>

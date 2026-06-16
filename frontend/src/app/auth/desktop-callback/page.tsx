@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Suspense, useEffect, useState } from "react";
+import LandingBackground from "@/components/LandingBackground";
 
 function DesktopCallbackContent() {
   const [deepLink, setDeepLink] = useState<string | null>(null);
@@ -31,29 +32,30 @@ function DesktopCallbackContent() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
-      <div className="max-w-md w-full text-center space-y-6">
-        <h1 className="text-2xl font-semibold text-white">Sign-in complete</h1>
-        {error ? (
-          <p className="text-amber-200 text-sm">{error}</p>
-        ) : (
-          <>
-            <p className="text-zinc-400 text-sm">
-              Returning you to the LinkdApply desktop app…
-            </p>
-            <div className="size-6 mx-auto animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
-            {deepLink ? (
-              <p className="text-zinc-500 text-xs">
-                If the app did not open,{" "}
-                <a href={deepLink} className="text-blue-400 hover:text-blue-300">
-                  click here to open LinkdApply
-                </a>
-                .
+    <div className="min-h-screen bg-white text-zinc-900 flex items-center justify-center p-6 overflow-hidden">
+      <LandingBackground />
+      <div className="relative z-10 max-w-md w-full text-center space-y-6">
+          <h1 className="font-serif text-2xl font-semibold text-zinc-900">Sign-in complete</h1>
+          {error ? (
+            <p className="text-amber-800 text-sm bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">{error}</p>
+          ) : (
+            <>
+              <p className="text-zinc-500 text-sm">
+                Returning you to the LinkdApply desktop app…
               </p>
-            ) : null}
-          </>
-        )}
-      </div>
+              <div className="size-6 mx-auto animate-spin rounded-full border-2 border-zinc-200 border-t-accent" />
+              {deepLink ? (
+                <p className="text-zinc-500 text-xs">
+                  If the app did not open,{" "}
+                  <a href={deepLink} className="text-accent hover:text-accent/80">
+                    click here to open LinkdApply
+                  </a>
+                  .
+                </p>
+              ) : null}
+            </>
+          )}
+        </div>
     </div>
   );
 }
@@ -62,8 +64,8 @@ export default function DesktopCallbackPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-          <div className="size-6 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
+        <div className="min-h-screen bg-white flex items-center justify-center">
+          <div className="size-6 animate-spin rounded-full border-2 border-zinc-200 border-t-accent" />
         </div>
       }
     >

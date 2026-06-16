@@ -291,7 +291,7 @@ function PricingPageContent() {
                   onClick={() => setCurrency("inr")}
                   className={`rounded-full px-6 py-2 text-sm font-bold transition-all ${
                     currency === "inr"
-                      ? "bg-white text-zinc-950 shadow-sm"
+                      ? "bg-zinc-900 text-white shadow-sm"
                       : "text-zinc-500 hover:text-zinc-900"
                   }`}
                 >
@@ -301,7 +301,7 @@ function PricingPageContent() {
                   onClick={() => setCurrency("usd")}
                   className={`rounded-full px-6 py-2 text-sm font-bold transition-all ${
                     currency === "usd"
-                      ? "bg-white text-zinc-950 shadow-sm"
+                      ? "bg-zinc-900 text-white shadow-sm"
                       : "text-zinc-500 hover:text-zinc-900"
                   }`}
                 >
@@ -316,7 +316,7 @@ function PricingPageContent() {
                 onClick={() => setBillingCycle("monthly")}
                 className={`rounded-full px-8 py-2.5 text-sm font-bold transition-all ${
                   billingCycle === "monthly"
-                    ? "bg-white text-zinc-950 shadow-sm"
+                    ? "bg-zinc-900 text-white shadow-sm"
                     : "text-zinc-500 hover:text-zinc-900"
                 }`}
               >
@@ -327,7 +327,7 @@ function PricingPageContent() {
                 onClick={() => setBillingCycle("yearly")}
                 className={`rounded-full px-8 py-2.5 text-sm font-bold transition-all flex items-center gap-2 ${
                   billingCycle === "yearly"
-                    ? "bg-white text-zinc-950 shadow-sm"
+                    ? "bg-zinc-900 text-white shadow-sm"
                     : "text-zinc-500 hover:text-zinc-900"
                 }`}
               >

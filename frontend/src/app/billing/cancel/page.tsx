@@ -18,7 +18,7 @@ export default function CancelPage() {
           </p>
         </div>
         <div className="pt-6 space-y-4">
-          <Link href="/pricing" className="purple-gradient-button w-full flex justify-center py-4 px-6 rounded-xl text-white font-semibold shadow-lg hover:scale-[1.02] transition-all">
+          <Link href="/pricing" className="btn-on-light w-full inline-flex items-center justify-center gap-2 px-10 py-4 font-semibold shadow-xl transition-all hover:scale-[1.02]">
             Try Again
           </Link>
           <Link href="/dashboard" className="w-full flex justify-center py-4 px-6 rounded-xl border border-zinc-200 bg-white text-zinc-900 font-semibold transition-all hover:bg-zinc-50">

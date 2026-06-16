@@ -15,7 +15,7 @@ export default function ConvictionCta() {
         <div className="flex justify-center pt-2">
           <Link
             href="/login"
-            className="inline-flex items-center justify-center rounded-xl bg-white px-10 py-4 text-base font-semibold text-zinc-900 shadow-xl transition-all hover:scale-[1.02] hover:bg-zinc-100"
+            className="btn-on-dark inline-flex items-center justify-center gap-2 px-10 py-4 text-base font-semibold shadow-xl transition-all hover:scale-[1.02]"
           >
             Start free trial
           </Link>

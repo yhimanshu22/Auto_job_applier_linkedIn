@@ -88,7 +88,7 @@ export default function LandingPage() {
             </p>
             <Link
               href="/pricing"
-              className="inline-flex items-center justify-center rounded-full px-8 py-4 text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-all hover:scale-[1.02] shadow-lg"
+              className="btn-on-light inline-flex items-center justify-center gap-2 px-10 py-4 text-base font-semibold shadow-xl transition-all hover:scale-[1.02]"
             >
               View pricing plans
             </Link>

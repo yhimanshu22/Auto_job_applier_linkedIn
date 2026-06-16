@@ -63,10 +63,10 @@ export default function PricingCard({ plan, billingCycle, currency = "usd", load
       <button
         onClick={onBuy}
         disabled={loading}
-        className={`mt-10 w-full py-4 rounded-xl font-bold transition-all hover:scale-[1.02] disabled:opacity-50 ${
-          accent 
-          ? "purple-gradient-button text-white shadow-xl" 
-          : "bg-white border border-zinc-200 text-zinc-900 shadow-sm hover:border-accent/20"
+        className={`mt-10 w-full inline-flex items-center justify-center gap-2 px-10 py-4 text-sm font-bold transition-all hover:scale-[1.02] disabled:opacity-50 ${
+          accent
+            ? "btn-on-light shadow-xl"
+            : "btn-secondary-light"
         }`}
       >
         {loading ? "Processing..." : isFreeTrial ? "Start Free Trial" : `Subscribe ${plan.title}`}

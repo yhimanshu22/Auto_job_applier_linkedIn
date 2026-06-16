@@ -74,7 +74,7 @@ export default function QuickInstall({ id = "install" }: QuickInstallProps) {
           <div className="flex flex-col items-center text-center">
             <DownloadLink
               os={active}
-              className="inline-flex items-center justify-center gap-2 rounded-xl px-8 py-3.5 text-sm font-semibold text-white purple-gradient-button shadow-md hover:scale-[1.02] transition-all"
+              className="btn-on-light inline-flex items-center justify-center gap-2 px-10 py-4 text-sm font-semibold shadow-xl transition-all hover:scale-[1.02]"
             >
               <DownloadIcon />
               Download for {osLabel}

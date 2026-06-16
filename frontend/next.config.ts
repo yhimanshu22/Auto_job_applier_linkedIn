@@ -8,7 +8,7 @@ const isDev = process.env.NODE_ENV === "development";
 const cspHeader = isDev
   ? `
     default-src 'self';
-    script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000;
+    script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000 http://127.0.0.1:3000 https://accounts.google.com;
     style-src 'self' 'unsafe-inline';
     img-src 'self' blob: data:;
     font-src 'self' data:;
@@ -42,6 +42,13 @@ const nextConfig: NextConfig = {
   // Turbopack can mis-detect the project root on Windows in nested repos.
   turbopack: {
     root: path.join(__dirname),
+  },
+  webpack(config, { dev }) {
+    if (dev) {
+      config.output = config.output ?? {};
+      config.output.chunkLoadTimeout = 120_000;
+    }
+    return config;
   },
   async rewrites() {
     // Use fallback so Next.js App Router handlers (e.g. /api/auth/*) win first.

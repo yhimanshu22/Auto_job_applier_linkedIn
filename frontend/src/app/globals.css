@@ -87,9 +87,41 @@ input[type="file"],
   scrollbar-width: none;  /* Firefox */
 }
 
-.purple-gradient-button {
-  background: linear-gradient(180deg, #7c3aed 0%, #6d28d9 100%);
-  box-shadow: 0 4px 14px 0 rgba(124, 58, 237, 0.39);
+.purple-gradient-button,
+.btn-on-light {
+  background: #18181b;
+  color: #ffffff;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.12);
+}
+
+.purple-gradient-button:hover,
+.btn-on-light:hover {
+  background: #27272a;
+}
+
+.btn-on-dark {
+  background: #ffffff;
+  color: #18181b;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.15);
+}
+
+.btn-on-dark:hover {
+  background: #f4f4f5;
+}
+
+.btn-secondary-light {
+  background: #ffffff;
+  color: #18181b;
+  border: 1px solid #d4d4d8;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.btn-secondary-light:hover {
+  background: #fafafa;
+  border-color: #a1a1aa;
 }
 
 .grid-pattern {

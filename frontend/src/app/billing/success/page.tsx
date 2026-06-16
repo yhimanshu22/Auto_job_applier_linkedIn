@@ -18,7 +18,7 @@ export default function SuccessPage() {
           </p>
         </div>
         <div className="pt-6">
-          <Link href="/dashboard" className="purple-gradient-button w-full flex justify-center py-4 px-6 rounded-xl text-white font-semibold shadow-lg hover:scale-[1.02] transition-all">
+          <Link href="/dashboard" className="btn-on-light w-full inline-flex items-center justify-center gap-2 px-10 py-4 font-semibold shadow-xl transition-all hover:scale-[1.02]">
             Return to Dashboard
           </Link>
         </div>
