@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, select, update, insert, func, case, literal, union_all
 from sqlalchemy.orm import sessionmaker, Session
 from app_paths import get_runtime_writable_root
-from models import Base, Config, Subscription, BotRun, Application, UserSession, Asset, ResumeMetadata, AutomationTask
+from models import Base, Config, Subscription, BotRun, Application, UserSession, Asset, ResumeMetadata, AutomationTask, Feedback, CommunityPost, CommunityReply
 from utils.encryption import encrypt_data, decrypt_data
 
 SENSITIVE_KEYS = [
@@ -700,6 +700,195 @@ class DatabaseManager:
             "ended_at": _ts_to_utc_iso(row.ended_at),
             "account_username": row.account_username,
         }
+
+    def create_feedback(
+        self,
+        *,
+        name: str,
+        email: str,
+        message: str,
+        rating: int | None = None,
+    ) -> dict:
+        with self.SessionLocal() as session:
+            row = Feedback(
+                name=name,
+                email=email,
+                message=message,
+                rating=rating,
+                published=False,
+            )
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            return {
+                "id": row.id,
+                "name": row.name,
+                "email": row.email,
+                "message": row.message,
+                "rating": row.rating,
+                "published": bool(row.published),
+                "created_at": _ts_to_utc_iso(row.created_at),
+            }
+
+    def ensure_community_seeded(self) -> None:
+        from data.community_seed import COMMUNITY_SEED_THREADS
+
+        with self.SessionLocal() as session:
+            if session.query(CommunityPost).count() > 0:
+                return
+
+            for thread in COMMUNITY_SEED_THREADS:
+                post = CommunityPost(
+                    author_name=thread["author_name"],
+                    author_email=thread["author_email"],
+                    title=thread["title"],
+                    body=thread["body"],
+                    post_type=thread["post_type"],
+                    rating=thread.get("rating"),
+                )
+                session.add(post)
+                session.flush()
+
+                reply_ids: list[int] = []
+                for reply_data in thread.get("replies", []):
+                    parent_idx = reply_data.get("parent_index")
+                    parent_id = (
+                        reply_ids[parent_idx]
+                        if parent_idx is not None and parent_idx < len(reply_ids)
+                        else None
+                    )
+                    reply = CommunityReply(
+                        post_id=post.id,
+                        parent_reply_id=parent_id,
+                        author_name=reply_data["author_name"],
+                        author_email=reply_data["author_email"],
+                        body=reply_data["body"],
+                    )
+                    session.add(reply)
+                    session.flush()
+                    reply_ids.append(reply.id)
+
+            session.commit()
+
+    @staticmethod
+    def _community_reply_to_dict(row: CommunityReply) -> dict:
+        return {
+            "id": row.id,
+            "post_id": row.post_id,
+            "parent_reply_id": row.parent_reply_id,
+            "author_name": row.author_name,
+            "body": row.body,
+            "created_at": _ts_to_utc_iso(row.created_at),
+        }
+
+    @staticmethod
+    def _community_post_to_dict(row: CommunityPost, replies: list[dict]) -> dict:
+        return {
+            "id": row.id,
+            "author_name": row.author_name,
+            "title": row.title,
+            "body": row.body,
+            "post_type": row.post_type,
+            "rating": row.rating,
+            "reply_count": len(replies),
+            "created_at": _ts_to_utc_iso(row.created_at),
+            "replies": replies,
+        }
+
+    def list_community_posts(self, *, limit: int = 50) -> list[dict]:
+        with self.SessionLocal() as session:
+            posts = (
+                session.query(CommunityPost)
+                .order_by(CommunityPost.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+            result = []
+            for post in posts:
+                replies = (
+                    session.query(CommunityReply)
+                    .filter(CommunityReply.post_id == post.id)
+                    .order_by(CommunityReply.created_at.asc())
+                    .all()
+                )
+                result.append(
+                    self._community_post_to_dict(
+                        post,
+                        [self._community_reply_to_dict(r) for r in replies],
+                    )
+                )
+            return result
+
+    def get_community_post(self, post_id: int) -> dict | None:
+        with self.SessionLocal() as session:
+            post = session.get(CommunityPost, post_id)
+            if not post:
+                return None
+            replies = (
+                session.query(CommunityReply)
+                .filter(CommunityReply.post_id == post_id)
+                .order_by(CommunityReply.created_at.asc())
+                .all()
+            )
+            return self._community_post_to_dict(
+                post,
+                [self._community_reply_to_dict(r) for r in replies],
+            )
+
+    def create_community_post(
+        self,
+        *,
+        author_name: str,
+        author_email: str,
+        title: str,
+        body: str,
+        post_type: str,
+        rating: int | None = None,
+    ) -> dict:
+        with self.SessionLocal() as session:
+            row = CommunityPost(
+                author_name=author_name,
+                author_email=author_email,
+                title=title,
+                body=body,
+                post_type=post_type,
+                rating=rating,
+            )
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            return self._community_post_to_dict(row, [])
+
+    def create_community_reply(
+        self,
+        *,
+        post_id: int,
+        author_name: str,
+        author_email: str,
+        body: str,
+        parent_reply_id: int | None = None,
+    ) -> dict:
+        with self.SessionLocal() as session:
+            post = session.get(CommunityPost, post_id)
+            if not post:
+                raise ValueError("Post not found")
+
+            if parent_reply_id is not None:
+                parent = session.get(CommunityReply, parent_reply_id)
+                if not parent or parent.post_id != post_id:
+                    raise ValueError("Invalid parent reply")
+
+            row = CommunityReply(
+                post_id=post_id,
+                parent_reply_id=parent_reply_id,
+                author_name=author_name,
+                author_email=author_email,
+                body=body,
+            )
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            return self._community_reply_to_dict(row)
 
     def close(self):
         # SQLAlchemy handles connections automatically via engine pooling

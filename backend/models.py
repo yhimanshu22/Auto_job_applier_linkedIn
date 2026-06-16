@@ -125,3 +125,43 @@ class AutomationTask(Base):
         Index("ix_automation_tasks_user_started", "user_id", "started_at"),
         Index("ix_automation_tasks_status", "status"),
     )
+
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    rating = Column(Integer)
+    published = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class CommunityPost(Base):
+    __tablename__ = "community_posts"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    author_name = Column(String, nullable=False)
+    author_email = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    body = Column(Text, nullable=False)
+    post_type = Column(String, nullable=False, default="feedback")  # feedback | question
+    rating = Column(Integer)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("ix_community_posts_created", "created_at"),)
+
+
+class CommunityReply(Base):
+    __tablename__ = "community_replies"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    post_id = Column(Integer, nullable=False)
+    parent_reply_id = Column(Integer)
+    author_name = Column(String, nullable=False)
+    author_email = Column(String, nullable=False)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_community_replies_post", "post_id", "created_at"),
+    )

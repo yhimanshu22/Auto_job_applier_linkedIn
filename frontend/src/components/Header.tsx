@@ -46,6 +46,13 @@ export default function Header() {
             </Link>
             <Link 
               className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
+              href="/community"
+              title="Community testimonials and feedback"
+            >
+              Community
+            </Link>
+            <Link 
+              className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors" 
               href="/pricing"
               title="LinkdApply Pricing"
             >

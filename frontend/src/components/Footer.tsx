@@ -19,6 +19,9 @@ export default function Footer() {
             <Link href="/contact" className="hover:text-zinc-900 transition-colors" title="Contact Us">
               Contact Us
             </Link>
+            <Link href="/community" className="hover:text-zinc-900 transition-colors" title="Community">
+              Community
+            </Link>
             <Link href="/pricing" className="hover:text-zinc-900 transition-colors" title="Plans and pricing">
               Pricing
             </Link>
