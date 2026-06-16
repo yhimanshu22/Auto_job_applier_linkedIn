@@ -1,5 +1,6 @@
 import React from 'react';
 import { SITE_URL } from '@/lib/company';
+import { LANDING_FAQS } from '@/lib/faq';
 import { DEFAULT_WINDOWS_INSTALLER_URL, DESKTOP_VERSION, getDesktopDownloadUrl } from '@/lib/install';
 
 export default function StructuredData() {
@@ -42,24 +43,14 @@ export default function StructuredData() {
   const faqSchema = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    "mainEntity": [
-      {
-        "@type": "Question",
-        "name": "Is LinkdApply safe to use?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "LinkdApply uses variable pacing and natural UI patterns to avoid mechanical, instant bot timing. No automation is risk-free: follow LinkedIn's rules, keep daily limits conservative, and monitor your account."
-        }
+    "mainEntity": LANDING_FAQS.map((item) => ({
+      "@type": "Question",
+      "name": item.q,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": item.a,
       },
-      {
-        "@type": "Question",
-        "name": "How many jobs can I apply to per day?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "We recommend a limit of 50-100 applications per day to maintain account health, though the bot can handle more if configured."
-        }
-      }
-    ]
+    })),
   };
 
   return (

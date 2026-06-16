@@ -4,7 +4,7 @@ import Link from "next/link";
 import StructuredData from "@/components/StructuredData";
 import QuickInstall from "@/components/QuickInstall";
 import HeroDownloadButton from "@/components/HeroDownloadButton";
-import { DESKTOP_VERSION } from "@/lib/install";
+import FaqAccordion from "@/components/FaqAccordion";
 
 export default function LandingPage() {
   return (
@@ -36,28 +36,15 @@ export default function LandingPage() {
                 #1 Undetectable <br /> 
                 <span className="text-accent underline decoration-accent/20">AI Bot</span> for Job Seekers
               </h1>
-              <div className="flex justify-center mt-4">
-                <span className="px-3 py-1 rounded-full bg-zinc-100 border border-zinc-200 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                  Desktop v{DESKTOP_VERSION}
-                </span>
-              </div>
               <p className="max-w-2xl mx-auto text-lg lg:text-xl text-zinc-500 leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
                 LinkdApply takes care of the tedious job search. Download the desktop app for Windows,
                 macOS, or Linux — then automate applications while staying completely undetectable.
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
-              <Link 
-                href="/login"
-                className="purple-gradient-button w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl px-10 py-4 text-white font-semibold shadow-xl transition-all hover:scale-[1.02]"
-              >
-                Start Applying Free
-              </Link>
+            <div className="flex justify-center animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
               <HeroDownloadButton />
             </div>
-
-            <QuickInstall variant="compact" />
           </div>
 
           {/* Hero Demo Image */}
@@ -168,43 +155,12 @@ export default function LandingPage() {
           <div className="mx-auto max-w-4xl px-6">
             <div className="text-center space-y-4 mb-16">
               <h2 className="font-serif text-4xl lg:text-5xl font-medium tracking-tight text-zinc-900 leading-tight">
-                Frequently Asked <br /> Questions
+                Frequently Asked Questions
               </h2>
               <p className="text-zinc-500">Everything you need to know about the LinkdApply automation suite.</p>
             </div>
 
-            <div className="space-y-6">
-              {[
-                { 
-                  q: "Is LinkdApply safe to use?", 
-                  a: "Yes. LinkdApply mimics human behavior with randomized delays and natural movement, making it undetectable by LinkedIn's anti-bot systems." 
-                },
-                { 
-                  q: "How many jobs can I apply to per day?", 
-                  a: "We recommend a limit of 50-100 applications per day to maintain account health, though the bot can handle more if configured." 
-                },
-                { 
-                  q: "Does it require my LinkedIn password?", 
-                  a: "No. LinkdApply uses your existing browser session and cookies to interact with LinkedIn securely, so your credentials remain private." 
-                },
-                { 
-                  q: "Can it handle custom questions on applications?", 
-                  a: "Absolutely. You can pre-configure answers to common custom questions in the 'Questions' tab of your dashboard." 
-                }
-              ].map((item, idx) => (
-                <div key={idx} className="group glass-card p-8 rounded-2xl border border-white/5 bg-zinc-50/50 hover:border-accent/30 transition-all hover:bg-white cursor-pointer">
-                  <h4 className="text-lg font-semibold text-zinc-900 mb-3 flex items-center gap-3">
-                    <span className="size-6 rounded-full bg-accent/20 text-accent text-xs flex items-center justify-center shrink-0 border border-accent/20 font-bold">
-                      {idx + 1}
-                    </span>
-                    {item.q}
-                  </h4>
-                  <p className="text-zinc-500 leading-relaxed pl-9 transition-colors group-hover:text-zinc-600">
-                    {item.a}
-                  </p>
-                </div>
-              ))}
-            </div>
+            <FaqAccordion />
           </div>
         </section>
 
