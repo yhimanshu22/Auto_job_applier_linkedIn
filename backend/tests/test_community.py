@@ -18,10 +18,7 @@ def test_create_post_and_reply(client: TestClient):
             "/api/community/posts",
             json={
                 "author_name": "Test User",
-                "author_email": "tester@example.com",
-                "title": "How do filters work?",
                 "body": "I am new to LinkdApply and want to understand the best filter setup.",
-                "post_type": "question",
             },
         )
     assert post_res.status_code == 200
@@ -31,7 +28,6 @@ def test_create_post_and_reply(client: TestClient):
         f"/api/community/posts/{post_id}/replies",
         json={
             "author_name": "Helper",
-            "author_email": "helper@example.com",
             "body": "Start with remote + Easy Apply, then narrow by keywords.",
         },
     )

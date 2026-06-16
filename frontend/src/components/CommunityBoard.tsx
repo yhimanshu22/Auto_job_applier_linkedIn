@@ -1,9 +1,17 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import type { CommunityPost, CommunityReply, PostType } from "@/lib/community";
+import type { CommunityPost, CommunityReply } from "@/lib/community";
 
 type LoadState = "loading" | "ready" | "error";
+
+type ReplyFormProps = {
+  postId: number;
+  parentReplyId?: number;
+  replyToName?: string;
+  onSuccess: () => void;
+  onCancel?: () => void;
+};
 
 function formatWhen(iso: string): string {
   const date = new Date(iso);
@@ -14,39 +22,6 @@ function formatWhen(iso: string): string {
     year: "numeric",
   });
 }
-
-function Stars({ rating }: { rating: number }) {
-  return (
-    <span className="inline-flex gap-0.5 text-amber-400" aria-label={`${rating} stars`}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <span key={i} className={i < rating ? "opacity-100" : "opacity-25"}>
-          ★
-        </span>
-      ))}
-    </span>
-  );
-}
-
-function TypeBadge({ type }: { type: PostType }) {
-  const label = type === "question" ? "Question" : "Feedback";
-  const styles =
-    type === "question"
-      ? "bg-blue-50 text-blue-700 border-blue-100"
-      : "bg-violet-50 text-violet-700 border-violet-100";
-  return (
-    <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${styles}`}>
-      {label}
-    </span>
-  );
-}
-
-type ReplyFormProps = {
-  postId: number;
-  parentReplyId?: number;
-  replyToName?: string;
-  onSuccess: () => void;
-  onCancel?: () => void;
-};
 
 function ReplyForm({ postId, parentReplyId, replyToName, onSuccess, onCancel }: ReplyFormProps) {
   const [submitting, setSubmitting] = useState(false);
@@ -60,7 +35,6 @@ function ReplyForm({ postId, parentReplyId, replyToName, onSuccess, onCancel }: 
     const data = new FormData(event.currentTarget);
     const payload = {
       author_name: String(data.get("author_name") ?? "").trim(),
-      author_email: String(data.get("author_email") ?? "").trim(),
       body: String(data.get("body") ?? "").trim(),
       parent_reply_id: parentReplyId ?? null,
     };
@@ -77,6 +51,7 @@ function ReplyForm({ postId, parentReplyId, replyToName, onSuccess, onCancel }: 
           typeof body.detail === "string" ? body.detail : "Could not post reply."
         );
       }
+      event.currentTarget.reset();
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -90,23 +65,13 @@ function ReplyForm({ postId, parentReplyId, replyToName, onSuccess, onCancel }: 
       {replyToName ? (
         <p className="text-xs font-medium text-zinc-500">Replying to {replyToName}</p>
       ) : null}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <input
-          name="author_name"
-          required
-          maxLength={120}
-          placeholder="Your name"
-          className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-        />
-        <input
-          name="author_email"
-          type="email"
-          required
-          maxLength={254}
-          placeholder="Email (not shown publicly)"
-          className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-        />
-      </div>
+      <input
+        name="author_name"
+        required
+        maxLength={120}
+        placeholder="Your name"
+        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+      />
       <textarea
         name="body"
         required
@@ -208,7 +173,10 @@ function ReplyThread({
                 postId={postId}
                 parentReplyId={reply.id}
                 replyToName={reply.author_name}
-                onSuccess={() => { setActiveReply(null); onRefresh(); }}
+                onSuccess={() => {
+                  setActiveReply(null);
+                  onRefresh();
+                }}
                 onCancel={() => setActiveReply(null)}
               />
             ) : null}
@@ -226,7 +194,14 @@ function ReplyThread({
         </button>
       ) : null}
       {activeReply === "post" ? (
-        <ReplyForm postId={postId} onSuccess={() => { setActiveReply(null); onRefresh(); }} onCancel={() => setActiveReply(null)} />
+        <ReplyForm
+          postId={postId}
+          onSuccess={() => {
+            setActiveReply(null);
+            onRefresh();
+          }}
+          onCancel={() => setActiveReply(null)}
+        />
       ) : null}
     </div>
   );
@@ -235,17 +210,14 @@ function ReplyThread({
 function PostCard({ post, onRefresh }: { post: CommunityPost; onRefresh: () => void }) {
   return (
     <article className="rounded-2xl border border-zinc-100 bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <TypeBadge type={post.post_type} />
-        {post.rating ? <Stars rating={post.rating} /> : null}
-      </div>
-      <h3 className="mt-3 font-serif text-xl font-medium text-zinc-900">{post.title}</h3>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-500">
-        <span className="font-medium text-zinc-700">{post.author_name}</span>
+      <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-500">
+        <span className="font-semibold text-zinc-900">{post.author_name}</span>
         <span>·</span>
         <time dateTime={post.created_at}>{formatWhen(post.created_at)}</time>
         <span>·</span>
-        <span>{post.reply_count} {post.reply_count === 1 ? "reply" : "replies"}</span>
+        <span>
+          {post.reply_count} {post.reply_count === 1 ? "reply" : "replies"}
+        </span>
       </div>
       <p className="mt-4 text-zinc-600 leading-relaxed whitespace-pre-wrap">{post.body}</p>
       <ReplyThread replies={post.replies} postId={post.id} onRefresh={onRefresh} />
@@ -263,14 +235,9 @@ function NewPostForm({ onSuccess }: { onSuccess: () => void }) {
     setError("");
 
     const data = new FormData(event.currentTarget);
-    const ratingRaw = Number(data.get("rating") || 0);
     const payload = {
       author_name: String(data.get("author_name") ?? "").trim(),
-      author_email: String(data.get("author_email") ?? "").trim(),
-      title: String(data.get("title") ?? "").trim(),
       body: String(data.get("body") ?? "").trim(),
-      post_type: String(data.get("post_type") ?? "feedback") as PostType,
-      rating: ratingRaw >= 1 && ratingRaw <= 5 ? ratingRaw : undefined,
     };
 
     try {
@@ -295,77 +262,27 @@ function NewPostForm({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-3xl border border-zinc-100 bg-zinc-50/80 p-8 lg:p-10 space-y-5">
+    <form
+      onSubmit={handleSubmit}
+      className="rounded-3xl border border-zinc-100 bg-zinc-50/80 p-8 lg:p-10 space-y-5"
+    >
       <div className="space-y-2">
         <h2 className="font-serif text-2xl lg:text-3xl font-medium text-zinc-900">
-          Start a discussion
+          Share your thoughts
         </h2>
         <p className="text-zinc-500 leading-relaxed">
-          Share feedback, ask a question, or help another job seeker. Your email stays private.
+          Post feedback or ask the community a question.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-zinc-700">Name</span>
-          <input
-            name="author_name"
-            required
-            maxLength={120}
-            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-zinc-700">Email</span>
-          <input
-            name="author_email"
-            type="email"
-            required
-            maxLength={254}
-            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-            placeholder="Not shown publicly"
-          />
-        </label>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-zinc-700">Type</span>
-          <select
-            name="post_type"
-            defaultValue="feedback"
-            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-          >
-            <option value="feedback">Feedback</option>
-            <option value="question">Question</option>
-          </select>
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-zinc-700">Rating (feedback only)</span>
-          <select
-            name="rating"
-            defaultValue=""
-            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-          >
-            <option value="">Optional</option>
-            <option value="5">5 — Excellent</option>
-            <option value="4">4 — Good</option>
-            <option value="3">3 — Okay</option>
-            <option value="2">2 — Needs work</option>
-            <option value="1">1 — Poor</option>
-          </select>
-        </label>
-      </div>
-
       <label className="block space-y-2">
-        <span className="text-sm font-medium text-zinc-700">Title</span>
+        <span className="text-sm font-medium text-zinc-700">Name</span>
         <input
-          name="title"
+          name="author_name"
           required
-          minLength={3}
-          maxLength={200}
+          maxLength={120}
           className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-          placeholder="e.g. Best filters for remote roles?"
+          placeholder="Your name"
         />
       </label>
 
@@ -389,7 +306,7 @@ function NewPostForm({ onSuccess }: { onSuccess: () => void }) {
         disabled={submitting}
         className="btn-on-light inline-flex items-center justify-center gap-2 px-8 py-3.5 text-sm font-semibold shadow-lg transition-all hover:scale-[1.02] disabled:opacity-60"
       >
-        {submitting ? "Posting…" : "Post to community"}
+        {submitting ? "Posting…" : "Post"}
       </button>
     </form>
   );
@@ -423,7 +340,7 @@ export default function CommunityBoard() {
           Community discussions
         </h2>
         <p className="mt-2 text-zinc-500">
-          Ask questions, share feedback, and reply to other job seekers.
+          Read what others are saying and join the conversation.
         </p>
       </div>
 
@@ -449,11 +366,11 @@ export default function CommunityBoard() {
       {state === "ready" ? (
         <div className="space-y-6">
           {posts.length === 0 ? (
-            <p className="text-center text-zinc-500 py-8">No posts yet — start the conversation above.</p>
+            <p className="text-center text-zinc-500 py-8">
+              No posts yet — start the conversation above.
+            </p>
           ) : (
-            posts.map((post) => (
-              <PostCard key={post.id} post={post} onRefresh={loadPosts} />
-            ))
+            posts.map((post) => <PostCard key={post.id} post={post} onRefresh={loadPosts} />)
           )}
         </div>
       ) : null}
