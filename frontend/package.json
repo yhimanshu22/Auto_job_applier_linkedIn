@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev:clean": "rm -rf .next && next dev --webpack",
+    "prebuild": "node ../scripts/write-frontend-version-env.js",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

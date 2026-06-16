@@ -1,8 +1,8 @@
 export type InstallOs = "windows" | "mac" | "linux";
 
-/** Shown on the landing page; keep in sync with desktop/src-tauri/tauri.conf.json */
+/** From repo VERSION via next.config.ts (NEXT_PUBLIC_DESKTOP_VERSION). */
 export const DESKTOP_VERSION =
-  process.env.NEXT_PUBLIC_DESKTOP_VERSION?.trim() || "1.1.1";
+  process.env.NEXT_PUBLIC_DESKTOP_VERSION?.trim() || "0.0.0";
 
 const GITHUB_RELEASE_BASE = `https://github.com/yhimanshu22/Auto_job_applier_linkedIn/releases/download/v${DESKTOP_VERSION}`;
 

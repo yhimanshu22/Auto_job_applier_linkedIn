@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v1.1.0)"
-        required: true
-        default: "v1.1.0"
+        description: "Release tag (optional; defaults to v{VERSION} from VERSION file)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -19,6 +19,20 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify tag matches VERSION
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          VERSION=$(node scripts/read-version.js)
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match VERSION (${VERSION})"
+            exit 1
+          fi
+
+      - name: Sync desktop version from VERSION
+        run: node scripts/sync-desktop-version.js
 
       - uses: actions/setup-node@v4
         with:
@@ -55,6 +69,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify tag matches VERSION
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          VERSION=$(node scripts/read-version.js)
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match VERSION (${VERSION})"
+            exit 1
+          fi
+
+      - name: Sync desktop version from VERSION
+        run: node scripts/sync-desktop-version.js
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -86,6 +114,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify tag matches VERSION
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          VERSION=$(node scripts/read-version.js)
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match VERSION (${VERSION})"
+            exit 1
+          fi
+
+      - name: Sync desktop version from VERSION
+        run: node scripts/sync-desktop-version.js
 
       - uses: actions/setup-node@v4
         with:
@@ -128,6 +170,23 @@ jobs:
     needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        run: |
+          VERSION=$(node scripts/read-version.js)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="v${VERSION}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "name=LinkdApply ${TAG}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -139,8 +198,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          name: LinkdApply ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: ${{ steps.release.outputs.name }}
           draft: false
           prerelease: false
           files: dist/*

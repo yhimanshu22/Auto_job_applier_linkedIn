@@ -1,6 +1,6 @@
 [project]
 name = "auto-job-applier-backend"
-version = "0.1.0"
+version = "1.1.1"
 description = "FastAPI + Selenium backend for the LinkedIn job applier"
 requires-python = ">=3.10,<3.14"
 dependencies = [

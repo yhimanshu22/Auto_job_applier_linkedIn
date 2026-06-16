@@ -1,5 +1,15 @@
+import fs from "fs";
 import path from "path";
 import type { NextConfig } from "next";
+
+function readRepoVersion(): string {
+  try {
+    const versionPath = path.join(__dirname, "..", "VERSION");
+    return fs.readFileSync(versionPath, "utf8").trim().split(/\r?\n/)[0].trim();
+  } catch {
+    return "0.0.0";
+  }
+}
 
 // In development we must allow 'unsafe-eval' for Next.js hot-reloading (React Refresh / Webpack)
 // In production we can be more strict.
@@ -39,6 +49,10 @@ const cspHeader = isDev
 const backendUrl = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_DESKTOP_VERSION:
+      process.env.NEXT_PUBLIC_DESKTOP_VERSION?.trim() || readRepoVersion(),
+  },
   // Turbopack can mis-detect the project root on Windows in nested repos.
   turbopack: {
     root: path.join(__dirname),
