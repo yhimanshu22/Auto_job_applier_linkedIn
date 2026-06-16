@@ -150,19 +150,27 @@ function ReplyThread({
 }) {
   const [activeReply, setActiveReply] = useState<number | "post" | null>(null);
 
-  if (replies.length === 0 && activeReply !== "post") {
+  if (replies.length === 0) {
     return (
       <div className="mt-4 border-t border-zinc-100 pt-4">
-        <button
-          type="button"
-          onClick={() => setActiveReply("post")}
-          className="text-sm font-semibold text-accent hover:underline"
-        >
-          Be the first to reply
-        </button>
         {activeReply === "post" ? (
-          <ReplyForm postId={postId} onSuccess={() => { setActiveReply(null); onRefresh(); }} onCancel={() => setActiveReply(null)} />
-        ) : null}
+          <ReplyForm
+            postId={postId}
+            onSuccess={() => {
+              setActiveReply(null);
+              onRefresh();
+            }}
+            onCancel={() => setActiveReply(null)}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setActiveReply("post")}
+            className="text-sm font-semibold text-accent hover:underline"
+          >
+            Be the first to reply
+          </button>
+        )}
       </div>
     );
   }
