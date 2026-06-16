@@ -164,6 +164,32 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Conviction CTA */}
+        <section className="py-20 lg:py-24 bg-zinc-50 border-t border-zinc-100">
+          <div className="mx-auto max-w-3xl px-6 text-center space-y-6">
+            <h2 className="font-serif text-4xl lg:text-5xl font-medium tracking-tight text-zinc-900 leading-tight">
+              Still not convinced ? Start with a free account!
+            </h2>
+            <p className="text-lg text-zinc-500 leading-relaxed">
+              LinkdApply users get on average 50% more interviews and spend 10 hours less per week.
+            </p>
+            <p className="text-xl font-medium text-zinc-700">
+              Start automating your job search today.
+            </p>
+            <div className="flex flex-col items-center gap-3 pt-2">
+              <Link
+                href="/login"
+                className="purple-gradient-button inline-flex items-center justify-center rounded-xl px-10 py-4 text-base font-semibold text-white shadow-xl transition-all hover:scale-[1.02]"
+              >
+                Start free
+              </Link>
+              <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">
+                No credit card required
+              </span>
+            </div>
+          </div>
+        </section>
+
         {/* Pricing CTA Section */}
         <section className="py-24 bg-zinc-50 border-t border-zinc-100">
           <div className="mx-auto max-w-4xl px-6 text-center space-y-8">
