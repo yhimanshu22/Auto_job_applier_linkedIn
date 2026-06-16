@@ -406,6 +406,17 @@ class DatabaseManager:
                     result[config.key] = decoded
             return result
 
+    def list_config_user_ids(self, category: str, key: str) -> list[str]:
+        """Distinct user_ids that have ``key`` stored under ``category``."""
+        with self.get_session() as session:
+            rows = (
+                session.query(Config.user_id)
+                .filter(Config.category == category, Config.key == key)
+                .distinct()
+                .all()
+            )
+            return [r[0] for r in rows if r and r[0]]
+
     def upsert_subscription(self, user_id, **kwargs):
         with self.get_session() as session:
             sub = session.query(Subscription).filter(Subscription.user_id == user_id).first()

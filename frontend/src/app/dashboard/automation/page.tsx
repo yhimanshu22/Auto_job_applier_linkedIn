@@ -86,6 +86,34 @@ type Task = {
 // Persistent dashboard form defaults — mirrors backend ``ALLOWED_FORM_KEYS``.
 // Every key is optional because the DB stores partial state and ``null`` is
 // used to clear an individual key on the next save.
+type ConnectCampaignRun = {
+  task_id: string;
+  started_at: string;
+  ended_at?: string | null;
+  status: string;
+  exit_code?: number | null;
+  sent: number;
+  skipped: number;
+  source?: string;
+};
+
+type ConnectCampaign = {
+  id: string;
+  name: string;
+  query: string;
+  max_connects: number;
+  bio_keywords?: string[] | null;
+  note?: string | null;
+  schedule_enabled: boolean;
+  schedule_time?: string | null;
+  daily_max?: number | null;
+  enabled: boolean;
+  last_run_at?: string | null;
+  last_task_id?: string | null;
+  totals: { runs: number; sent: number; skipped: number };
+  runs?: ConnectCampaignRun[];
+};
+
 type FormDefaults = {
   tab?: Tab;
   // common flags
@@ -388,11 +416,29 @@ function ConnectForm({
   defaults,
   patchDefaults,
   onClearDefaults,
-}: FormPersistenceProps) {
+  userId,
+  campaigns,
+  onCampaignsChange,
+  flash,
+  onTaskLaunched,
+}: FormPersistenceProps & {
+  userId?: string;
+  campaigns: ConnectCampaign[];
+  onCampaignsChange: (next: ConnectCampaign[]) => void;
+  flash: (m: Message) => void;
+  onTaskLaunched: () => void;
+}) {
   const [query, setQuery] = useState(defaults.connect_query ?? "");
   const [maxConnects, setMaxConnects] = useState(defaults.connect_max_connects ?? 10);
   const [note, setNote] = useState(defaults.connect_note ?? "");
   const [bioKeywords, setBioKeywords] = useState(defaults.connect_bio_keywords ?? "");
+  const [campaignName, setCampaignName] = useState("");
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleTime, setScheduleTime] = useState("09:00");
+  const [dailyMax, setDailyMax] = useState<number | "">("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [savingCampaign, setSavingCampaign] = useState(false);
+  const [campaignBusyId, setCampaignBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     patchDefaults({
@@ -409,8 +455,193 @@ function ConnectForm({
       .map((x) => x.trim())
       .filter(Boolean);
 
+  const loadCampaign = (c: ConnectCampaign) => {
+    setEditingId(c.id);
+    setCampaignName(c.name);
+    setQuery(c.query);
+    setMaxConnects(c.max_connects);
+    setNote(c.note ?? "");
+    setBioKeywords((c.bio_keywords ?? []).join(", "));
+    setScheduleEnabled(c.schedule_enabled);
+    setScheduleTime(c.schedule_time ?? "09:00");
+    setDailyMax(c.daily_max ?? "");
+  };
+
+  const campaignPayload = () => ({
+    name: campaignName.trim() || query.trim() || "Connect campaign",
+    query: query.trim(),
+    max_connects: maxConnects,
+    note: note.trim() || undefined,
+    bio_keywords: bioKeywords ? splitList(bioKeywords) : undefined,
+    schedule_enabled: scheduleEnabled,
+    schedule_time: scheduleEnabled ? scheduleTime : undefined,
+    daily_max: dailyMax === "" ? undefined : Number(dailyMax),
+    enabled: true,
+  });
+
+  const saveCampaign = async () => {
+    if (!query.trim()) {
+      flash({ type: "error", text: "Enter search keywords before saving a campaign." });
+      return;
+    }
+    setSavingCampaign(true);
+    try {
+      const url = editingId
+        ? `${API}/connect-campaigns/${editingId}?user_id=${encodeUserId(userId)}`
+        : `${API}/connect-campaigns?user_id=${encodeUserId(userId)}`;
+      const res = await apiFetch(url, {
+        method: editingId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(campaignPayload()),
+      });
+      if (!res.ok) {
+        flash({ type: "error", text: await parseErr(res) });
+        return;
+      }
+      const j = await res.json();
+      const saved = j.campaign as ConnectCampaign;
+      if (editingId) {
+        onCampaignsChange(campaigns.map((c) => (c.id === saved.id ? saved : c)));
+      } else {
+        onCampaignsChange([saved, ...campaigns]);
+        setEditingId(saved.id);
+      }
+      flash({ type: "success", text: `Campaign "${saved.name}" saved.` });
+    } catch {
+      flash({ type: "error", text: "Network error saving campaign." });
+    } finally {
+      setSavingCampaign(false);
+    }
+  };
+
+  const runCampaign = async (id: string) => {
+    setCampaignBusyId(id);
+    try {
+      const res = await apiFetch(
+        `${API}/connect-campaigns/${id}/run?user_id=${encodeUserId(userId)}`,
+        { method: "POST" }
+      );
+      if (!res.ok) {
+        flash({ type: "error", text: await parseErr(res) });
+        return;
+      }
+      const j = await res.json();
+      flash({ type: "success", text: `Campaign run started (task ${j.task?.id}).` });
+      onTaskLaunched();
+    } catch {
+      flash({ type: "error", text: "Network error launching campaign." });
+    } finally {
+      setCampaignBusyId(null);
+    }
+  };
+
+  const deleteCampaign = async (id: string, name: string) => {
+    if (!window.confirm(`Delete campaign "${name}"?`)) return;
+    try {
+      const res = await apiFetch(
+        `${API}/connect-campaigns/${id}?user_id=${encodeUserId(userId)}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        flash({ type: "error", text: await parseErr(res) });
+        return;
+      }
+      onCampaignsChange(campaigns.filter((c) => c.id !== id));
+      if (editingId === id) setEditingId(null);
+      flash({ type: "success", text: "Campaign deleted." });
+    } catch {
+      flash({ type: "error", text: "Network error deleting campaign." });
+    }
+  };
+
+  const newCampaign = () => {
+    setEditingId(null);
+    setCampaignName("");
+    setScheduleEnabled(false);
+    setScheduleTime("09:00");
+    setDailyMax("");
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {campaigns.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+              Saved campaigns
+            </p>
+            <button
+              type="button"
+              onClick={newCampaign}
+              className="text-[10px] font-bold text-blue-400 uppercase tracking-widest hover:text-blue-300"
+            >
+              + New
+            </button>
+          </div>
+          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            {campaigns.map((c) => (
+              <div
+                key={c.id}
+                className={`rounded-lg border p-3 ${
+                  editingId === c.id
+                    ? "border-blue-500/40 bg-blue-500/5"
+                    : "border-zinc-800 bg-zinc-900/40"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-zinc-200 truncate">{c.name}</p>
+                    <p className="text-[10px] text-zinc-500 truncate">
+                      {c.query}
+                      {c.bio_keywords?.length ? ` · ${c.bio_keywords.join(", ")}` : ""}
+                    </p>
+                    <p className="text-[9px] text-zinc-600 mt-1">
+                      {c.totals.sent} sent · {c.totals.runs} runs
+                      {c.schedule_enabled && c.schedule_time
+                        ? ` · daily ${c.schedule_time} UTC`
+                        : ""}
+                      {c.last_run_at ? ` · last ${fmtTime(c.last_run_at)}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      disabled={busy || campaignBusyId !== null}
+                      onClick={() => runCampaign(c.id)}
+                      className="px-2 py-1 rounded bg-blue-600/80 hover:bg-blue-500 text-white text-[9px] font-bold uppercase disabled:opacity-50"
+                    >
+                      {campaignBusyId === c.id ? "…" : "Run"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => loadCampaign(c)}
+                      className="px-2 py-1 rounded border border-zinc-700 text-zinc-400 text-[9px] font-bold uppercase hover:text-zinc-200"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteCampaign(c.id, c.name)}
+                      className="px-2 py-1 rounded border border-zinc-800 text-zinc-600 text-[9px] font-bold uppercase hover:text-red-400"
+                    >
+                      Del
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Field label="Campaign name" hint="For saved presets — e.g. IIT Kanpur SDE">
+        <input
+          value={campaignName}
+          onChange={(e) => setCampaignName(e.target.value)}
+          placeholder="IIT Kanpur SDE daily"
+          className={inputCls}
+        />
+      </Field>
       <Field
         label="Search keywords"
         hint="School, company, role, or location — e.g. IIT Kanpur"
@@ -423,7 +654,7 @@ function ConnectForm({
         />
       </Field>
       <div className="grid sm:grid-cols-2 gap-3">
-        <Field label="Max connections">
+        <Field label="Max connections per run">
           <input
             type="number"
             min={1}
@@ -433,15 +664,28 @@ function ConnectForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Bio keywords" hint="Optional, comma-separated">
+        <Field label="Daily cap" hint="Optional — max connects per day for this campaign">
           <input
-            value={bioKeywords}
-            onChange={(e) => setBioKeywords(e.target.value)}
-            placeholder="alumni, software engineer"
+            type="number"
+            min={1}
+            max={50}
+            value={dailyMax}
+            onChange={(e) =>
+              setDailyMax(e.target.value === "" ? "" : parseInt(e.target.value) || 1)
+            }
+            placeholder="e.g. 20"
             className={inputCls}
           />
         </Field>
       </div>
+      <Field label="Bio keywords" hint="Optional, comma-separated">
+        <input
+          value={bioKeywords}
+          onChange={(e) => setBioKeywords(e.target.value)}
+          placeholder="SDE, software engineer"
+          className={inputCls}
+        />
+      </Field>
       <Field label="Invitation note" hint="Optional — leave empty to send without a note">
         <textarea
           value={note}
@@ -452,24 +696,55 @@ function ConnectForm({
           className={`${inputCls} resize-none`}
         />
       </Field>
+
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-3 space-y-2">
+        <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest cursor-pointer">
+          <input
+            type="checkbox"
+            checked={scheduleEnabled}
+            onChange={(e) => setScheduleEnabled(e.target.checked)}
+          />
+          Schedule daily run (UTC)
+        </label>
+        {scheduleEnabled && (
+          <input
+            type="time"
+            value={scheduleTime}
+            onChange={(e) => setScheduleTime(e.target.value)}
+            className={inputCls}
+          />
+        )}
+      </div>
+
       <CommonOptions v={common} onChange={setCommon} />
-      <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          disabled={busy || !query.trim()}
-          onClick={() =>
-            onSubmit({
-              query: query.trim(),
-              max_connects: maxConnects,
-              note: note.trim() || undefined,
-              bio_keywords: bioKeywords ? splitList(bioKeywords) : undefined,
-              ...common,
-            })
-          }
-          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
-        >
-          {busy ? "Launching…" : "Find & connect"}
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy || !query.trim()}
+            onClick={() =>
+              onSubmit({
+                query: query.trim(),
+                max_connects: maxConnects,
+                note: note.trim() || undefined,
+                bio_keywords: bioKeywords ? splitList(bioKeywords) : undefined,
+                campaign_id: editingId || undefined,
+                ...common,
+              })
+            }
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
+          >
+            {busy ? "Launching…" : "Find & connect"}
+          </button>
+          <button
+            type="button"
+            disabled={savingCampaign || !query.trim()}
+            onClick={saveCampaign}
+            className="px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-300 text-[11px] font-bold uppercase tracking-widest disabled:opacity-50"
+          >
+            {savingCampaign ? "Saving…" : editingId ? "Update campaign" : "Save campaign"}
+          </button>
+        </div>
         <ClearDefaultsButton onClear={onClearDefaults} />
       </div>
     </div>
@@ -1155,6 +1430,7 @@ export default function AutomationPage() {
   const [artifactLoading, setArtifactLoading] = useState(false);
   // Transient "Copied!" feedback per copy target.
   const [copiedTag, setCopiedTag] = useState<string | null>(null);
+  const [connectCampaigns, setConnectCampaigns] = useState<ConnectCampaign[]>([]);
 
   const endpoint = useMemo<Record<Tab, string>>(
     () => ({
@@ -1296,6 +1572,9 @@ export default function AutomationPage() {
       setTasks(nextTasks);
       setStats((j.stats as Stats) || null);
       setHealth(j.health || {});
+      if (Array.isArray(j.connect_campaigns)) {
+        setConnectCampaigns(j.connect_campaigns as ConnectCampaign[]);
+      }
       // Hydrate the form-defaults blob only once — after the first server
       // response. Subsequent polls just refresh stats/tasks; the user is
       // typing into the forms by then and we don't want to clobber input.
@@ -1693,6 +1972,14 @@ export default function AutomationPage() {
                   defaults={formDefaults}
                   patchDefaults={patchDefaults}
                   onClearDefaults={() => clearDefaults("connect_")}
+                  userId={userId}
+                  campaigns={connectCampaigns}
+                  onCampaignsChange={setConnectCampaigns}
+                  flash={flash}
+                  onTaskLaunched={() => {
+                    etagRef.current = null;
+                    refresh();
+                  }}
                 />
               )}
               {tab === "engage" && (

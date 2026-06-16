@@ -20,6 +20,7 @@ from db_manager import db
 from services.admin import is_admin
 from utils.user_resolution import resolve_user_id
 from services import linkedin_automation as la
+from services import connect_campaigns as cc
 from services.linkedin_env import (
     AUTOMATION_KEY_TO_ENV,
     AUTOMATION_SENSITIVE_KEYS,
@@ -90,6 +91,7 @@ def _compute_etag(
     stats: dict[str, Any],
     health: dict[str, Any],
     form_defaults: dict[str, Any],
+    connect_campaigns: list[dict[str, Any]] | None = None,
 ) -> str:
     """Strong ETag derived from the parts of the payload that can actually change.
 
@@ -118,6 +120,17 @@ def _compute_etag(
             "chrome_profile_ready": health.get("chrome_profile_ready"),
         },
         "form_defaults": form_defaults,
+        "connect_campaigns": [
+            (
+                c.get("id"),
+                c.get("updated_at"),
+                c.get("last_run_at"),
+                c.get("last_task_id"),
+                c.get("totals"),
+                len(c.get("runs") or []),
+            )
+            for c in (connect_campaigns or [])
+        ],
     }
     canonical = json.dumps(fingerprint, sort_keys=True, separators=(",", ":"))
     return '"' + hashlib.sha1(canonical.encode("utf-8")).hexdigest()[:16] + '"'
@@ -168,6 +181,35 @@ class ConnectRequest(_CommonOpts):
         default=None, description="Optional connection invitation note (max 300 chars)"
     )
     bio_keywords: Optional[list[str]] = None
+    campaign_id: Optional[str] = Field(
+        default=None, description="Optional saved campaign id (for run history linkage)"
+    )
+
+
+class ConnectCampaignBody(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    query: str = Field(min_length=1, max_length=200)
+    max_connects: int = Field(default=10, ge=1, le=50)
+    bio_keywords: Optional[list[str]] = None
+    note: Optional[str] = Field(default=None, max_length=300)
+    schedule_enabled: bool = False
+    schedule_time: Optional[str] = Field(
+        default=None, description="Daily run time in HH:MM (UTC)"
+    )
+    daily_max: Optional[int] = Field(default=None, ge=1, le=50)
+    enabled: bool = True
+
+
+class ConnectCampaignPatch(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    query: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    max_connects: Optional[int] = Field(default=None, ge=1, le=50)
+    bio_keywords: Optional[list[str]] = None
+    note: Optional[str] = Field(default=None, max_length=300)
+    schedule_enabled: Optional[bool] = None
+    schedule_time: Optional[str] = None
+    daily_max: Optional[int] = None
+    enabled: Optional[bool] = None
 
 
 class CalendarRequest(_CommonOpts):
@@ -222,7 +264,16 @@ async def pursue_profile(req: PursueRequest, request: Request):
 @router.post("/connect")
 async def connect_people(req: ConnectRequest, request: Request):
     """Search people by keyword and send connection requests."""
-    return await _start("connect", req.model_dump(exclude_none=True), request)
+    params = req.model_dump(exclude_none=True)
+    campaign_id = params.pop("campaign_id", None)
+    result = await _start("connect", params, request)
+    if campaign_id:
+        uid = await resolve_user_id(request, req.user_id)
+        task_id = result.get("id")
+        if task_id and cc.get_campaign(uid, campaign_id):
+            cc.record_connect_task_start(uid, campaign_id, task_id, source="manual")
+        result["campaign_id"] = campaign_id
+    return result
 
 
 @router.post("/calendar")
@@ -469,12 +520,14 @@ async def dashboard(
     stats_payload = _stats_with_plan(uid)
     health_payload = _health_snapshot(user_id=uid)
     form_defaults_payload = _form_defaults_snapshot(user_id=uid)
+    connect_campaigns_payload = cc.list_campaigns(uid)
 
     etag = _compute_etag(
         tasks,
         stats_payload,
         health_payload,
         form_defaults_payload,
+        connect_campaigns_payload,
     )
     response.headers["ETag"] = etag
     response.headers["Cache-Control"] = "no-cache"
@@ -493,6 +546,7 @@ async def dashboard(
         "stats": stats_payload,
         "health": health_payload,
         "form_defaults": form_defaults_payload,
+        "connect_campaigns": connect_campaigns_payload,
         "etag": etag,
     }
 
@@ -654,6 +708,98 @@ async def clear_form_defaults(request: Request, prefix: Optional[str] = None, us
     for k in keys_to_clear:
         db.delete_config(k, FORM_DEFAULTS_CATEGORY, user_id=uid)
     return {"status": "cleared", "removed": keys_to_clear}
+
+
+# ---------------------------------------------------------------------------
+# Connect campaigns — saved searches with optional daily schedule
+# ---------------------------------------------------------------------------
+
+
+@router.get("/connect-campaigns")
+async def list_connect_campaigns(request: Request, user_id: Optional[str] = None):
+    uid = await resolve_user_id(request, user_id)
+    return {"campaigns": cc.list_campaigns(uid)}
+
+
+@router.post("/connect-campaigns")
+async def create_connect_campaign(
+    body: ConnectCampaignBody, request: Request, user_id: Optional[str] = None
+):
+    uid = await resolve_user_id(request, user_id)
+    try:
+        campaign = cc.create_campaign(uid, body.model_dump(exclude_none=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"campaign": campaign}
+
+
+@router.put("/connect-campaigns/{campaign_id}")
+async def update_connect_campaign(
+    campaign_id: str,
+    body: ConnectCampaignPatch,
+    request: Request,
+    user_id: Optional[str] = None,
+):
+    uid = await resolve_user_id(request, user_id)
+    try:
+        campaign = cc.update_campaign(
+            uid, campaign_id, body.model_dump(exclude_none=True)
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"campaign": campaign}
+
+
+@router.delete("/connect-campaigns/{campaign_id}")
+async def delete_connect_campaign(
+    campaign_id: str, request: Request, user_id: Optional[str] = None
+):
+    uid = await resolve_user_id(request, user_id)
+    if not cc.delete_campaign(uid, campaign_id):
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return {"status": "deleted", "id": campaign_id}
+
+
+@router.post("/connect-campaigns/{campaign_id}/run")
+async def run_connect_campaign(
+    campaign_id: str,
+    request: Request,
+    user_id: Optional[str] = None,
+    debug: bool = False,
+    headless: Optional[bool] = None,
+    no_ai: bool = False,
+):
+    uid = await resolve_user_id(request, user_id)
+    try:
+        return cc.run_campaign(
+            uid,
+            campaign_id,
+            source="manual",
+            debug=debug,
+            headless=headless,
+            no_ai=no_ai,
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to start task: {exc}")
+
+
+@router.get("/connect-campaigns/{campaign_id}/history")
+async def connect_campaign_history(
+    campaign_id: str, request: Request, user_id: Optional[str] = None
+):
+    uid = await resolve_user_id(request, user_id)
+    try:
+        return {"runs": cc.campaign_history(uid, campaign_id)}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Campaign not found")
 
 
 # ---------------------------------------------------------------------------

@@ -31,6 +31,24 @@ from selenium.webdriver.support.ui import WebDriverWait
 # debugging artifacts land in one place.
 _DIAG_DIR = os.path.join("logs", "diag")
 
+# Common shorthand → phrases that appear on LinkedIn result cards.
+_BIO_KEYWORD_ALIASES: dict[str, tuple[str, ...]] = {
+    "sde": (
+        "sde",
+        "software engineer",
+        "software developer",
+        "software dev",
+        "swe",
+        "backend engineer",
+        "full stack",
+        "fullstack",
+        "full-stack",
+    ),
+    "ml": ("ml", "machine learning", "deep learning", "ml engineer"),
+    "ai": ("ai", "artificial intelligence", "gen ai", "genai", "ai engineer"),
+    "swe": ("swe", "software engineer", "software developer"),
+}
+
 
 # Selector inventory for people-search results. LinkedIn ships A/B layouts
 # fairly often; the search code walks this list and stops at the first
@@ -356,7 +374,7 @@ class ProfileActionsMixin:
     def _go_to_next_search_page(self, query: str, current_page: int) -> Optional[int]:
         """Open the next people-search results page. Returns new page number or None."""
         next_page = current_page + 1
-        if next_page > 20:
+        if next_page > 30:
             return None
 
         try:
@@ -421,14 +439,57 @@ class ProfileActionsMixin:
             self._dump_pursue_diagnostics(reason="connect_search_failed", query=query)
             return results
 
-        initial = self._wait_for_people_search_results(timeout=20, min_results=1)
-        if not initial:
-            results["errors"].append(
-                "No connectable people found (all may be Pending or weekly limit reached)"
+        self._wait_for_search_page_ready(timeout=15)
+
+        search_page = 1
+        max_scan_pages = 30
+        initial: List[Dict[str, str]] = []
+        max_raw_seen = 0
+        max_raw_page = 1
+        while search_page <= max_scan_pages:
+            self._wait_for_search_page_ready(timeout=12)
+            raw = self._extract_profile_targets_from_page()
+            if not raw:
+                raw = self._wait_for_people_search_results(timeout=10, min_results=1)
+            filtered = self._filter_targets_by_bio(raw, bio_keywords)
+            logging.info(
+                "CONNECT scan page=%d connectable=%d bio_match=%d",
+                search_page,
+                len(raw),
+                len(filtered),
             )
+            if len(raw) > max_raw_seen:
+                max_raw_seen = len(raw)
+                max_raw_page = search_page
+            if filtered:
+                initial = filtered
+                logging.info(
+                    "CONNECT search_results_ready connectable=%d page=%d",
+                    len(filtered),
+                    search_page,
+                )
+                break
+            next_page = self._go_to_next_search_page(query, search_page)
+            if not next_page:
+                break
+            search_page = next_page
+
+        if not initial:
+            msg = (
+                "No connectable people found after scanning search results "
+                f"(stopped on page {search_page})"
+            )
+            if bio_keywords:
+                msg += f"; none matched bio keywords: {', '.join(bio_keywords)}"
+                if max_raw_seen > 0:
+                    msg += (
+                        f" (page {max_raw_page} had {max_raw_seen} connectable "
+                        "without a bio match)"
+                    )
+            msg += " — profiles may be Pending or weekly limit reached"
+            results["errors"].append(msg)
             self._dump_pursue_diagnostics(reason="connect_no_connectable", query=query)
             return results
-        logging.info("CONNECT search_results_ready connectable=%d", len(initial))
 
         if self._invitation_modal_visible():
             logging.info("CONNECT clearing leftover invitation modal before search")
@@ -438,7 +499,7 @@ class ProfileActionsMixin:
         seen_profiles: Set[str] = set()
         stalled = 0
         stall_budget = 8
-        search_page = 1
+        # search_page may already point at the first page with connectable results
 
         while results["sent"] < max_connects and stalled < stall_budget:
             targets = self._collect_people_profile_targets(bio_keywords)
@@ -459,7 +520,7 @@ class ProfileActionsMixin:
                 if next_page:
                     search_page = next_page
                     stalled = 0
-                    self._wait_for_people_search_results(timeout=12, min_results=0)
+                    self._wait_for_search_page_ready(timeout=12)
                     continue
                 stalled += 1
                 time.sleep(1.5)
@@ -519,7 +580,7 @@ class ProfileActionsMixin:
                 if next_page:
                     search_page = next_page
                     stalled = 0
-                    self._wait_for_people_search_results(timeout=12, min_results=0)
+                    self._wait_for_search_page_ready(timeout=12)
                 else:
                     stalled += 1
                     time.sleep(1.5)
@@ -528,6 +589,81 @@ class ProfileActionsMixin:
             self._dump_pursue_diagnostics(reason="connect_no_sent", query=query)
 
         return results
+
+    def _expand_bio_keywords(self, bio_keywords: Optional[List[str]]) -> List[str]:
+        """Expand shorthand (e.g. SDE) to phrases common on LinkedIn cards."""
+        if not bio_keywords:
+            return []
+        expanded: set[str] = set()
+        for kw in bio_keywords:
+            token = (kw or "").strip().lower()
+            if not token:
+                continue
+            expanded.add(token)
+            for alias_key, phrases in _BIO_KEYWORD_ALIASES.items():
+                if token == alias_key or token in phrases:
+                    expanded.update(phrases)
+        return sorted(expanded)
+
+    def _get_search_card_text(self, profile_key: str) -> str:
+        """Return visible card text for a people-search profile slug."""
+        try:
+            text = self.driver.execute_script(
+                """
+                const key = arguments[0];
+                for (const card of document.querySelectorAll(
+                  "div[componentkey^='SearchResultsACo']"
+                )) {
+                  if (card.querySelector(`a[href*="/in/${key}"]`)) {
+                    return card.innerText || "";
+                  }
+                }
+                return "";
+                """,
+                profile_key,
+            )
+            return str(text or "")
+        except Exception:
+            return profile_key or ""
+
+    def _filter_targets_by_bio(
+        self,
+        raw: List[Dict[str, str]],
+        bio_keywords: Optional[List[str]],
+    ) -> List[Dict[str, str]]:
+        if not bio_keywords:
+            return raw
+        normalized = self._expand_bio_keywords(bio_keywords)
+        if not normalized:
+            return raw
+        filtered: List[Dict[str, str]] = []
+        for target in raw:
+            text = self._get_search_card_text(target.get("key", "")).lower()
+            if any(kw in text for kw in normalized):
+                filtered.append(target)
+        return filtered
+
+    def _wait_for_search_page_ready(self, timeout: float = 15.0) -> bool:
+        """Wait until people-search result cards appear (Connect not required)."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                count = self.driver.execute_script(
+                    """
+                    const cards = document.querySelectorAll(
+                      "div[componentkey^='SearchResultsACo']"
+                    );
+                    if (cards.length > 0) return cards.length;
+                    return document.querySelectorAll("a[href*='/in/']").length;
+                    """
+                )
+                if int(count or 0) > 0:
+                    time.sleep(1.2)
+                    return True
+            except Exception:
+                pass
+            time.sleep(1.0)
+        return False
 
     def _extract_profile_targets_from_page(self) -> List[Dict[str, str]]:
         """People on the search page who still show a Connect / invite control."""
@@ -632,27 +768,7 @@ class ProfileActionsMixin:
         raw = self._extract_profile_targets_from_page()
         if not raw:
             raw = self._wait_for_people_search_results(timeout=8, min_results=1)
-
-        if not bio_keywords:
-            return raw
-
-        normalized = [kw.lower() for kw in bio_keywords if kw]
-        if not normalized:
-            return raw
-
-        filtered: List[Dict[str, str]] = []
-        for target in raw:
-            try:
-                card = self.driver.find_element(
-                    By.XPATH,
-                    f"//a[contains(@href,'/in/{target['key']}')]/ancestor::div[starts-with(@componentkey,'SearchResults')][1]",
-                )
-                text = (card.text or "").lower()
-            except Exception:
-                text = target.get("key", "").lower()
-            if any(kw in text for kw in normalized):
-                filtered.append(target)
-        return filtered or raw
+        return self._filter_targets_by_bio(raw, bio_keywords)
 
     def _click_connect_on_search_card(self, profile_key: str) -> str:
         """Click the inline Connect control on the people-search results page."""

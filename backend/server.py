@@ -60,6 +60,7 @@ configure_api_logging()
 
 @asynccontextmanager
 async def _app_lifespan(app: FastAPI):
+    import asyncio
     import logging
 
     log = logging.getLogger(__name__)
@@ -72,7 +73,34 @@ async def _app_lifespan(app: FastAPI):
             )
     except Exception:
         log.exception("Stale automation task reconcile failed")
+
+    scheduler_stop = asyncio.Event()
+
+    async def _connect_campaign_scheduler() -> None:
+        from services.connect_campaigns import tick_scheduled_campaigns
+
+        while not scheduler_stop.is_set():
+            try:
+                tick_scheduled_campaigns()
+            except Exception:
+                log.exception("Connect campaign scheduler tick failed")
+            try:
+                await asyncio.wait_for(scheduler_stop.wait(), timeout=60.0)
+                break
+            except asyncio.TimeoutError:
+                continue
+
+    scheduler_task = asyncio.create_task(_connect_campaign_scheduler())
+
     yield
+
+    scheduler_stop.set()
+    scheduler_task.cancel()
+    try:
+        await scheduler_task
+    except asyncio.CancelledError:
+        pass
+
     if stop_supervisor(reason="backend_shutdown"):
         log.info("Stopped job-applier supervisor on backend shutdown")
         try:

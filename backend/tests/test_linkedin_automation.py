@@ -1099,6 +1099,7 @@ def test_dashboard_endpoint_includes_core_sections(client, test_db, configured_a
     assert "stats" in body
     assert "health" in body
     assert "form_defaults" in body
+    assert "connect_campaigns" in body
     assert "accounts" not in body
 
 
@@ -1643,3 +1644,137 @@ def test_dashboard_etag_changes_when_tasks_change(
     )
     assert second.status_code == 200
     assert second.headers["ETag"] != etag_before
+
+
+# ---------------------------------------------------------------------------
+# Connect campaigns
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def clear_connect_campaigns(test_db):
+    from services.connect_campaigns import CONNECT_CAMPAIGNS_CATEGORY, CAMPAIGNS_KEY
+
+    test_db.delete_config(CAMPAIGNS_KEY, CONNECT_CAMPAIGNS_CATEGORY, user_id=TEST_USER)
+    yield
+    test_db.delete_config(CAMPAIGNS_KEY, CONNECT_CAMPAIGNS_CATEGORY, user_id=TEST_USER)
+
+
+def test_connect_campaign_crud(client, clear_connect_campaigns):
+    res = client.post(
+        "/api/linkedin-automation/connect-campaigns",
+        json={
+            "name": "IIT SDE",
+            "query": "IIT Kanpur",
+            "max_connects": 15,
+            "bio_keywords": ["SDE"],
+            "schedule_enabled": True,
+            "schedule_time": "09:30",
+            "daily_max": 20,
+            "user_id": TEST_USER,
+        },
+    )
+    assert res.status_code == 200
+    campaign = res.json()["campaign"]
+    assert campaign["name"] == "IIT SDE"
+    assert campaign["query"] == "IIT Kanpur"
+    assert campaign["bio_keywords"] == ["SDE"]
+    cid = campaign["id"]
+
+    listed = client.get(
+        f"/api/linkedin-automation/connect-campaigns?user_id={TEST_USER}"
+    )
+    assert listed.status_code == 200
+    assert len(listed.json()["campaigns"]) == 1
+
+    res = client.put(
+        f"/api/linkedin-automation/connect-campaigns/{cid}",
+        json={"name": "IIT SDE daily", "user_id": TEST_USER},
+    )
+    assert res.status_code == 200
+    assert res.json()["campaign"]["name"] == "IIT SDE daily"
+
+    res = client.delete(
+        f"/api/linkedin-automation/connect-campaigns/{cid}?user_id={TEST_USER}"
+    )
+    assert res.status_code == 200
+    listed = client.get(
+        f"/api/linkedin-automation/connect-campaigns?user_id={TEST_USER}"
+    )
+    assert listed.json()["campaigns"] == []
+
+
+def test_connect_campaign_run_launches_task(
+    client, fake_popen, clear_automation_tasks, clear_connect_campaigns, auth_as
+):
+    auth_as(TEST_USER)
+    create = client.post(
+        "/api/linkedin-automation/connect-campaigns",
+        json={
+            "name": "Run me",
+            "query": "IIT Kanpur",
+            "max_connects": 5,
+            "user_id": TEST_USER,
+        },
+    )
+    cid = create.json()["campaign"]["id"]
+
+    res = client.post(
+        f"/api/linkedin-automation/connect-campaigns/{cid}/run?user_id={TEST_USER}"
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["campaign_id"] == cid
+    assert body["task"]["action"] == "connect"
+    spawned = fake_popen.instances[-1]
+    assert "connect" in spawned.cmd
+    assert "IIT Kanpur" in spawned.cmd
+
+
+def test_connect_task_finished_updates_campaign_stats(
+    test_db, clear_connect_campaigns, tmp_path
+):
+    from services import connect_campaigns as cc
+
+    campaign = cc.create_campaign(
+        TEST_USER,
+        {"name": "Stats", "query": "IIT Kanpur", "max_connects": 3},
+    )
+    log_path = tmp_path / "connect.log"
+    log_path.write_text(
+        "Connect summary: sent=4 skipped=2 errors=0\n",
+        encoding="utf-8",
+    )
+    cc.record_connect_task_start(
+        TEST_USER, campaign["id"], "la-connect-test", source="manual"
+    )
+    cc.on_connect_task_finished(
+        "la-connect-test",
+        TEST_USER,
+        str(log_path),
+        status="completed",
+        exit_code=0,
+    )
+    updated = cc.get_campaign(TEST_USER, campaign["id"])
+    assert updated["totals"]["sent"] == 4
+    assert updated["totals"]["skipped"] == 2
+    assert updated["runs"][0]["sent"] == 4
+    assert updated["runs"][0]["status"] == "completed"
+
+
+def test_schedule_due_once_per_day():
+    from datetime import datetime, timezone
+
+    from services.connect_campaigns import _schedule_due
+
+    campaign = {
+        "enabled": True,
+        "schedule_enabled": True,
+        "schedule_time": "09:00",
+        "last_run_at": datetime(2026, 6, 16, 9, 0, tzinfo=timezone.utc).isoformat(),
+    }
+    now = datetime(2026, 6, 16, 9, 0, tzinfo=timezone.utc)
+    assert _schedule_due(campaign, now) is False
+
+    campaign["last_run_at"] = None
+    assert _schedule_due(campaign, now) is True

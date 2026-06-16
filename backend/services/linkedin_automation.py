@@ -325,6 +325,23 @@ def _reap(task: AutomationTask) -> None:
             db.finalize_automation_task(task.id, rc, status=task.status)
         except Exception as exc:
             logging.warning(f"Could not finalize automation task {task.id} in DB: {exc}")
+        if task.action == "connect":
+            try:
+                from services.connect_campaigns import on_connect_task_finished
+
+                on_connect_task_finished(
+                    task.id,
+                    task.user_id,
+                    task.log_path,
+                    status=task.status,
+                    exit_code=task.exit_code,
+                )
+            except Exception as exc:
+                logging.warning(
+                    "Could not update connect campaign for task %s: %s",
+                    task.id,
+                    exc,
+                )
 
 
 def get_task(task_id: str) -> AutomationTask | None:
