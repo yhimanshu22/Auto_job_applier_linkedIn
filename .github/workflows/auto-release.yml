@@ -20,6 +20,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: release-${{ github.repository }}
@@ -81,17 +82,29 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Create and push release tag
+        id: tag
         shell: bash
         run: |
           set -euo pipefail
           TAG="${{ steps.bump.outputs.tag }}"
-          VERSION="${{ steps.bump.outputs.version }}"
 
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Release tag ${TAG} already exists; nothing to do"
+            echo "created=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           git tag -a "$TAG" -m "Release ${TAG}"
           git push origin "$TAG"
-          echo "Pushed ${TAG} — release-desktop workflow will build installers"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+          echo "Pushed ${TAG}"
+
+      - name: Trigger desktop release build
+        if: steps.tag.outputs.created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.bump.outputs.tag }}"
+          # Tag pushes from GITHUB_TOKEN do not start other workflows — trigger explicitly.
+          gh workflow run "Release desktop app" --ref main -f "tag=${TAG}"
+          echo "Started Release desktop app for ${TAG}"
