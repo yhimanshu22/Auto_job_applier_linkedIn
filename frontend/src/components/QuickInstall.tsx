@@ -5,6 +5,7 @@ import DownloadLink, { DownloadIcon } from "@/components/DownloadLink";
 import {
   DESKTOP_VERSION,
   LINUX_INSTALLER_FILENAME,
+  MAC_ARM_INSTALLER_FILENAME,
   WINDOWS_INSTALLER_FILENAME,
   detectInstallOs,
   getInstallerFilename,
@@ -107,10 +108,8 @@ export default function QuickInstall({ id, variant = "section" }: QuickInstallPr
               <span className="font-mono text-xs">{WINDOWS_INSTALLER_FILENAME}</span>
             </p>
             <p>
-              <span className="font-semibold text-zinc-900">macOS:</span> Apple Silicon and Intel
-              builds — auto-detected. Intel Macs get{" "}
-              <span className="font-mono text-xs">_x64.dmg</span>, Apple Silicon gets{" "}
-              <span className="font-mono text-xs">_aarch64.dmg</span>.
+              <span className="font-semibold text-zinc-900">macOS:</span>{" "}
+              <span className="font-mono text-xs">{MAC_ARM_INSTALLER_FILENAME}</span> (Apple Silicon)
             </p>
             <p>
               <span className="font-semibold text-zinc-900">Linux:</span>{" "}

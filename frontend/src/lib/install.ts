@@ -17,11 +17,8 @@ const ASSET_PATTERNS: Record<InstallOs, RegExp> = {
   linux: /\.AppImage$/i,
 };
 
-/** Pick Apple Silicon vs Intel DMG on macOS (client-side). */
+/** macOS build is Apple Silicon (aarch64) for now. */
 export function getMacInstallerFilename(): string {
-  if (typeof navigator !== "undefined" && navigator.userAgent.includes("Intel Mac")) {
-    return MAC_INTEL_INSTALLER_FILENAME;
-  }
   return MAC_ARM_INSTALLER_FILENAME;
 }
 

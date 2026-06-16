@@ -51,15 +51,7 @@ jobs:
           path: desktop/src-tauri/target/release/bundle/msi/*.msi
 
   build-macos:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-latest
-            artifact: macos-arm64
-          - runner: macos-13
-            artifact: macos-x64
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -78,7 +70,7 @@ jobs:
       - name: Install uv
         run: pip install uv
 
-      - name: Build macOS DMG
+      - name: Build macOS DMG (Apple Silicon)
         working-directory: desktop
         run: |
           npm ci
@@ -87,7 +79,7 @@ jobs:
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: macos-installer
           path: desktop/src-tauri/target/release/bundle/dmg/*.dmg
 
   build-linux:
