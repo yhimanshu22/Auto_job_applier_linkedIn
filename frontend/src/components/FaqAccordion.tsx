@@ -1,72 +1,42 @@
-"use client";
-
-import { useState } from "react";
+import Link from "next/link";
 import { LANDING_FAQS } from "@/lib/faq";
 
 export default function FaqAccordion() {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
-
-  const toggle = (index: number) => {
-    setOpenIndex((current) => (current === index ? null : index));
-  };
-
   return (
-    <div className="space-y-3">
-      {LANDING_FAQS.map((item, idx) => {
-        const isOpen = openIndex === idx;
+    <div className="flex flex-col gap-4 text-left">
+      {LANDING_FAQS.map((item) => (
+        <details
+          key={item.q}
+          className="group rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm open:border-accent/30 open:shadow-md transition-shadow"
+        >
+          <summary className="cursor-pointer list-none text-base font-semibold text-zinc-900 flex items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+            {item.q}
+            <span className="shrink-0 text-zinc-400 group-open:rotate-180 transition-transform duration-150" aria-hidden>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
+          </summary>
+          <p className="mt-3 text-zinc-500 leading-relaxed">{item.a}</p>
+        </details>
+      ))}
+    </div>
+  );
+}
 
-        return (
-          <div
-            key={item.q}
-            className={[
-              "rounded-2xl border bg-zinc-50/50",
-              isOpen
-                ? "border-accent/30 bg-white shadow-sm"
-                : "border-zinc-200/80 hover:border-zinc-300 hover:bg-white",
-            ].join(" ")}
-          >
-            <button
-              type="button"
-              onClick={() => toggle(idx)}
-              aria-expanded={isOpen}
-              className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left"
-            >
-              <span className="flex items-center gap-3 min-w-0">
-                <span className="size-6 shrink-0 rounded-full bg-accent/20 text-accent text-xs flex items-center justify-center border border-accent/20 font-bold">
-                  {idx + 1}
-                </span>
-                <span className="text-base font-semibold text-zinc-900">{item.q}</span>
-              </span>
-              <span
-                className={[
-                  "shrink-0 text-zinc-400 transition-transform duration-150",
-                  isOpen ? "rotate-180" : "",
-                ].join(" ")}
-                aria-hidden
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </span>
-            </button>
-
-            {isOpen && (
-              <p className="px-6 pb-5 pl-13 text-zinc-500 leading-relaxed">
-                {item.a}
-              </p>
-            )}
-          </div>
-        );
-      })}
+export function FaqSectionHeader() {
+  return (
+    <div className="text-center space-y-4 mb-12">
+      <h2 className="font-serif text-4xl lg:text-5xl font-medium tracking-tight text-zinc-900 leading-tight">
+        Frequently Asked Questions
+      </h2>
+      <p className="text-zinc-500">
+        Everything you need to know about LinkdApply. See our{" "}
+        <Link href="/pricing" className="text-accent underline underline-offset-2 hover:text-accent/80">
+          pricing page
+        </Link>
+        .
+      </p>
     </div>
   );
 }
