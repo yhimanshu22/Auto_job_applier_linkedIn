@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import DownloadLink, { DownloadIcon } from "@/components/DownloadLink";
 import {
+  DESKTOP_VERSION,
+  LINUX_INSTALLER_FILENAME,
+  WINDOWS_INSTALLER_FILENAME,
   detectInstallOs,
-  getInstallCommand,
+  getInstallerFilename,
+  getInstallerLabel,
+  getOsLabel,
   type InstallOs,
 } from "@/lib/install";
 
@@ -18,68 +24,37 @@ const OS_TABS = [
   { id: "linux", label: "Linux" },
 ] as const;
 
-// Stable default for SSR + first client paint; real OS is applied after mount.
 const SSR_DEFAULT_OS: InstallOs = "windows";
 
 export default function QuickInstall({ id, variant = "section" }: QuickInstallProps) {
   const [active, setActive] = useState<InstallOs>(SSR_DEFAULT_OS);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setActive(detectInstallOs());
   }, []);
 
-  const command = useMemo(() => getInstallCommand(active), [active]);
+  const osLabel = getOsLabel(active);
+  const installerLabel = useMemo(() => getInstallerLabel(active), [active]);
+  const installerFilename = useMemo(() => getInstallerFilename(active), [active]);
 
-  async function onCopy() {
-    try {
-      await navigator.clipboard.writeText(command);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1400);
-    } catch {
-      // ignore: clipboard may be blocked; user can copy manually
-    }
-  }
+  const downloadCta = (
+    <DownloadLink
+      os={active}
+      className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white purple-gradient-button shadow-md hover:scale-[1.02] transition-all"
+    >
+      <DownloadIcon />
+      Download for {osLabel}
+    </DownloadLink>
+  );
 
   if (variant === "compact") {
     return (
       <div className="w-full max-w-2xl mx-auto space-y-3 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
-        <div className="inline-flex rounded-full border border-zinc-200 bg-white p-1 mx-auto">
-          {OS_TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setActive(t.id)}
-              className={[
-                "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-full transition-colors",
-                active === t.id
-                  ? "bg-zinc-900 text-white"
-                  : "text-zinc-600 hover:text-zinc-900",
-              ].join(" ")}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          {downloadCta}
         </div>
-
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3 shadow-sm">
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-            <pre className="flex-1 overflow-x-auto rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-left text-xs text-zinc-800 leading-relaxed">
-              <code>{command}</code>
-            </pre>
-            <button
-              type="button"
-              onClick={onCopy}
-              className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white purple-gradient-button shadow-md hover:scale-[1.02] transition-all"
-            >
-              {copied ? "Copied" : "Copy command"}
-            </button>
-          </div>
-        </div>
-
         <p className="text-xs text-zinc-500 text-center">
-          Requires Rust, Node.js, and Google Chrome. Installer output:{" "}
-          <span className="font-semibold text-zinc-700">desktop/src-tauri/target/release/bundle/</span>
+          v{DESKTOP_VERSION} · {installerLabel}
         </p>
       </div>
     );
@@ -90,15 +65,15 @@ export default function QuickInstall({ id, variant = "section" }: QuickInstallPr
       <div className="mx-auto max-w-4xl px-6 lg:px-8">
         <div className="text-center space-y-4 mb-10">
           <h2 className="font-serif text-4xl lg:text-5xl font-medium tracking-tight text-zinc-900 leading-tight">
-            Build the <span className="text-accent italic">desktop app</span>
+            Install the <span className="text-accent italic">desktop app</span>
           </h2>
           <p className="text-zinc-500">
-            Tauri packages the local bot sidecar and opens the dashboard. Build from source, or download a release when available.
+            Download for Windows, macOS, or Linux. Run the installer, then sign in to start applying.
           </p>
         </div>
 
-        <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6 lg:p-8 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+        <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6 lg:p-8 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="inline-flex rounded-full border border-zinc-200 bg-white p-1">
               {OS_TABS.map((t) => (
                 <button
@@ -117,25 +92,33 @@ export default function QuickInstall({ id, variant = "section" }: QuickInstallPr
               ))}
             </div>
 
-            <button
-              type="button"
-              onClick={onCopy}
-              className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white purple-gradient-button shadow-md hover:scale-[1.02] transition-all"
+            <DownloadLink
+              os={active}
+              className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white purple-gradient-button shadow-md hover:scale-[1.02] transition-all"
             >
-              {copied ? "Copied" : "Copy command"}
-            </button>
+              <DownloadIcon />
+              Download v{DESKTOP_VERSION}
+            </DownloadLink>
           </div>
 
-          <pre className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 leading-relaxed">
-            <code>{command}</code>
-          </pre>
-
-          <div className="mt-5 text-xs text-zinc-500 space-y-1">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-600 space-y-2">
             <p>
-              Dev run: <span className="font-mono">cd desktop && npm run dev</span> (starts backend + opens dashboard)
+              <span className="font-semibold text-zinc-900">Windows:</span>{" "}
+              <span className="font-mono text-xs">{WINDOWS_INSTALLER_FILENAME}</span>
             </p>
             <p>
-              Requires Rust, Node.js, uv/Python 3.10+, and Google Chrome.
+              <span className="font-semibold text-zinc-900">macOS:</span> Apple Silicon and Intel
+              builds — auto-detected. Intel Macs get{" "}
+              <span className="font-mono text-xs">_x64.dmg</span>, Apple Silicon gets{" "}
+              <span className="font-mono text-xs">_aarch64.dmg</span>.
+            </p>
+            <p>
+              <span className="font-semibold text-zinc-900">Linux:</span>{" "}
+              <span className="font-mono text-xs">{LINUX_INSTALLER_FILENAME}</span> (AppImage)
+            </p>
+            <p className="text-xs text-zinc-500 pt-1">
+              Selected: <span className="font-mono">{installerFilename}</span> · Requires Google
+              Chrome
             </p>
           </div>
         </div>

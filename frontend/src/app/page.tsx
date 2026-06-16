@@ -3,6 +3,8 @@ import Footer from "@/components/Footer";
 import Link from "next/link";
 import StructuredData from "@/components/StructuredData";
 import QuickInstall from "@/components/QuickInstall";
+import HeroDownloadButton from "@/components/HeroDownloadButton";
+import { DESKTOP_VERSION } from "@/lib/install";
 
 export default function LandingPage() {
   return (
@@ -36,7 +38,7 @@ export default function LandingPage() {
               </h1>
               <div className="flex justify-center mt-4">
                 <span className="px-3 py-1 rounded-full bg-zinc-100 border border-zinc-200 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                  Current Version: v1.1.0 (Stable)
+                  Desktop v{DESKTOP_VERSION}
                 </span>
               </div>
               <p className="max-w-2xl mx-auto text-lg lg:text-xl text-zinc-500 leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
@@ -52,16 +54,7 @@ export default function LandingPage() {
               >
                 Start Applying Free
               </Link>
-              <a
-                href="#install"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-10 py-4 text-white font-semibold shadow-xl transition-all hover:bg-zinc-800 hover:scale-[1.02]"
-              >
-                <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <polyline points="16 18 22 12 16 6" />
-                  <polyline points="8 6 2 12 8 18" />
-                </svg>
-                Install locally
-              </a>
+              <HeroDownloadButton />
             </div>
 
             <QuickInstall variant="compact" />
