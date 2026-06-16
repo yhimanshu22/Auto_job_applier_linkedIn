@@ -10,6 +10,7 @@ from services.admin import admin_subscription, is_admin
 from utils.user_resolution import resolve_user_id
 from services.plan_limits import PLAN_LIMITS
 from services import payu as payu_service
+from services import billing_emails
 
 load_dotenv()
 
@@ -200,6 +201,7 @@ async def _handle_payu_callback(request: Request, *, success: bool):
                 f"{FRONTEND_URL}/billing/cancel?reason=activation_failed",
                 status_code=303,
             )
+        billing_emails.notify_payu_payment(params=params)
         return RedirectResponse(
             f"{FRONTEND_URL}/billing/success?provider=payu&txnid={txnid}",
             status_code=303,
@@ -290,6 +292,10 @@ async def start_free_trial(payload: FreeTrialRequest, request: Request):
             status="trialing",
             current_period_end=expiry.isoformat()
         )
+        billing_emails.notify_onboarding_and_trial(
+            email=user_id,
+            expires_at=expiry.isoformat(),
+        )
         return {"status": "success", "expires_at": expiry.isoformat()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -354,6 +360,7 @@ def handle_checkout_completed(session):
                 status='active',
                 payment_provider='stripe',
             )
+            billing_emails.notify_stripe_checkout(session=session)
         else:
             print("WARNING: No user_id found in checkout session metadata. Skip DB update.")
     except Exception as e:
@@ -399,7 +406,9 @@ def handle_subscription_updated(subscription):
 
 def handle_subscription_deleted(subscription):
     subscription_id = subscription.get("id")
-    user_id = subscription.get("metadata", {}).get("user_id")
+    metadata = subscription.get("metadata", {}) or {}
+    user_id = metadata.get("user_id")
+    plan = metadata.get("plan") or "starter"
 
     print("Subscription deleted:", subscription_id)
 
@@ -408,13 +417,16 @@ def handle_subscription_deleted(subscription):
             user_id=user_id,
             status='canceled'
         )
+        billing_emails.notify_subscription_cancelled(email=user_id, plan=plan)
 
 
 def handle_payment_failed(invoice):
     customer_id = invoice.get("customer")
+    email = invoice.get("customer_email")
+    plan = "starter"
     print("Payment failed:", customer_id)
-    # Could mark as past_due here if we query the user by customer_id
-    # For now, subscription.updated event usually covers this anyway
+    if email:
+        billing_emails.notify_payment_failed(email=email, plan=plan)
 
 
 class PortalRequest(BaseModel):
