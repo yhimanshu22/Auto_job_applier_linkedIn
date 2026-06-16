@@ -1,0 +1,97 @@
+name: Auto release on push
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - VERSION
+      - desktop/**
+      - scripts/read-version.js
+      - scripts/sync-desktop-version.js
+      - scripts/bump-version.js
+      - .github/workflows/release-desktop.yml
+      - .github/workflows/auto-release.yml
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump before release if tag already exists (patch, minor, major, or skip)"
+        required: false
+        default: patch
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version when tag already exists
+        id: bump
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUMP="${{ github.event_name == 'workflow_dispatch' && inputs.bump || 'patch' }}"
+          VERSION=$(node scripts/read-version.js)
+          TAG="v${VERSION}"
+
+          if [ "$BUMP" = "skip" ]; then
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists; bumping ${BUMP} version"
+            node scripts/bump-version.js "$BUMP"
+            node scripts/sync-desktop-version.js
+            VERSION=$(node scripts/read-version.js)
+            TAG="v${VERSION}"
+            git add VERSION desktop/package.json desktop/src-tauri/tauri.conf.json desktop/src-tauri/Cargo.toml
+            git commit -m "chore: bump version to ${VERSION} [skip ci]"
+            git push origin HEAD:main
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag ${TAG} does not exist yet; keeping VERSION at ${VERSION}"
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.bump.outputs.tag }}"
+          VERSION="${{ steps.bump.outputs.version }}"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Release tag ${TAG} already exists; nothing to do"
+            exit 0
+          fi
+
+          git tag -a "$TAG" -m "Release ${TAG}"
+          git push origin "$TAG"
+          echo "Pushed ${TAG} — release-desktop workflow will build installers"
