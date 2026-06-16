@@ -338,6 +338,7 @@ export default function Dashboard() {
     if (isFormMode) {
       const category = activeTab.split(".")[0];
       finalContent = formatConfigContent(category, formData);
+    }
 
     try {
       const cleanName = activeTab.split('.')[0];
