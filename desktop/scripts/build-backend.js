@@ -180,6 +180,16 @@ if (force) {
 }
 cleanPyinstallerArtifacts();
 
+const venvDir = path.join(backendDir, ".venv");
+if (!fs.existsSync(venvDir) || process.env.CI === "true") {
+  console.log("Syncing backend dependencies (uv sync)...");
+  execSync("uv sync", {
+    cwd: backendDir,
+    stdio: "inherit",
+    env: buildEnv,
+  });
+}
+
 console.log("Installing PyInstaller into backend venv...");
 try {
   execSync("uv pip install pyinstaller", {
