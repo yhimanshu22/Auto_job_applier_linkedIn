@@ -72,9 +72,10 @@ def _health_snapshot(user_id: str) -> dict[str, Any]:
         if active
         else False
     )
+    framework_ready = la.is_framework_available()
     return {
         "framework_dir": framework_dir,
-        "framework_available": os.path.isdir(framework_dir),
+        "framework_available": framework_ready,
         "main_py_exists": os.path.isfile(entrypoint),
         "entrypoint_path": entrypoint,
         "session_store": "user_sessions",

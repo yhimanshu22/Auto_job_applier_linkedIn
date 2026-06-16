@@ -45,6 +45,49 @@ def get_config_path(filename: str) -> str:
     return os.path.join(get_base_path(), "config", filename)
 
 
+def get_bundled_framework_dir() -> str:
+    """Read-only automation bundle (PyInstaller ``_MEIPASS`` or source tree)."""
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", "")
+        if meipass:
+            return os.path.join(meipass, "linkedin_automation")
+    return os.path.join(get_base_path(), "linkedin_automation")
+
+
+def _seed_framework_workspace(workspace: str) -> None:
+    """Copy default topics/calendar templates into the writable workspace once."""
+    bundled = get_bundled_framework_dir()
+    if not os.path.isdir(bundled):
+        return
+    import shutil
+
+    for name in ("topics.txt", "content_calendar.txt"):
+        dest = os.path.join(workspace, name)
+        if os.path.isfile(dest):
+            continue
+        src = os.path.join(bundled, name)
+        if os.path.isfile(src):
+            try:
+                shutil.copy2(src, dest)
+            except OSError:
+                pass
+
+
+def get_framework_workspace_dir() -> str:
+    """
+    Writable cwd for automation subprocesses (generated topics, calendar files).
+
+    Dev servers without ``LINKDAPPLY_USER_DATA`` use the source package tree.
+    Packaged desktop installs use ``%APPDATA%/LinkdApply/linkedin_automation``.
+    """
+    if getattr(sys, "frozen", False) or os.getenv("LINKDAPPLY_USER_DATA", "").strip():
+        workspace = os.path.join(get_runtime_writable_root(), "linkedin_automation")
+        os.makedirs(workspace, exist_ok=True)
+        _seed_framework_workspace(workspace)
+        return workspace
+    return os.path.join(get_base_path(), "linkedin_automation")
+
+
 # Secrets the packaged desktop app must share with supervisor/bot subprocesses.
 _RUNTIME_SECRET_KEYS = (
     "ENCRYPTION_KEY",

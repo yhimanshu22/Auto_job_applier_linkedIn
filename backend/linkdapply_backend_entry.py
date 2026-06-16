@@ -33,6 +33,13 @@ def main() -> None:
 
         supervisor_main()
         return
+    if "--automation" in sys.argv:
+        idx = sys.argv.index("--automation")
+        sys.argv = ["linkedin_automation", *sys.argv[idx + 1 :]]
+        from linkedin_automation.__main__ import main as automation_main
+
+        sys.exit(automation_main())
+        return
 
     host = os.getenv("LINKDAPPLY_API_HOST", "127.0.0.1")
     port = int(os.getenv("LINKDAPPLY_API_PORT", "8000"))

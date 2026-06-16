@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from app_paths import get_base_path, get_logs_dir
+from app_paths import get_base_path, get_framework_workspace_dir, get_logs_dir
 from db_manager import db
 from services.linkedin_env import (
     apply_dashboard_automation_settings,
@@ -34,8 +34,27 @@ from services.linkedin_env import (
 
 
 def get_framework_dir() -> str:
-    """Return the absolute path to the bundled `linkedin_automation` package."""
-    return os.path.join(get_base_path(), "linkedin_automation")
+    """Return the cwd for automation subprocesses (writable when packaged)."""
+    return get_framework_workspace_dir()
+
+
+def is_framework_available() -> bool:
+    """True when the automation package can be launched on this runtime."""
+    if getattr(sys, "frozen", False):
+        import importlib.util
+
+        return importlib.util.find_spec("linkedin_automation.__main__") is not None
+    framework_dir = get_framework_dir()
+    return os.path.isdir(framework_dir) and os.path.isfile(
+        os.path.join(framework_dir, "__main__.py")
+    )
+
+
+def _automation_launch_prefix() -> list[str]:
+    """Frozen sidecars use ``--automation``; dev uses ``python -m linkedin_automation``."""
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--automation"]
+    return [sys.executable, "-m", "linkedin_automation"]
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +135,7 @@ def _build_env(account: str | None = None, *, user_id: str) -> dict[str, str]:
 
 def _build_command(action: str, params: dict[str, Any]) -> list[str]:
     """Map an action + params dict to the framework CLI argv."""
-    cmd: list[str] = [sys.executable, "-m", "linkedin_automation", action]
+    cmd: list[str] = _automation_launch_prefix() + [action]
 
     if params.get("debug"):
         cmd.append("--debug")
@@ -190,11 +209,12 @@ def start_task(
     a ``LookupError`` when ``account`` is specified but doesn't match any
     configured account.
     """
-    framework_dir = get_framework_dir()
-    if not os.path.isdir(framework_dir):
+    if not is_framework_available():
+        framework_dir = get_framework_dir()
         raise FileNotFoundError(
             f"LinkedIn automation framework not found at {framework_dir}"
         )
+    framework_dir = get_framework_dir()
 
     cmd = _build_command(action, params)
 
@@ -240,7 +260,7 @@ def start_task(
     task = AutomationTask(
         id=task_id,
         action=action,
-        args=cmd[2:],
+        args=cmd[len(_automation_launch_prefix()) :],
         log_path=log_path,
         user_id=user_id,
         process=process,
@@ -256,7 +276,7 @@ def start_task(
         db.create_automation_task(
             task_id=task_id,
             action=action,
-            args=cmd[2:],
+            args=cmd[len(_automation_launch_prefix()) :],
             log_path=log_path,
             user_id=user_id,
             account_username=account_username,

@@ -178,6 +178,16 @@ def test_build_command_post_with_text():
     assert cmd[cmd.index("--post-text") + 1] == "hello"
 
 
+def test_build_command_uses_automation_flag_when_frozen(monkeypatch):
+    from services import linkedin_automation as la_service
+
+    monkeypatch.setattr(la_service.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(la_service.sys, "executable", "/fake/linkdapply-backend.exe")
+
+    cmd = la_service._build_command("post", {"post_text": "hello"})
+    assert cmd[:3] == ["/fake/linkdapply-backend.exe", "--automation", "post"]
+
+
 def test_build_command_engage_defaults_and_overrides():
     from services import linkedin_automation as la_service
 

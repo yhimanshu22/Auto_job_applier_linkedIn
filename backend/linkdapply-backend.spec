@@ -7,6 +7,17 @@ from PyInstaller.utils.hooks import collect_submodules
 
 backend = Path(SPECPATH)
 
+
+def _framework_datas() -> list[tuple[str, str]]:
+    """Bundle default automation templates for the writable workspace seeder."""
+    root = backend / "linkedin_automation"
+    out: list[tuple[str, str]] = []
+    for name in ("topics.txt", "content_calendar.txt"):
+        path = root / name
+        if path.is_file():
+            out.append((str(path), "linkedin_automation"))
+    return out
+
 hiddenimports = [
     "uvicorn.logging",
     "uvicorn.loops",
@@ -28,7 +39,7 @@ hiddenimports = [
     "services.bot_config_cache",
     "services.smart_rate_limit",
     "services.chrome_ports",
-] + collect_submodules("cryptography")
+] + collect_submodules("cryptography") + collect_submodules("linkedin_automation")
 
 a = Analysis(
     [str(backend / "linkdapply_backend_entry.py")],
@@ -36,8 +47,7 @@ a = Analysis(
     binaries=[],
     datas=[
         (str(backend / "config"), "config"),
-        (str(backend / "linkedin_automation" / "topics.txt"), "linkedin_automation"),
-        (str(backend / "linkedin_automation" / "content_calendar.txt"), "linkedin_automation"),
+        *_framework_datas(),
     ],
     hiddenimports=hiddenimports,
     hookspath=[],
