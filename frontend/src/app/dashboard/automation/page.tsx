@@ -81,18 +81,6 @@ type Task = {
   args?: string[];
   log?: string;
   user_id?: string;
-  account_username?: string | null;
-};
-
-type LinkedInAccount = {
-  username: string;
-  primary: boolean;
-  has_password: boolean;
-};
-
-type AccountsPayload = {
-  accounts: LinkedInAccount[];
-  active: string | null;
 };
 
 // Persistent dashboard form defaults — mirrors backend ``ALLOWED_FORM_KEYS``.
@@ -100,7 +88,6 @@ type AccountsPayload = {
 // used to clear an individual key on the next save.
 type FormDefaults = {
   tab?: Tab;
-  selected_account?: string;
   // common flags
   common_debug?: boolean;
   common_headless?: boolean | null;
@@ -1048,15 +1035,8 @@ export default function AutomationPage() {
     main_py_exists?: boolean;
     shared_cookie_exists?: boolean;
     session_in_db?: boolean;
+    chrome_profile_ready?: boolean;
   }>({});
-  // LinkedIn accounts the bot can run as. `selectedAccount === ""` means
-  // "use the primary account" (whatever the backend's dashboard secrets
-  // currently designate as primary).
-  const [accountsPayload, setAccountsPayload] = useState<AccountsPayload>({
-    accounts: [],
-    active: null,
-  });
-  const [selectedAccount, setSelectedAccount] = useState<string>("");
   // Server-persisted dashboard form values. ``defaultsLoaded`` guards the
   // first-mount save effect — without it, the empty initial state would
   // immediately wipe the DB before /dashboard had a chance to return.
@@ -1125,13 +1105,6 @@ export default function AutomationPage() {
         common_headless: s.headless,
         common_no_ai: s.no_ai,
       });
-    },
-    [patchDefaults]
-  );
-  const setSelectedAccountPersisted = useCallback(
-    (acc: string) => {
-      setSelectedAccount(acc);
-      patchDefaults({ selected_account: acc });
     },
     [patchDefaults]
   );
@@ -1221,7 +1194,6 @@ export default function AutomationPage() {
       setTasks(nextTasks);
       setStats((j.stats as Stats) || null);
       setHealth(j.health || {});
-      if (j.accounts) setAccountsPayload(j.accounts as AccountsPayload);
       // Hydrate the form-defaults blob only once — after the first server
       // response. Subsequent polls just refresh stats/tasks; the user is
       // typing into the forms by then and we don't want to clobber input.
@@ -1230,9 +1202,6 @@ export default function AutomationPage() {
         setFormDefaults(fd);
         lastSavedDefaultsRef.current = JSON.stringify(fd);
         if (typeof fd.tab === "string") setTab(fd.tab);
-        if (typeof fd.selected_account === "string") {
-          setSelectedAccount(fd.selected_account);
-        }
         if (
           typeof fd.common_debug === "boolean" ||
           typeof fd.common_headless === "boolean" ||
@@ -1329,7 +1298,6 @@ export default function AutomationPage() {
     async (body: Record<string, unknown>) => {
       if (busy || !endpoint[tab]) return;
       const cleaned: Record<string, unknown> = { user_id: userId };
-      if (selectedAccount) cleaned.account = selectedAccount;
       Object.entries(body).forEach(([k, v]) => {
         if (v !== undefined && v !== null && v !== "") cleaned[k] = v;
       });
@@ -1356,12 +1324,15 @@ export default function AutomationPage() {
         setBusy(false);
       }
     },
-    [busy, endpoint, flash, refresh, selectedAccount, tab, userId]
+    [busy, endpoint, flash, refresh, tab, userId]
   );
 
   const stopTask = async (id: string) => {
     try {
-      const res = await apiFetch(`${API}/tasks/${id}/stop`, { method: "POST" });
+      const res = await apiFetch(
+        `${API}/tasks/${id}/stop?user_id=${encodeUserId(userId)}`,
+        { method: "POST" }
+      );
       if (res.ok) {
         flash({ type: "success", text: `Task ${id} stopped.` });
         etagRef.current = null;
@@ -1376,7 +1347,9 @@ export default function AutomationPage() {
 
   const viewTask = async (id: string) => {
     try {
-      const res = await apiFetch(`${API}/tasks/${id}?log_lines=500`);
+      const res = await apiFetch(
+        `${API}/tasks/${id}?log_lines=500&user_id=${encodeUserId(userId)}`
+      );
       if (res.ok) setOpenTask(await res.json());
       else flash({ type: "error", text: await parseErr(res) });
     } catch {
@@ -1581,47 +1554,6 @@ export default function AutomationPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 grid lg:grid-cols-12 gap-6">
         <section className="lg:col-span-5">
-          {accountsPayload.accounts.length > 0 && tab !== "settings" && (
-            <div className="bg-zinc-950 border border-zinc-900 rounded-xl shadow-sm mb-4 px-4 py-3 flex items-center gap-3">
-              <div className="shrink-0">
-                <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
-                  Running as
-                </p>
-                <p className="text-[10px] text-zinc-600 mt-0.5">
-                  LinkedIn account this task will authenticate as
-                </p>
-              </div>
-              <div className="flex-1">
-                {accountsPayload.accounts.length === 1 ? (
-                  <p className="text-xs font-mono text-zinc-300">
-                    {accountsPayload.accounts[0].username}
-                    <span className="ml-2 text-[9px] text-emerald-500 uppercase tracking-widest font-bold">
-                      primary
-                    </span>
-                  </p>
-                ) : (
-                  <select
-                    value={selectedAccount}
-                    onChange={(e) => setSelectedAccountPersisted(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 font-mono"
-                  >
-                    <option value="">
-                      Primary (
-                      {accountsPayload.active || "not configured"}
-                      )
-                    </option>
-                    {accountsPayload.accounts
-                      .filter((a) => !a.primary)
-                      .map((a) => (
-                        <option key={a.username} value={a.username}>
-                          {a.username}
-                        </option>
-                      ))}
-                  </select>
-                )}
-              </div>
-            </div>
-          )}
           <div className="bg-zinc-950 border border-zinc-900 rounded-xl shadow-sm overflow-hidden">
             <div className="px-4 py-2 border-b border-zinc-900 bg-zinc-900/30 flex gap-1">
               {TABS.map((t) => (
@@ -1690,14 +1622,21 @@ export default function AutomationPage() {
           <div className="mt-4 bg-zinc-950 border border-zinc-900 rounded-xl p-3 text-[10px] text-zinc-500 space-y-1">
             <p>
               <span className="text-zinc-400 font-bold uppercase tracking-widest">Note —</span>{" "}
-              Credentials are shared with the job applier via the dashboard secrets, and
-              LinkedIn sessions are stored in the local database (same as the job bot).
+              Automation runs as your signed-in account ({userId || "session user"}). It reuses
+              the job bot&apos;s saved Chrome profile when that email exists in secrets and the
+              bot has logged in at least once. Stop the job bot before running automation on the
+              same account.
             </p>
-            {!(health.session_in_db ?? health.shared_cookie_exists) && (
-              <p className="text-amber-400/80">
-                No cached LinkedIn session yet; the first run will log in and save cookies to the DB.
+            {health.chrome_profile_ready ? (
+              <p className="text-emerald-400/80">
+                Job-bot Chrome profile found — automation will reuse that login session.
               </p>
-            )}
+            ) : !(health.session_in_db ?? health.shared_cookie_exists) ? (
+              <p className="text-amber-400/80">
+                No job-bot Chrome profile or cached session yet — run the job bot once for this
+                email, or the first automation run will log in fresh.
+              </p>
+            ) : null}
           </div>
         </section>
 
@@ -1729,9 +1668,6 @@ export default function AutomationPage() {
                       Task
                     </th>
                     <th className="px-4 py-3 text-[9px] font-bold text-zinc-500 uppercase tracking-wider">
-                      Account
-                    </th>
-                    <th className="px-4 py-3 text-[9px] font-bold text-zinc-500 uppercase tracking-wider">
                       Started
                     </th>
                     <th className="px-4 py-3 text-[9px] font-bold text-zinc-500 uppercase tracking-wider">
@@ -1751,11 +1687,6 @@ export default function AutomationPage() {
                             {t.action.replace("-", " ")}
                           </p>
                           <p className="text-[9px] text-zinc-600 font-mono">{t.id}</p>
-                        </td>
-                        <td className="px-4 py-3 text-[10px] text-zinc-400 font-mono">
-                          {t.account_username || (
-                            <span className="text-zinc-700">—</span>
-                          )}
                         </td>
                         <td className="px-4 py-3 text-[10px] text-zinc-500">
                           {fmtTime(t.started_at)}
@@ -1791,7 +1722,7 @@ export default function AutomationPage() {
                   ) : (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={4}
                         className="px-4 py-10 text-center text-zinc-600 text-[10px] uppercase tracking-widest"
                       >
                         No tasks yet
@@ -1821,11 +1752,6 @@ export default function AutomationPage() {
                     ? ` • exit ${openTask.exit_code}`
                     : ""}
                 </p>
-                {openTask.account_username && (
-                  <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
-                    Account: {openTask.account_username}
-                  </p>
-                )}
               </div>
               <button
                 onClick={() => setOpenTask(null)}

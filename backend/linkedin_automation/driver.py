@@ -317,6 +317,28 @@ class DriverFactory:
         return browser_path
     
     @staticmethod
+    def _chrome_profile_dir() -> str | None:
+        path = (os.getenv("LINKDAPPLY_CHROME_PROFILE_DIR") or "").strip()
+        return path or None
+
+    @staticmethod
+    def _apply_chrome_profile_options(options) -> bool:
+        """Reuse the job bot's saved Chrome profile when ``LINKDAPPLY_CHROME_PROFILE_DIR`` is set."""
+        profile_dir = DriverFactory._chrome_profile_dir()
+        if not profile_dir:
+            return False
+        from services.chrome_profiles import clear_chrome_profile_locks
+
+        os.makedirs(profile_dir, exist_ok=True)
+        clear_chrome_profile_locks(profile_dir)
+        options.add_argument(f"--user-data-dir={profile_dir}")
+        port = (os.getenv("CHROME_DEBUG_PORT") or "").strip()
+        if port.isdigit():
+            options.add_argument(f"--remote-debugging-port={port}")
+        logging.info("Using job-bot Chrome profile: %s", profile_dir)
+        return True
+
+    @staticmethod
     def _configure_browser_options():
         """Build Chrome options tuned for automation while mimicking humans.
 
@@ -352,7 +374,9 @@ class DriverFactory:
         # Disable notifications and add custom user agent
         options.add_argument("--disable-notifications")
         options.add_argument(f"user-agent={config.USER_AGENT}")
-        
+
+        DriverFactory._apply_chrome_profile_options(options)
+
         return options
     
     @staticmethod
@@ -405,6 +429,7 @@ class DriverFactory:
                 std_options.add_argument(f"--window-size={config.WINDOW_SIZE[0]},{config.WINDOW_SIZE[1]}")
                 std_options.add_argument("--disable-notifications")
                 std_options.add_argument(f"user-agent={config.USER_AGENT}")
+                DriverFactory._apply_chrome_profile_options(std_options)
                 # If we detected a browser binary, point to it
                 if browser_path:
                     try:

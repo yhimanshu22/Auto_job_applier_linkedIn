@@ -21,11 +21,10 @@ from typing import Any, Optional
 from app_paths import get_base_path, get_framework_workspace_dir, get_logs_dir
 from db_manager import db
 from services.linkedin_env import (
+    apply_automation_user_credentials,
     apply_dashboard_automation_settings,
-    apply_dashboard_linkedin_credentials,
-    apply_linkedin_account,
-    get_active_linkedin_account,
 )
+from services.chrome_profiles import apply_automation_chrome_profile_env
 
 
 # ---------------------------------------------------------------------------
@@ -96,23 +95,22 @@ def _now_iso() -> str:
 # ---------------------------------------------------------------------------
 
 
-def _build_env(account: str | None = None, *, user_id: str) -> dict[str, str]:
-    """Build the subprocess env: shell env + dashboard creds + framework settings + PYTHONPATH.
+def _build_env(*, user_id: str) -> dict[str, str]:
+    """Build the subprocess env: signed-in user creds + framework settings + PYTHONPATH.
 
-    When ``account`` is set, the credentials injected by
-    ``apply_dashboard_linkedin_credentials`` are overridden so that account's
-    username/password are used for this run. When ``account`` is ``None`` or
-    empty, the primary account stays in place.
+    Automation always authenticates as ``user_id`` (session email), not other
+    LinkedIn accounts stored in dashboard secrets.
 
-    LinkedIn cookies for the automation framework are loaded/saved via SQLite
-    ``user_sessions`` (see ``services.linkedin_session``). The job-applier bot
-    uses per-account Chrome profiles instead.
+    When the job bot has already logged in, reuses its on-disk Chrome profile
+    (``chrome_profiles/{BOT_ID}``). Otherwise falls back to ``user_sessions``
+    cookies or a fresh login.
     """
     env = os.environ.copy()
     env["USER_ID"] = user_id
-    apply_dashboard_linkedin_credentials(env, user_id=user_id)
-    if account:
-        apply_linkedin_account(env, account, user_id=user_id)
+    linkedin_email = apply_automation_user_credentials(env, user_id=user_id)
+    apply_automation_chrome_profile_env(
+        env, user_id=user_id, linkedin_email=linkedin_email or user_id
+    )
     apply_dashboard_automation_settings(env, user_id=user_id)
 
     # `python -m linkedin_automation` needs the backend root on sys.path so the
@@ -200,14 +198,11 @@ def start_task(
     action: str,
     params: dict[str, Any],
     user_id: str,
-    account: str | None = None,
 ) -> AutomationTask:
     """Launch a framework subprocess and register it as a tracked task.
 
-    Raises ``FileNotFoundError`` if the framework directory is missing,
-    ``ValueError`` for unsupported actions / missing required params, and
-    a ``LookupError`` when ``account`` is specified but doesn't match any
-    configured account.
+    Raises ``FileNotFoundError`` if the framework directory is missing and
+    ``ValueError`` for unsupported actions / missing required params.
     """
     if not is_framework_available():
         framework_dir = get_framework_dir()
@@ -223,22 +218,16 @@ def start_task(
     os.makedirs(logs_dir, exist_ok=True)
     log_path = os.path.join(logs_dir, f"linkedin_automation_{task_id}.log")
 
-    env = _build_env(account=account, user_id=user_id)
-    # Resolve the account that will *actually* authenticate, after dashboard
-    # credentials + optional override are applied. This is what we persist on
-    # the task / show in the dashboard. ``None`` is possible when no account
-    # is configured at all.
-    if account:
-        resolved = (env.get("LINKEDIN_USERNAME") or "").strip()
-        if not resolved or resolved.lower() != str(account).strip().lower():
-            raise LookupError(f"LinkedIn account {account!r} not configured")
-    account_username = get_active_linkedin_account(env)
+    env = _build_env(user_id=user_id)
+    account_username = (user_id or "").strip() or None
 
     log_handle = open(log_path, "a", encoding="utf-8", buffering=1)
     ts = _now_iso()
     log_handle.write(f"\n{'=' * 60}\n[{ts}] Task {task_id} started\n")
     log_handle.write(f"Action: {action}\nCommand: {' '.join(cmd)}\nCWD: {framework_dir}\n")
-    log_handle.write(f"Account: {account_username or '(none configured)'}\n")
+    log_handle.write(f"User: {account_username or '(none)'}\n")
+    if env.get("LINKDAPPLY_CHROME_PROFILE_DIR"):
+        log_handle.write(f"Chrome profile: {env['LINKDAPPLY_CHROME_PROFILE_DIR']}\n")
     log_handle.write(f"{'=' * 60}\n")
     log_handle.flush()
 
@@ -367,11 +356,12 @@ def stop_task(task_id: str) -> bool:
 
 def tail_log(task: AutomationTask, lines: int = 200) -> str:
     if not os.path.isfile(task.log_path):
-        return ""
+        return f"(log file not found: {task.log_path})"
     try:
         with open(task.log_path, "r", encoding="utf-8", errors="replace") as f:
             buf = f.readlines()
-        return "".join(buf[-max(20, min(lines, 1000)) :])
+        text = "".join(buf[-max(20, min(lines, 1000)) :])
+        return text or "(log file is empty)"
     except Exception as exc:
         return f"(log read error: {exc})"
 

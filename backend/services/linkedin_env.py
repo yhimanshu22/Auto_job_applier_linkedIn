@@ -162,6 +162,25 @@ def _ensure_primary_env_slots(env: dict, legacy: dict[str, str]) -> None:
         env["LINKEDIN_PASSWORD"] = str(password)
 
 
+def apply_automation_user_credentials(env: dict, *, user_id: str) -> str:
+    """Inject LinkedIn credentials for automation — only the signed-in ``user_id`` email."""
+    uid = (user_id or "").strip()
+    if not uid:
+        return ""
+    for key in list(env.keys()):
+        if key == "LINKEDIN_USERNAME" or key.startswith("LINKEDIN_USERNAME_"):
+            env.pop(key, None)
+        elif key == "LINKEDIN_PASSWORD" or key.startswith("LINKEDIN_PASSWORD_"):
+            env.pop(key, None)
+    env["LINKEDIN_USERNAME"] = uid
+    password = get_linkedin_password_for_email(uid, uid)
+    if password:
+        env["LINKEDIN_PASSWORD"] = password
+    else:
+        env.pop("LINKEDIN_PASSWORD", None)
+    return uid
+
+
 def apply_dashboard_linkedin_credentials(env: dict, *, user_id: str) -> None:
     """Inject LinkedIn credentials from DB into ``env`` for supervisor / bot subprocesses."""
     migrate_canonical_linkedin_to_legacy(user_id=user_id)

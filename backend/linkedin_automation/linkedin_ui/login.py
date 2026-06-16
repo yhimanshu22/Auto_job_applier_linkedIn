@@ -178,9 +178,33 @@ class LoginMixin:
             logging.info("Navigating to LinkedIn login page")
             self.random_delay(config.MIN_PAGE_LOAD_DELAY, config.MAX_PAGE_LOAD_DELAY)
 
+            using_bot_profile = bool(os.getenv("LINKDAPPLY_CHROME_PROFILE_DIR", "").strip())
+
             try:
-                # 1. Try loading cookies first
-                if self.load_cookies():
+                if using_bot_profile:
+                    if not self._get_resilient(
+                        config.LINKEDIN_FEED_URL, desc="LinkedIn feed (bot profile)"
+                    ):
+                        logging.warning(
+                            "Could not open feed with job-bot Chrome profile; trying login flow."
+                        )
+                    else:
+                        self.random_delay(
+                            config.MIN_PAGE_LOAD_DELAY, config.MAX_PAGE_LOAD_DELAY
+                        )
+                        deadline = time.monotonic() + float(config.ELEMENT_TIMEOUT)
+                        while time.monotonic() < deadline and not self._looks_logged_in():
+                            time.sleep(0.25)
+                        if self._looks_logged_in():
+                            logging.info(
+                                "Logged in via job-bot Chrome profile (no cookie DB needed)"
+                            )
+                            return True
+                        logging.info(
+                            "Job-bot Chrome profile present but session not logged in; "
+                            "falling back to credentials / cookie store."
+                        )
+                elif self.load_cookies():
                     if not self._get_resilient(
                         config.LINKEDIN_FEED_URL, desc="LinkedIn feed (cookies)"
                     ):

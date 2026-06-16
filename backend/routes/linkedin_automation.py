@@ -23,9 +23,7 @@ from services import linkedin_automation as la
 from services.linkedin_env import (
     AUTOMATION_KEY_TO_ENV,
     AUTOMATION_SENSITIVE_KEYS,
-    get_active_linkedin_account,
     get_automation_settings,
-    list_linkedin_accounts,
     preview_env_with_dashboard_credentials,
 )
 from services.plan_limits import (
@@ -62,15 +60,16 @@ def _stats_with_plan(user_id: Optional[str]) -> dict[str, Any]:
 
 def _health_snapshot(user_id: str) -> dict[str, Any]:
     """Cheap filesystem probes that report whether the framework is reachable."""
+    from services.chrome_profiles import resolve_automation_chrome_profile
     from services.linkedin_session import cookie_store_ids, load_linkedin_cookies
 
     framework_dir = la.get_framework_dir()
     entrypoint = os.path.join(framework_dir, "__main__.py")
-    active = get_active_linkedin_account(user_id=user_id)
+    chrome_profile = resolve_automation_chrome_profile(
+        user_id=user_id, linkedin_email=user_id
+    )
     has_db_session = bool(
-        load_linkedin_cookies(user_id=user_id, linkedin_username=active)
-        if active
-        else False
+        load_linkedin_cookies(user_id=user_id, linkedin_username=user_id)
     )
     framework_ready = la.is_framework_available()
     return {
@@ -79,20 +78,10 @@ def _health_snapshot(user_id: str) -> dict[str, Any]:
         "main_py_exists": os.path.isfile(entrypoint),
         "entrypoint_path": entrypoint,
         "session_store": "user_sessions",
-        "session_store_ids": cookie_store_ids(user_id=user_id, linkedin_username=active)
-        if active
-        else [],
-        "session_in_db": has_db_session,
-    }
-
-
-def _accounts_snapshot(user_id: str) -> dict[str, Any]:
-    """Available LinkedIn accounts and which one is currently the default."""
-    accounts = list_linkedin_accounts(user_id=user_id)
-    active = get_active_linkedin_account(user_id=user_id)
-    return {
-        "accounts": accounts,
-        "active": active,
+        "session_store_ids": cookie_store_ids(user_id=user_id, linkedin_username=user_id),
+        "chrome_profile_ready": chrome_profile is not None,
+        "chrome_profile_dir": chrome_profile["profile_dir"] if chrome_profile else None,
+        "session_in_db": has_db_session or chrome_profile is not None,
     }
 
 
@@ -100,7 +89,6 @@ def _compute_etag(
     tasks: list[dict[str, Any]],
     stats: dict[str, Any],
     health: dict[str, Any],
-    accounts: dict[str, Any],
     form_defaults: dict[str, Any],
 ) -> str:
     """Strong ETag derived from the parts of the payload that can actually change.
@@ -127,10 +115,7 @@ def _compute_etag(
             "framework_available": health.get("framework_available"),
             "main_py_exists": health.get("main_py_exists"),
             "session_in_db": health.get("session_in_db"),
-        },
-        "accounts": {
-            "active": accounts.get("active"),
-            "names": [a["username"] for a in accounts.get("accounts", [])],
+            "chrome_profile_ready": health.get("chrome_profile_ready"),
         },
         "form_defaults": form_defaults,
     }
@@ -148,10 +133,6 @@ class _CommonOpts(BaseModel):
     headless: Optional[bool] = None
     no_ai: bool = False
     user_id: Optional[str] = None
-    # Optional LinkedIn account override. When set, the subprocess runs as
-    # that username instead of the primary configured account. Must match an
-    # entry returned by ``GET /api/linkedin-automation/accounts``.
-    account: Optional[str] = None
 
 
 class PostRequest(_CommonOpts):
@@ -194,15 +175,12 @@ class CalendarRequest(_CommonOpts):
 async def _start(action: str, params: dict[str, Any], request: Request) -> dict[str, Any]:
     claimed = params.pop("user_id", None)
     user_id = await resolve_user_id(request, claimed)
-    account = params.pop("account", None)
     assert_can_run_automation(user_id)
     try:
-        task = la.start_task(action, params, user_id=user_id, account=account)
+        task = la.start_task(action, params, user_id=user_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    except LookupError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to start task: {exc}")
@@ -259,8 +237,13 @@ def _assert_task_owner(request_user: str, task_user: str | None):
 
 
 @router.get("/tasks/{task_id}")
-async def get_task(request: Request, task_id: str, log_lines: int = 200):
-    uid = await resolve_user_id(request)
+async def get_task(
+    request: Request,
+    task_id: str,
+    log_lines: int = 200,
+    user_id: Optional[str] = None,
+):
+    uid = await resolve_user_id(request, user_id)
     task = la.get_task(task_id)
     if task is not None:
         _assert_task_owner(uid, task.user_id)
@@ -280,8 +263,12 @@ async def get_task(request: Request, task_id: str, log_lines: int = 200):
                 with open(log_path, "r", encoding="utf-8", errors="replace") as f:
                     buf = f.readlines()
                 row["log"] = "".join(buf[-max(20, min(int(log_lines), 1000)) :])
+            else:
+                row["log"] = f"(log file not found: {log_path})"
         except Exception as exc:
             row["log"] = f"(log read error: {exc})"
+    else:
+        row["log"] = "(no log path recorded for this task)"
     return row
 
 
@@ -404,8 +391,8 @@ async def get_calendar_file(
 
 
 @router.post("/tasks/{task_id}/stop")
-async def stop_task(request: Request, task_id: str):
-    uid = await resolve_user_id(request)
+async def stop_task(request: Request, task_id: str, user_id: Optional[str] = None):
+    uid = await resolve_user_id(request, user_id)
     task = la.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
@@ -466,14 +453,12 @@ async def dashboard(
     tasks = la.merged_task_history(limit=limit, user_id=uid)
     stats_payload = _stats_with_plan(uid)
     health_payload = _health_snapshot(user_id=uid)
-    accounts_payload = _accounts_snapshot(user_id=uid)
     form_defaults_payload = _form_defaults_snapshot(user_id=uid)
 
     etag = _compute_etag(
         tasks,
         stats_payload,
         health_payload,
-        accounts_payload,
         form_defaults_payload,
     )
     response.headers["ETag"] = etag
@@ -492,15 +477,26 @@ async def dashboard(
         "tasks": tasks,
         "stats": stats_payload,
         "health": health_payload,
-        "accounts": accounts_payload,
         "form_defaults": form_defaults_payload,
         "etag": etag,
     }
 
 
 # ---------------------------------------------------------------------------
-# Accounts (single-endpoint convenience; ``/dashboard`` already includes this)
+# Accounts (used by billing dashboard for seat count; not automation identity)
 # ---------------------------------------------------------------------------
+
+
+def _accounts_snapshot(user_id: str) -> dict[str, Any]:
+    """Available LinkedIn accounts from secrets (job bot / billing only)."""
+    from services.linkedin_env import get_active_linkedin_account, list_linkedin_accounts
+
+    accounts = list_linkedin_accounts(user_id=user_id)
+    active = get_active_linkedin_account(user_id=user_id)
+    return {
+        "accounts": accounts,
+        "active": active,
+    }
 
 
 @router.get("/accounts")
@@ -527,7 +523,6 @@ FORM_DEFAULTS_CATEGORY = "linkedin_automation_form_defaults"
 ALLOWED_FORM_KEYS: frozenset[str] = frozenset({
     # page-level
     "tab",
-    "selected_account",
     # common
     "common_debug",
     "common_headless",
