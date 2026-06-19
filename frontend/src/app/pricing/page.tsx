@@ -308,8 +308,19 @@ function PricingPageContent() {
         form.appendChild(input);
       });
 
+      console.log("PayU Redirect Details:", {
+        action_url: data.action_url,
+        txnid: data.txnid,
+        amount: data.amount,
+        productinfo: data.productinfo,
+      });
+
       document.body.appendChild(form);
-      form.submit();
+      
+      // Delay submission slightly to allow DOM integration and prevent browser blockers/interruption
+      setTimeout(() => {
+        form.submit();
+      }, 100);
     } catch (error: unknown) {
       console.error(error);
       const message = error instanceof Error ? error.message : "Failed to initiate checkout. Is the backend running?";
