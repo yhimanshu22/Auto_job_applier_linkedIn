@@ -95,7 +95,26 @@ async def create_payu_session(payload: PayUCheckoutRequest, request: Request):
     udf1 = user_id
     udf2 = payload.billing_cycle
     
-    hash_sequence = f"{key}|{txnid}|{amount_str}|{payload.plan}|{firstname}|{payload.email}|{udf1}|{udf2}||||||||{salt}"
+    hash_fields = [
+        key,
+        txnid,
+        amount_str,
+        payload.plan,
+        firstname,
+        payload.email,
+        udf1,
+        udf2,
+        "",  # udf3
+        "",  # udf4
+        "",  # udf5
+        "",  # udf6
+        "",  # udf7
+        "",  # udf8
+        "",  # udf9
+        "",  # udf10
+        salt
+    ]
+    hash_sequence = "|".join(hash_fields)
     payu_hash = hashlib.sha512(hash_sequence.encode("utf-8")).hexdigest().lower()
 
     phone = os.getenv("PAYU_DEFAULT_PHONE", "8114245060").strip()
