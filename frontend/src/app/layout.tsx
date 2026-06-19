@@ -21,7 +21,19 @@ export const metadata: Metadata = {
     template: "%s | LinkdApply"
   },
   description: "Automate your LinkedIn job search with LinkdApply. The most advanced, undetectable AI bot that applies to hundreds of jobs, tailors cover letters, and handles custom questions while you sleep.",
-  keywords: ["LinkedIn Bot", "Job Application Automation", "AI Job Search", "Automate LinkedIn Applications", "LinkedIn Easy Apply Bot", "Job Hunting AI", "LinkdApply"],
+  keywords: [
+    "LinkedIn Bot", 
+    "Job Application Automation", 
+    "AI Job Search", 
+    "Automate LinkedIn Applications", 
+    "LinkedIn Easy Apply Bot", 
+    "Job Hunting AI", 
+    "LinkdApply",
+    "LinkedIn Auto Applier",
+    "Auto job application bot",
+    "LinkedIn job search helper",
+    "AI cover letter generator"
+  ],
   authors: [{ name: "LinkdApply Team" }],
   creator: "LinkdApply",
   publisher: "LinkdApply",
@@ -36,13 +48,22 @@ export const metadata: Metadata = {
     url: SITE_URL,
     siteName: "LinkdApply",
     title: "LinkdApply | AI-Powered LinkedIn Job Automation",
-    description: "Land your dream job faster. Automate applications with the world's most human-like AI bot.",
+    description: "Land your dream job faster. Automate Easy Apply applications with the world's most human-like AI bot.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "LinkdApply - AI LinkedIn Job Application Automation Bot Banner",
+      }
+    ]
   },
   twitter: {
-    card: "summary",
-    title: "LinkdApply | AI Job Search Automation",
+    card: "summary_large_image",
+    title: "LinkdApply | #1 AI LinkedIn Job Application Automation Bot",
     description: "Stop filling forms. Start interviewing. The #1 AI bot for LinkedIn applications.",
     creator: "@linkdapply",
+    images: ["/og-image.png"],
   },
   robots: {
     index: true,

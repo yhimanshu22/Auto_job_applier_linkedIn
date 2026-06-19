@@ -5,8 +5,8 @@ import Link from "next/link";
 import { COMPANY } from "@/lib/company";
 
 export const metadata: Metadata = {
-  title: "About Us | LinkdApply",
-  description: "Learn about LinkdApply — an AI-powered LinkedIn job application automation service operated by Himanshu Yadav from Uttar Pradesh, India.",
+  title: "About Us | Learn More About LinkdApply AI Job Bot",
+  description: "Learn about the mission behind LinkdApply — the AI-powered LinkedIn job application automation service designed to help job seekers save time and get more interviews.",
 };
 
 const SERVICES = [

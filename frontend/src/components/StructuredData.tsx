@@ -17,6 +17,8 @@ export default function StructuredData() {
     "installUrl": DEFAULT_WINDOWS_INSTALLER_URL,
     "softwareVersion": DESKTOP_VERSION,
     "applicationCategory": "BusinessApplication",
+    "applicationSubCategory": "Job Search Assistant",
+    "featureList": "Automatic LinkedIn applications, AI-powered question answering, human-like activity simulation, cover letter customization, multi-account dashboard support",
     "aggregateRating": {
       "@type": "AggregateRating",
       "ratingValue": "4.9",

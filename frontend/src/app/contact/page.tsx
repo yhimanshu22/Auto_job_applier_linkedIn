@@ -4,8 +4,8 @@ import Footer from "@/components/Footer";
 import { COMPANY } from "@/lib/company";
 
 export const metadata: Metadata = {
-  title: "Contact Us | LinkdApply",
-  description: "Contact LinkdApply. Find our legal business name, registered address, phone number, and email address.",
+  title: "Contact Us | LinkdApply Customer Support",
+  description: "Get in touch with the LinkdApply support team. Have questions about the LinkedIn auto-applier bot? Contact us via email, phone, or view our official office location details.",
 };
 
 export default function ContactPage() {
