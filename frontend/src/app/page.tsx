@@ -53,12 +53,15 @@ export default function LandingPage() {
           <div className="relative w-full max-w-6xl mx-auto px-4 perspective-midrange animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-700 animate-float">
             <div className="glass-card rounded-2xl overflow-hidden shadow-2xl border border-white/5 p-0 bg-zinc-950 transition-transform duration-500">
               <div className="bg-zinc-950 rounded-xl aspect-video flex items-center justify-center overflow-hidden relative shadow-inner">
-                <img
-                  src="/landing_page_video.gif"
-                  alt="LinkdApply Automation Demo"
+                <video
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
                   className="w-full h-full object-cover transition-transform duration-1000"
-                  loading="lazy"
-                />
+                >
+                  <source src="/landing_page_video.mp4" type="video/mp4" />
+                </video>
               </div>
             </div>
           </div>
