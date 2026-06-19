@@ -118,12 +118,13 @@ function PricingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const autoTrialStarted = useRef(false);
+  const autoCheckoutStarted = useRef(false);
 
   const redirectToLogin = useCallback(
     (callbackUrl: string = TRIAL_LOGIN_URL) => {
-      router.push(callbackUrl);
+      window.location.href = callbackUrl;
     },
-    [router]
+    []
   );
 
   const startFreeTrial = useCallback(async () => {
@@ -174,6 +175,27 @@ function PricingPageContent() {
     autoTrialStarted.current = true;
     void startFreeTrial();
   }, [status, searchParams, startFreeTrial, session?.user?.email, redirectToLogin]);
+
+  useEffect(() => {
+    const cycle = searchParams.get("cycle");
+    if (cycle === "monthly" || cycle === "yearly") {
+      setBillingCycle(cycle);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const buyPlan = searchParams.get("buy") as PlanType | null;
+    if (!buyPlan || buyPlan === "free_trial") return;
+    if (status === "loading") return;
+
+    if (status !== "authenticated" || !session?.user?.email) {
+      return;
+    }
+
+    if (autoCheckoutStarted.current) return;
+    autoCheckoutStarted.current = true;
+    void startPayUCheckout(buyPlan as Exclude<PlanType, "free_trial">);
+  }, [status, searchParams, session?.user?.email]);
 
 
   /*
@@ -310,7 +332,7 @@ function PricingPageContent() {
     }
 
     if (status !== "authenticated" || !session?.user?.email) {
-      redirectToLogin(PRICING_LOGIN_URL);
+      redirectToLogin(`/login?callbackUrl=${encodeURIComponent(`/pricing?buy=${plan}&cycle=${billingCycle}`)}`);
       return;
     }
     void startPayUCheckout(plan as Exclude<PlanType, "free_trial">);

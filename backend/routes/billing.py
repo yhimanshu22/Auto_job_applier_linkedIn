@@ -116,6 +116,9 @@ async def create_payu_session(payload: PayUCheckoutRequest, request: Request):
     ]
     hash_sequence = "|".join(hash_fields)
     payu_hash = hashlib.sha512(hash_sequence.encode("utf-8")).hexdigest().lower()
+    
+    print(f"DEBUG PAYU: hash_sequence = '{hash_sequence}'")
+    print(f"DEBUG PAYU: generated hash = '{payu_hash}'")
 
     phone = os.getenv("PAYU_DEFAULT_PHONE", "8114245060").strip()
 
