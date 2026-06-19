@@ -51,7 +51,7 @@ export default function AboutPage() {
           {/* Hero */}
           <section className="mb-16 text-center">
             <h1 className="font-serif text-[40px] md:text-[56px] leading-[1.1] font-medium tracking-tight text-zinc-900 mb-6">
-              About <span className="text-accent italic">LinkdApply</span>
+              About <span className="text-accent">LinkdApply</span>
             </h1>
             <p className="text-xl text-zinc-600 leading-relaxed max-w-3xl mx-auto">
               {COMPANY.brandName} is an AI-powered software service that helps job seekers automate LinkedIn job

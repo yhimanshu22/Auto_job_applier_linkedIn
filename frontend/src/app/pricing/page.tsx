@@ -267,7 +267,7 @@ function PricingPageContent() {
         
         <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
           <div className="text-center space-y-6 pt-12">
-            <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[9px] font-bold uppercase tracking-widest text-accent">
+            <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[9px] font-bold tracking-widest text-accent">
               Start free. Upgrade when your job search scales.
             </div>
             <p className="font-serif text-[40px] lg:text-[64px] leading-[1.1] font-medium tracking-tight text-zinc-900">
