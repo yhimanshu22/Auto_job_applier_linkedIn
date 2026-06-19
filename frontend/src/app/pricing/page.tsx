@@ -330,8 +330,7 @@ function PricingPageContent() {
 
           <p className="text-center text-sm text-zinc-500 max-w-3xl mx-auto mb-24">
             All prices for Indian customers are listed in Indian Rupees (INR) and are inclusive of applicable
-            taxes. Indian payments are processed securely via PayU (UPI, cards, net banking). International
-            payments are processed securely in USD via Stripe.
+            taxes. Indian payments are processed securely via PayU (UPI, cards, net banking).
           </p>
         </div>
       </main>

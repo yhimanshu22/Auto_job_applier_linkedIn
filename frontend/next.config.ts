@@ -25,7 +25,7 @@ const cspHeader = isDev
     connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 ws://localhost:3000 ws://127.0.0.1:3000 http://127.0.0.1:8000;
     object-src 'none';
     base-uri 'self';
-    form-action 'self' http://127.0.0.1:8000 https://test.payu.in https://apitest.payu.in https://secure.payu.in;
+    form-action 'self' http://127.0.0.1:8000 https://*.payu.in;
     frame-ancestors 'none';
   `
   : `
@@ -37,7 +37,7 @@ const cspHeader = isDev
     frame-src 'self' https://accounts.google.com;
     object-src 'none';
     base-uri 'self';
-    form-action 'self' http://127.0.0.1:8000 https://test.payu.in https://apitest.payu.in https://secure.payu.in;
+    form-action 'self' http://127.0.0.1:8000 https://*.payu.in;
     frame-ancestors 'none';
     connect-src 'self' http://127.0.0.1:8000 https://accounts.google.com;
   `;
