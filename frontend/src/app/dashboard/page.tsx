@@ -48,8 +48,10 @@ function formatShortTime(iso: string | null | undefined) {
 function formatPeriodEnd(value: unknown): string {
   if (value === null || value === undefined) return "—";
   try {
-    if (typeof value === "number") {
-      return new Date(value * 1000).toLocaleString(undefined, {
+    const num = Number(value);
+    if (!isNaN(num) && String(value).trim() !== "") {
+      const ms = num < 10000000000 ? num * 1000 : num;
+      return new Date(ms).toLocaleString(undefined, {
         dateStyle: "medium",
         timeStyle: "short",
       });

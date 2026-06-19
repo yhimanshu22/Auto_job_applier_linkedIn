@@ -2082,7 +2082,7 @@ export default function AutomationPage() {
                   defaults={formDefaults}
                   patchDefaults={patchDefaults}
                   onClearDefaults={() => clearDefaults("connect_")}
-                  userId={userId}
+                  userId={userId || undefined}
                   campaigns={connectCampaigns}
                   onCampaignsChange={setConnectCampaigns}
                   flash={flash}

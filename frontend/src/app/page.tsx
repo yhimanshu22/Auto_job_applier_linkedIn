@@ -8,6 +8,8 @@ import FaqAccordion, { FaqSectionHeader } from "@/components/FaqAccordion";
 import FeaturesSection from "@/components/FeaturesSection";
 import HowItWorksSteps from "@/components/HowItWorksSteps";
 import ConvictionCta from "@/components/ConvictionCta";
+import TestimonialsGrid from "@/components/TestimonialsGrid";
+import { DEFAULT_TESTIMONIALS } from "@/lib/testimonials";
 
 export default function LandingPage() {
   return (
@@ -72,11 +74,6 @@ export default function LandingPage() {
                 >
                   <source src="/landing_page_video.mp4" type="video/mp4" />
                 </video>
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-zinc-950/5">
-                  <span className="text-white font-medium tracking-widest text-[9px] uppercase bg-black/40 px-3 py-1 rounded-full border border-white/10">
-                    Bot Activity Live
-                  </span>
-                </div>
               </div>
             </div>
           </div>
@@ -86,7 +83,22 @@ export default function LandingPage() {
         <HowItWorksSteps />
         <QuickInstall id="install" />
 
-        <section id="faq" className="py-24 lg:py-32 bg-zinc-50 border-y border-zinc-100">
+        {/* Testimonials */}
+        <section className="py-24 lg:py-32 bg-zinc-50 border-b border-zinc-100">
+          <div className="mx-auto max-w-6xl px-6 space-y-12">
+            <div className="text-center max-w-3xl mx-auto space-y-4">
+              <h2 className="font-serif text-4xl lg:text-5xl font-medium tracking-tight text-zinc-900">
+                Loved by job seekers across the world
+              </h2>
+              <p className="text-lg text-zinc-500 leading-relaxed">
+                See how other job seekers are saving hundreds of hours and getting more interviews with LinkdApply.
+              </p>
+            </div>
+            <TestimonialsGrid testimonials={DEFAULT_TESTIMONIALS} />
+          </div>
+        </section>
+
+        <section id="faq" className="py-24 lg:py-32 bg-white border-b border-zinc-100">
           <div className="mx-auto max-w-3xl px-6">
             <FaqSectionHeader />
             <FaqAccordion />

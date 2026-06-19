@@ -8,11 +8,9 @@ const BACKEND_URL = (process.env.BACKEND_URL || "http://127.0.0.1:8000").replace
   ""
 );
 
-/** Stripe/PayU server callbacks — no browser session; must not require NextAuth. */
+/** Stripe server callbacks — no browser session; must not require NextAuth. */
 const PUBLIC_BILLING_PATHS = new Set([
   "webhook",
-  "payu/callback/success",
-  "payu/callback/failure",
 ]);
 
 const FORWARD_HEADERS = [

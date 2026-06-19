@@ -113,7 +113,7 @@ const PRICING_LOGIN_URL = `/login?callbackUrl=${encodeURIComponent("/pricing")}`
 function PricingPageContent() {
   const [loading, setLoading] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
-  const [currency, setCurrency] = useState<Currency>("inr");
+  const [currency] = useState<Currency>("usd");
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -175,28 +175,6 @@ function PricingPageContent() {
     void startFreeTrial();
   }, [status, searchParams, startFreeTrial, session?.user?.email, redirectToLogin]);
 
-  async function startPayUCheckout(plan: Exclude<PlanType, "free_trial">) {
-    if (status === "loading") return;
-
-    if (status !== "authenticated" || !session?.user?.email) {
-      redirectToLogin(PRICING_LOGIN_URL);
-      return;
-    }
-
-    const email = session.user.email;
-    setLoading(plan);
-    const qs = new URLSearchParams({
-      plan,
-      billing_cycle: billingCycle,
-      user_id: email,
-      email,
-    });
-    const name = session.user.name?.trim();
-    if (name) qs.set("firstname", name);
-
-    // PayU docs Step 1.3a: server-rendered HTML form auto-POSTs to PayU.
-    window.location.href = `/api/billing/payu/checkout-page?${qs.toString()}`;
-  }
 
   async function startStripeCheckout(plan: Exclude<PlanType, "free_trial">) {
     if (status === "loading") return;
@@ -254,10 +232,6 @@ function PricingPageContent() {
       redirectToLogin(PRICING_LOGIN_URL);
       return;
     }
-    if (currency === "inr") {
-      void startPayUCheckout(plan as Exclude<PlanType, "free_trial">);
-      return;
-    }
     void startStripeCheckout(plan as Exclude<PlanType, "free_trial">);
   }
 
@@ -274,7 +248,7 @@ function PricingPageContent() {
         
         <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
           <div className="text-center space-y-6 pt-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20 text-[10px] font-bold uppercase tracking-widest text-accent">
+            <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[9px] font-bold uppercase tracking-widest text-accent">
               Start free. Upgrade when your job search scales.
             </div>
             <p className="font-serif text-[40px] lg:text-[64px] leading-[1.1] font-medium tracking-tight text-zinc-900">
@@ -284,31 +258,6 @@ function PricingPageContent() {
               Try LinkdApply for 24 hours, then choose the plan that matches your application volume.
             </p>
 
-            {/* Currency Toggle */}
-            <div className="mt-8 flex justify-center">
-              <div className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 p-1 shadow-sm">
-                <button
-                  onClick={() => setCurrency("inr")}
-                  className={`rounded-full px-6 py-2 text-sm font-bold transition-all ${
-                    currency === "inr"
-                      ? "bg-zinc-900 text-white shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-900"
-                  }`}
-                >
-                  ₹ INR (India)
-                </button>
-                <button
-                  onClick={() => setCurrency("usd")}
-                  className={`rounded-full px-6 py-2 text-sm font-bold transition-all ${
-                    currency === "usd"
-                      ? "bg-zinc-900 text-white shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-900"
-                  }`}
-                >
-                  $ USD (International)
-                </button>
-              </div>
-            </div>
 
             {/* Billing Cycle Toggle */}
             <div className="mt-4 inline-flex rounded-full border border-zinc-200 bg-zinc-50 p-1 shadow-sm">
@@ -353,9 +302,7 @@ function PricingPageContent() {
           </div>
 
           <p className="text-center text-sm text-zinc-500 max-w-3xl mx-auto mb-24">
-            All prices for Indian customers are listed in Indian Rupees (INR) and are inclusive of applicable
-            taxes. Indian payments are processed securely via PayU (UPI, cards, net banking). International
-            payments are processed securely in USD via Stripe.
+            All payments are processed securely in USD via Stripe.
           </p>
         </div>
       </main>

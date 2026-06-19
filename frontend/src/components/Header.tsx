@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import ProductHuntBanner from "./ProductHuntBanner";
 
 export default function Header() {
   return (
-    <header className="absolute top-0 z-50 w-full border-b border-zinc-200/80 bg-white/90 backdrop-blur-md pt-6">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 md:px-8 pb-4 text-zinc-900">
+    <header className="absolute top-0 z-50 w-full border-b border-zinc-200/80 bg-white/90 backdrop-blur-md">
+      <ProductHuntBanner />
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 md:px-8 py-4 text-zinc-900">
         <div className="flex items-center gap-8">
           <Link
             href="/"

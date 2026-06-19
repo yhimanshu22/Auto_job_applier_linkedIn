@@ -43,8 +43,8 @@ export default function Footer() {
           </nav>
         </div>
         <div className="flex justify-center border-t border-zinc-100 pt-8">
-          <p className="text-xs font-bold text-zinc-400 tracking-[0.2em] uppercase whitespace-nowrap">
-            © 2026 LinkdApply v{DESKTOP_VERSION}. All Rights Reserved.
+          <p className="text-xs font-medium text-zinc-400 tracking-wide">
+            © 2026 LinkdApply v{DESKTOP_VERSION}. All rights reserved.
           </p>
         </div>
       </div>
