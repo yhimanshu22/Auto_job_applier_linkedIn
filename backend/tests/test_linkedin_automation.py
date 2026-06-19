@@ -252,6 +252,49 @@ def test_build_command_connect_requires_query():
         la_service._build_command("connect", {})
 
 
+def test_build_command_scan_opportunities():
+    from services import linkedin_automation as la_service
+
+    cmd = la_service._build_command(
+        "scan-opportunities",
+        {
+            "max_posts": 30,
+            "keywords": ["intern", "hiring"],
+            "output": "jobs.json",
+        },
+    )
+    assert cmd[3] == "scan-opportunities"
+    assert cmd[cmd.index("--max-posts") + 1] == "30"
+    assert cmd[cmd.index("--keywords") + 1 : cmd.index("--keywords") + 3] == [
+        "intern",
+        "hiring",
+    ]
+    assert cmd[cmd.index("--output") + 1] == "jobs.json"
+    assert "--require-contact" not in cmd
+
+    strict = la_service._build_command(
+        "scan-opportunities",
+        {"max_posts": 10, "include_without_contact": False},
+    )
+    assert "--require-contact" in strict
+
+
+def test_scan_opportunities_endpoint_launches_task(
+    client, fake_popen, clear_automation_tasks, auth_as
+):
+    auth_as(TEST_USER)
+    res = client.post(
+        "/api/linkedin-automation/scan-opportunities",
+        json={"max_posts": 25, "user_id": TEST_USER},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["action"] == "scan-opportunities"
+    spawned = fake_popen.instances[-1]
+    assert "scan-opportunities" in spawned.cmd
+    assert "--max-posts" in spawned.cmd
+
+
 def test_build_command_calendar_requires_niche():
     from services import linkedin_automation as la_service
 

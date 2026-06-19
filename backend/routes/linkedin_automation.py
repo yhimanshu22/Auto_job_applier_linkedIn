@@ -212,6 +212,13 @@ class ConnectCampaignPatch(BaseModel):
     enabled: Optional[bool] = None
 
 
+class ScanOpportunitiesRequest(_CommonOpts):
+    max_posts: int = Field(default=50, ge=1, le=200)
+    keywords: Optional[list[str]] = None
+    output: Optional[str] = Field(default="opportunities.json")
+    include_without_contact: bool = True
+
+
 class CalendarRequest(_CommonOpts):
     niche: str
     total_posts: int = 30
@@ -274,6 +281,12 @@ async def connect_people(req: ConnectRequest, request: Request):
             cc.record_connect_task_start(uid, campaign_id, task_id, source="manual")
         result["campaign_id"] = campaign_id
     return result
+
+
+@router.post("/scan-opportunities")
+async def scan_opportunities(req: ScanOpportunitiesRequest, request: Request):
+    """Scan the home feed for job/intern posts with apply emails or form links."""
+    return await _start("scan-opportunities", req.model_dump(exclude_none=True), request)
 
 
 @router.post("/calendar")
@@ -393,12 +406,12 @@ def _read_framework_file(rel_or_abs_path: str, max_bytes: int) -> dict[str, Any]
 
 @router.get("/tasks/{task_id}/artifact")
 async def get_task_artifact(request: Request, task_id: str, max_bytes: int = 200_000):
-    """Return the file produced by a task (currently ``generate-calendar``).
+    """Return the file produced by a task (calendar or opportunity scan).
 
-    Generation tasks write a topics file to the framework cwd. The dashboard
-    calls this endpoint to surface that file inline so users don't have to
-    open the filesystem. Restricted to ``generate-calendar`` tasks and to
-    paths that resolve inside the framework directory.
+    Generation tasks write a topics file to the framework cwd. Opportunity
+    scans write ``opportunities.json``. The dashboard calls this endpoint to
+    surface that file inline. Restricted to supported actions and paths inside
+    the framework directory.
     """
     uid = await resolve_user_id(request)
     task = la.get_task(task_id)
@@ -414,15 +427,17 @@ async def get_task_artifact(request: Request, task_id: str, max_bytes: int = 200
         action = row.get("action") or ""
         args = list(row.get("args") or [])
 
-    if action != "generate-calendar":
+    if action not in ("generate-calendar", "scan-opportunities"):
         raise HTTPException(
             status_code=400,
             detail=f"Task action {action!r} has no readable artifact.",
         )
 
-    # Locate the output file: honor a ``--output`` flag if the user passed
-    # one, otherwise fall back to the framework default ``content_calendar.txt``.
-    output = "content_calendar.txt"
+    if action == "generate-calendar":
+        output = "content_calendar.txt"
+    else:
+        output = "opportunities.json"
+
     for i, token in enumerate(args):
         if token == "--output" and i + 1 < len(args):
             output = args[i + 1]
@@ -619,6 +634,11 @@ ALLOWED_FORM_KEYS: frozenset[str] = frozenset({
     "connect_max_connects",
     "connect_note",
     "connect_bio_keywords",
+    # opportunities
+    "opportunities_max_posts",
+    "opportunities_keywords",
+    "opportunities_output",
+    "opportunities_include_without_contact",
     # calendar
     "calendar_niche",
     "calendar_total_posts",

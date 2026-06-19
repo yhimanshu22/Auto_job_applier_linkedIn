@@ -27,6 +27,23 @@ export default function LandingPage() {
         {/* Hero */}
         <section className="relative flex flex-col items-center gap-12 lg:gap-16 px-6 pt-12 pb-8">
           <div className="relative w-full max-w-4xl text-center space-y-8">
+            <div className="flex justify-center animate-in fade-in slide-in-from-bottom-8 duration-1000">
+              <a
+                href="https://www.producthunt.com/products/linkdapply?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-linkdapply"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1175339&amp;theme=light&amp;t=1781871279619"
+                  alt="LinkdApply - AI applies to LinkedIn jobs while you focus on interviews | Product Hunt"
+                  width="250"
+                  height="54"
+                />
+              </a>
+            </div>
+
             <div className="space-y-4">
               <h1 className="font-serif text-[56px] lg:text-[80px] leading-[1.1] font-medium tracking-tight text-zinc-900 animate-in fade-in slide-in-from-bottom-8 duration-1000">
                 #1 Undetectable <br />

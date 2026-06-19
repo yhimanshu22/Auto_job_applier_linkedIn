@@ -21,6 +21,7 @@ from .verify import VerifyMixin
 from .composer import ComposerMixin
 from .feed_actions import FeedActionsMixin
 from .engage import EngageStreamMixin
+from .opportunity_scan import OpportunityScanMixin
 from .profile_actions import ProfileActionsMixin
 
 class LinkedInInteraction(
@@ -32,6 +33,7 @@ class LinkedInInteraction(
     ComposerMixin,
     FeedActionsMixin,
     EngageStreamMixin,
+    OpportunityScanMixin,
     BaseInteraction,
     ProfileActionsMixin,
 ):

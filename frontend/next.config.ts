@@ -20,7 +20,7 @@ const cspHeader = isDev
     default-src 'self';
     script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000 http://127.0.0.1:3000 https://accounts.google.com;
     style-src 'self' 'unsafe-inline';
-    img-src 'self' blob: data:;
+    img-src 'self' blob: data: https://api.producthunt.com;
     font-src 'self' data:;
     connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 ws://localhost:3000 ws://127.0.0.1:3000 http://127.0.0.1:8000;
     object-src 'none';

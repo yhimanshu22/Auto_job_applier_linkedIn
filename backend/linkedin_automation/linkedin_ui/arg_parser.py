@@ -38,9 +38,15 @@ def setup_argument_parser() -> argparse.ArgumentParser:
         'connect', help='Search people by keyword and send connection requests'
     )
     _setup_connect_parser(connect_parser)
+
+    scan_opportunities_parser = subparsers.add_parser(
+        "scan-opportunities",
+        help="Scan feed posts for job/intern opportunities (emails, apply links)",
+    )
+    _setup_scan_opportunities_parser(scan_opportunities_parser)
     
     # Add common arguments
-    for p in [post_parser, calendar_parser, engage_parser, pursue_parser, connect_parser]:
+    for p in [post_parser, calendar_parser, engage_parser, pursue_parser, connect_parser, scan_opportunities_parser]:
         p.add_argument('--debug', action='store_true', help='Enable debug logging')
         p.add_argument('--headless', action='store_true', help='Run browser in headless mode')
         p.add_argument('--no-ai', action='store_true', help='Disable AI generation')
@@ -179,4 +185,35 @@ def _setup_connect_parser(parser: argparse.ArgumentParser) -> None:
         nargs="+",
         default=None,
         help="Only connect with people whose result card mentions these keywords",
+    )
+
+
+def _setup_scan_opportunities_parser(parser: argparse.ArgumentParser) -> None:
+    """Set up arguments for the 'scan-opportunities' command."""
+    parser.add_argument(
+        "--max-posts",
+        type=int,
+        default=50,
+        help="Maximum number of feed posts to scan",
+    )
+    parser.add_argument(
+        "--keywords",
+        nargs="+",
+        default=None,
+        help="Extra keywords to match (defaults to intern/hiring/apply phrases)",
+    )
+    parser.add_argument(
+        "--output",
+        default="opportunities.json",
+        help="JSON file to write results to",
+    )
+    parser.add_argument(
+        "--require-contact",
+        action="store_true",
+        help="Only save posts that include an email or apply URL",
+    )
+    parser.add_argument(
+        "--include-without-contact",
+        action="store_true",
+        help=argparse.SUPPRESS,
     )

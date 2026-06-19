@@ -100,6 +100,8 @@ class PostExtractor:
             ".//span[contains(@class,'line-clamp-show-more-button')]",
             ".//button[normalize-space()='...see more']",
             ".//button[normalize-space()='Show more']",
+            ".//button[contains(translate(@aria-label,'SEE MORE','see more'),'see more')]",
+            ".//button[contains(@aria-label,'Show more')]",
         ]
         for xp in selectors:
             try:

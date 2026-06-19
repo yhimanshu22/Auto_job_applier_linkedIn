@@ -123,6 +123,17 @@ def main() -> int:
                     results.get("skipped", 0),
                 )
 
+        elif args.command == "scan-opportunities":
+            results = bot.scan_opportunities(
+                max_posts=args.max_posts,
+                keywords=args.keywords,
+                output_file=args.output,
+                require_contact=args.require_contact and not args.include_without_contact,
+            )
+            logging.info(f"Opportunity scan results: {json.dumps(results, indent=2)}")
+            if results.get("errors"):
+                exit_code = 1
+
         bot.close()
         if exit_code:
             logging.info("LinkedIn Bot finished with exit code %s", exit_code)

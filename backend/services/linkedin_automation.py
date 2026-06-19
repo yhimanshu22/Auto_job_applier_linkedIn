@@ -191,6 +191,19 @@ def _build_command(action: str, params: dict[str, Any]) -> list[str]:
         if params.get("bio_keywords"):
             cmd += ["--bio-keywords", *map(str, params["bio_keywords"])]
 
+    elif action == "scan-opportunities":
+        if params.get("max_posts") is not None:
+            cmd += ["--max-posts", str(int(params["max_posts"]))]
+        if params.get("keywords"):
+            cmd += ["--keywords", *map(str, params["keywords"])]
+        if params.get("output"):
+            cmd += ["--output", str(params["output"])]
+        require_contact = params.get("require_contact")
+        if require_contact is None:
+            require_contact = not params.get("include_without_contact", True)
+        if require_contact:
+            cmd.append("--require-contact")
+
     elif action == "generate-calendar":
         if not params.get("niche"):
             raise ValueError("generate-calendar requires 'niche'")

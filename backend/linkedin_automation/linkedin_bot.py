@@ -829,3 +829,54 @@ class LinkedInBot:
             results["errors"].append(error_msg)
             logging.error(error_msg, exc_info=True)
             return results
+
+    def scan_opportunities(
+        self,
+        max_posts: int = 50,
+        keywords: Optional[List[str]] = None,
+        output_file: str = "opportunities.json",
+        require_contact: bool = False,
+    ) -> Dict[str, Any]:
+        """Scan the home feed for job/intern posts with apply emails or forms."""
+        results: Dict[str, Any] = {
+            "posts_scanned": 0,
+            "found": 0,
+            "opportunities": [],
+            "output_file": output_file,
+            "errors": [],
+            "success": False,
+        }
+
+        try:
+            if not self._login_succeeded:
+                results["errors"].append("LinkedIn login failed")
+                return results
+
+            logging.info(
+                "Scanning feed for opportunities (max_posts=%s)", max_posts
+            )
+            if keywords:
+                logging.info("Extra keywords: %s", ", ".join(keywords))
+
+            scan = self.linkedin.scan_feed_opportunities(
+                max_posts=max_posts,
+                keywords=keywords,
+                output_file=output_file,
+                post_extractor=self.post_extractor,
+                require_contact=require_contact,
+            )
+            results.update(scan)
+            results["success"] = not results.get("errors")
+            logging.info(
+                "Opportunity scan summary: scanned=%s found=%s file=%s",
+                results.get("posts_scanned", 0),
+                results.get("found", 0),
+                output_file,
+            )
+            return results
+
+        except Exception as e:
+            error_msg = f"Error scanning feed for opportunities: {str(e)}"
+            results["errors"].append(error_msg)
+            logging.error(error_msg, exc_info=True)
+            return results

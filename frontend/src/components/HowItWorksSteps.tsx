@@ -31,7 +31,7 @@ export default function HowItWorksSteps() {
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="text-center space-y-4 mb-16 lg:mb-24">
           <h2 className="font-serif text-4xl lg:text-6xl font-medium tracking-tight text-zinc-900 leading-tight">
-            Start applying in <span className="text-accent italic">minutes</span>.
+            Start applying in <span className="text-accent">minutes</span>.
           </h2>
           <p className="max-w-2xl mx-auto text-lg text-zinc-500">
             Getting started with LinkdApply is simple. No complex setup, just pure automation.

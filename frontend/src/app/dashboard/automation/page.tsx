@@ -8,7 +8,7 @@ import { apiFetch, encodeUserId } from "@/lib/desktop-api";
 
 const API = "/api/linkedin-automation";
 const BILLING_API = "/api/billing";
-const TABS = ["post", "connect", "engage", "pursue", "calendar", "settings"] as const;
+const TABS = ["post", "connect", "engage", "opportunities", "pursue", "calendar", "settings"] as const;
 type Tab = (typeof TABS)[number];
 
 type Subscription = {
@@ -135,6 +135,11 @@ type FormDefaults = {
   // engage
   engage_action?: "like" | "comment" | "both";
   engage_max_actions?: number;
+  // opportunities (feed job/intern scan)
+  opportunities_max_posts?: number;
+  opportunities_keywords?: string;
+  opportunities_output?: string;
+  opportunities_include_without_contact?: boolean;
   // pursue
   pursue_profile_name?: string;
   pursue_max_posts?: number;
@@ -817,6 +822,107 @@ function EngageForm({
   );
 }
 
+function OpportunitiesForm({
+  common,
+  setCommon,
+  onSubmit,
+  busy,
+  defaults,
+  patchDefaults,
+  onClearDefaults,
+}: FormPersistenceProps) {
+  const [maxPosts, setMaxPosts] = useState(defaults.opportunities_max_posts ?? 50);
+  const [keywords, setKeywords] = useState(defaults.opportunities_keywords ?? "");
+  const [output, setOutput] = useState(defaults.opportunities_output ?? "opportunities.json");
+  const [includeWithoutContact, setIncludeWithoutContact] = useState(
+    defaults.opportunities_include_without_contact ?? true
+  );
+
+  useEffect(() => {
+    patchDefaults({
+      opportunities_max_posts: maxPosts,
+      opportunities_keywords: keywords,
+      opportunities_output: output,
+      opportunities_include_without_contact: includeWithoutContact,
+    });
+  }, [maxPosts, keywords, output, includeWithoutContact, patchDefaults]);
+
+  const splitList = (s: string) =>
+    s
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[10px] text-zinc-500 leading-relaxed">
+        Scrolls your LinkedIn feed and collects hiring/intern posts. Saves apply
+        emails and form links when present; also keeps keyword matches (e.g.
+        &quot;we are hiring&quot;) with the post snippet for manual follow-up.
+      </p>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label="Max posts to scan">
+          <input
+            type="number"
+            min={5}
+            max={200}
+            value={maxPosts}
+            onChange={(e) => setMaxPosts(parseInt(e.target.value) || 5)}
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Output file" hint="Saved in automation workspace">
+          <input
+            value={output}
+            onChange={(e) => setOutput(e.target.value)}
+            placeholder="opportunities.json"
+            className={inputCls}
+          />
+        </Field>
+      </div>
+      <Field
+        label="Extra keywords"
+        hint="Optional — defaults include intern, hiring, apply, fill the form"
+      >
+        <input
+          value={keywords}
+          onChange={(e) => setKeywords(e.target.value)}
+          placeholder="campus hiring, summer intern"
+          className={inputCls}
+        />
+      </Field>
+      <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest cursor-pointer">
+        <input
+          type="checkbox"
+          checked={includeWithoutContact}
+          onChange={(e) => setIncludeWithoutContact(e.target.checked)}
+        />
+        Include hiring posts without email or link
+      </label>
+      <CommonOptions v={common} onChange={setCommon} />
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            onSubmit({
+              max_posts: maxPosts,
+              keywords: keywords ? splitList(keywords) : undefined,
+              output: output.trim() || "opportunities.json",
+              include_without_contact: includeWithoutContact,
+              ...common,
+            })
+          }
+          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
+        >
+          {busy ? "Launching…" : "Scan feed"}
+        </button>
+        <ClearDefaultsButton onClear={onClearDefaults} />
+      </div>
+    </div>
+  );
+}
+
 function PursueForm({
   common,
   setCommon,
@@ -1437,6 +1543,7 @@ export default function AutomationPage() {
       post: "/post",
       connect: "/connect",
       engage: "/engage",
+      opportunities: "/scan-opportunities",
       pursue: "/pursue",
       calendar: "/calendar",
       settings: "",
@@ -1744,7 +1851,8 @@ export default function AutomationPage() {
   useEffect(() => {
     setArtifact(null);
     setArtifactError(null);
-    if (!openTask || openTask.action !== "generate-calendar") return;
+    if (!openTask || !["generate-calendar", "scan-opportunities"].includes(openTask.action))
+      return;
 
     let cancelled = false;
     setArtifactLoading(true);
@@ -1936,20 +2044,22 @@ export default function AutomationPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 grid lg:grid-cols-12 gap-6">
         <section className="lg:col-span-5">
           <div className="bg-zinc-950 border border-zinc-900 rounded-xl shadow-sm overflow-hidden">
-            <div className="px-4 py-2 border-b border-zinc-900 bg-zinc-900/30 flex gap-1">
-              {TABS.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTabPersisted(t)}
-                  className={`px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded transition-all ${
-                    tab === t
-                      ? "bg-blue-600 text-white"
-                      : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
+            <div className="border-b border-zinc-900 bg-zinc-900/30 overflow-x-auto overscroll-x-contain scrollbar-thin">
+              <div className="px-4 py-2 flex gap-1 flex-nowrap w-max min-w-full">
+                {TABS.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTabPersisted(t)}
+                    className={`shrink-0 whitespace-nowrap px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded transition-all ${
+                      tab === t
+                        ? "bg-blue-600 text-white"
+                        : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="p-4">
               {tab === "post" && (
@@ -1991,6 +2101,17 @@ export default function AutomationPage() {
                   defaults={formDefaults}
                   patchDefaults={patchDefaults}
                   onClearDefaults={() => clearDefaults("engage_")}
+                />
+              )}
+              {tab === "opportunities" && (
+                <OpportunitiesForm
+                  common={common}
+                  setCommon={setCommonPersisted}
+                  onSubmit={submit}
+                  busy={busy}
+                  defaults={formDefaults}
+                  patchDefaults={patchDefaults}
+                  onClearDefaults={() => clearDefaults("opportunities_")}
                 />
               )}
               {tab === "pursue" && (
@@ -2192,12 +2313,15 @@ export default function AutomationPage() {
                 </pre>
               </div>
 
-              {openTask.action === "generate-calendar" && (
+              {(openTask.action === "generate-calendar" ||
+                openTask.action === "scan-opportunities") && (
                 <div className="border-t border-zinc-900 pt-3">
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="min-w-0">
                       <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
-                        Generated calendar
+                        {openTask.action === "scan-opportunities"
+                          ? "Opportunities JSON"
+                          : "Generated calendar"}
                       </p>
                       {artifact && (
                         <p className="text-[10px] text-zinc-600 font-mono mt-0.5 truncate">

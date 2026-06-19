@@ -21,6 +21,7 @@ DOM variant we want to cover.
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -506,3 +507,160 @@ def test_comment_submit_diagnostics_swallows_driver_errors(tmp_path, monkeypatch
     bot = _FakeBot(driver)
     bot._dump_comment_submit_diagnostics()  # must not raise
     assert getattr(bot, "_comment_submit_diag_done", False) is True
+
+
+# ---------------------------------------------------------------------------
+# Feed scroll (2026 inner-container)
+# ---------------------------------------------------------------------------
+
+
+def test_scroll_feed_uses_main_feed_container_script():
+    """``_scroll_feed`` must drive the inner mainFeed scroller, not window."""
+
+    from linkedin_automation.linkedin_ui.engage_dom import _FEED_SCROLL_JS
+
+    driver = MagicMock()
+    driver.execute_script.side_effect = [
+        {"mode": "container", "scrollTop": 0, "scrollHeight": 4000, "clientHeight": 788},
+        {"mode": "container", "scrollTop": 700, "scrollHeight": 4000, "clientHeight": 788},
+        {"mode": "container", "scrollTop": 700, "scrollHeight": 4000, "clientHeight": 788},
+    ]
+    bot = _FakeBot(driver)
+    bot._scroll_feed(0.05, 0.06)
+
+    assert driver.execute_script.call_count >= 2
+    first_call = driver.execute_script.call_args_list[0]
+    assert first_call[0][0] == _FEED_SCROLL_JS
+    assert first_call[0][1] == "metrics"
+
+
+def test_extract_apply_urls_skips_linkedin_junk_links():
+    from linkedin_automation.linkedin_ui.opportunity_scan import OpportunityScanMixin
+
+    class _Opp(OpportunityScanMixin):
+        pass
+
+    bot = _Opp()
+    post = _make_element(
+        children={
+            ".//a[starts-with(@href,'http')]": [
+                _make_element(attrs={"href": "https://www.linkedin.com/safety/go/"}),
+                _make_element(attrs={"href": "https://www.linkedin.com/jobs/view/4429226393/"}),
+                _make_element(attrs={"href": "https://forms.gle/abc123"}),
+            ],
+        },
+    )
+    text = "Apply at https://www.linkedin.com/search/results/all/ or email us"
+    urls = bot._extract_apply_urls(text, post)
+
+    assert "https://www.linkedin.com/jobs/view/4429226393/" in urls
+    assert "https://forms.gle/abc123" in urls
+    assert not any("safety/go" in u for u in urls)
+    assert not any("search/results" in u for u in urls)
+
+
+def test_clean_opportunity_text_strips_feed_noise():
+    from linkedin_automation.linkedin_ui.opportunity_scan import OpportunityScanMixin
+
+    class _Opp(OpportunityScanMixin):
+        pass
+
+    bot = _Opp()
+    raw = (
+        "Feed post\n"
+        "Ashutosh Mishra supports this\n"
+        "Durgansh Mishra\n"
+        "2nd\n"
+        "We are hiring interns — apply at jobs@co.com"
+    )
+    cleaned = bot._clean_opportunity_text(raw)
+    assert "Feed post" not in cleaned
+    assert "supports this" not in cleaned
+    assert "We are hiring interns" in cleaned
+
+
+def test_looks_like_opportunity_weak_keyword_requires_hiring_context():
+    from linkedin_automation.linkedin_ui.opportunity_scan import OpportunityScanMixin
+
+    class _Opp(OpportunityScanMixin):
+        pass
+
+    bot = _Opp()
+    kw = ["intern", "hiring", "looking for intern"]
+    assert not bot._looks_like_opportunity(
+        "Software Engineer | Looking for new opportunities", kw
+    )
+    assert bot._looks_like_opportunity(
+        "We are looking for intern developers to join our team", kw
+    )
+
+
+def test_job_card_url_counts_as_opportunity_signal():
+    from linkedin_automation.linkedin_ui.opportunity_scan import OpportunityScanMixin
+
+    class _Opp(OpportunityScanMixin):
+        pass
+
+    bot = _Opp()
+    post = _make_element(
+        children={
+            ".//a[contains(@href,'/jobs/view/')]": [
+                _make_element(
+                    attrs={"href": "https://www.linkedin.com/jobs/view/4429226393/"}
+                ),
+            ],
+        },
+    )
+    urls = bot._extract_apply_urls("Join our team!", post)
+    assert any("/jobs/view/4429226393/" in u for u in urls)
+
+
+def test_persist_opportunities_writes_incrementally(tmp_path):
+    from linkedin_automation.linkedin_ui.opportunity_scan import OpportunityScanMixin
+
+    class _Opp(OpportunityScanMixin):
+        pass
+
+    bot = _Opp()
+    out = tmp_path / "opportunities.json"
+    started = "2026-06-17T00:00:00+00:00"
+    bot._persist_opportunities(
+        str(out),
+        [],
+        posts_scanned=0,
+        started_at=started,
+        in_progress=True,
+    )
+    first = json.loads(out.read_text(encoding="utf-8"))
+    assert first["found"] == 0
+    assert first["in_progress"] is True
+
+    entry = {"author": "Jane", "emails": ["j@co.com"], "urls": []}
+    bot._persist_opportunities(
+        str(out),
+        [entry],
+        posts_scanned=3,
+        started_at=started,
+        in_progress=True,
+    )
+    second = json.loads(out.read_text(encoding="utf-8"))
+    assert second["found"] == 1
+    assert second["posts_scanned"] == 3
+    assert second["opportunities"][0]["author"] == "Jane"
+
+
+def test_hiring_post_saved_without_contact_when_not_required():
+    from linkedin_automation.linkedin_ui.opportunity_scan import OpportunityScanMixin
+
+    class _Opp(OpportunityScanMixin):
+        pass
+
+    bot = _Opp()
+    kw = ["hiring", "we are hiring"]
+    text = bot._clean_opportunity_text(
+        "Viren Sood\nWe are hiring MBA grads for our summer program"
+    )
+    assert bot._looks_like_opportunity(text, kw)
+    emails = bot._extract_emails(text)
+    urls = bot._extract_apply_urls(text, _make_element())
+    assert not emails and not urls

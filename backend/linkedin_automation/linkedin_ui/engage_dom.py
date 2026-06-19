@@ -30,6 +30,116 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from .. import config
 
+# LinkedIn 2026 feed scrolls inside mainFeed / scaffold containers, not window.
+_FEED_SCROLL_JS = """
+return (function(action, amount) {
+  function findScroller() {
+    var mainFeed = document.querySelector('[data-testid="mainFeed"]');
+    if (mainFeed) {
+      var el = mainFeed;
+      while (el && el !== document.body) {
+        var st = window.getComputedStyle(el);
+        var oy = st.overflowY;
+        if ((oy === 'auto' || oy === 'scroll' || oy === 'overlay')
+            && el.scrollHeight > el.clientHeight + 10) {
+          return el;
+        }
+        el = el.parentElement;
+      }
+      el = mainFeed.parentElement;
+      while (el && el !== document.documentElement) {
+        var st2 = window.getComputedStyle(el);
+        var oy2 = st2.overflowY;
+        if ((oy2 === 'auto' || oy2 === 'scroll' || oy2 === 'overlay')
+            && el.scrollHeight > el.clientHeight + 10) {
+          return el;
+        }
+        el = el.parentElement;
+      }
+    }
+    var selectors = [
+      'main.scaffold-layout__main',
+      '.scaffold-layout__main',
+      'main',
+      '[data-testid="feed-container"]',
+      '.core-rail'
+    ];
+    for (var i = 0; i < selectors.length; i++) {
+      var node = document.querySelector(selectors[i]);
+      if (node && node.scrollHeight > node.clientHeight + 10) {
+        return node;
+      }
+    }
+    return null;
+  }
+
+  var scroller = findScroller();
+  function metrics() {
+    if (scroller) {
+      return {
+        mode: 'container',
+        scrollTop: scroller.scrollTop,
+        scrollHeight: scroller.scrollHeight,
+        clientHeight: scroller.clientHeight
+      };
+    }
+    var sh = document.body.scrollHeight || document.documentElement.scrollHeight || 0;
+    var st = window.scrollY || document.documentElement.scrollTop || 0;
+    return {
+      mode: 'window',
+      scrollTop: st,
+      scrollHeight: sh,
+      clientHeight: window.innerHeight
+    };
+  }
+
+  if (action === 'metrics') {
+    return metrics();
+  }
+
+  var step = amount;
+  if (!step || step <= 0) {
+    step = Math.round((scroller ? scroller.clientHeight : window.innerHeight) * 0.9);
+  }
+
+  if (action === 'down') {
+    if (scroller) {
+      scroller.scrollTop += step;
+    } else {
+      window.scrollBy(0, step);
+    }
+  } else if (action === 'bottom') {
+    if (scroller) {
+      scroller.scrollTop = scroller.scrollHeight;
+    } else {
+      window.scrollTo(0, document.body.scrollHeight);
+    }
+  } else if (action === 'last_post') {
+    var posts = document.querySelectorAll(
+      "[data-testid='mainFeed'] div[role='listitem'], div[role='listitem']"
+    );
+    if (posts.length) {
+      posts[posts.length - 1].scrollIntoView({ block: 'end', behavior: 'instant' });
+    } else if (scroller) {
+      scroller.scrollTop += step;
+    } else {
+      window.scrollBy(0, step);
+    }
+  } else if (action === 'nudge') {
+    var small = Math.round(step * 0.2);
+    if (scroller) {
+      scroller.scrollTop = Math.max(0, scroller.scrollTop - small);
+      scroller.scrollTop += step;
+    } else {
+      window.scrollBy(0, -small);
+      window.scrollBy(0, step);
+    }
+  }
+
+  return metrics();
+})(arguments[0], arguments[1]);
+"""
+
 
 class EngageDomMixin:
     """Provides DOM traversal, extraction, and interaction helpers."""
@@ -261,6 +371,22 @@ class EngageDomMixin:
                 continue
         return keys
 
+    def _feed_scroll_metrics(self) -> dict:
+        """Return scroll position for the feed container or window fallback."""
+        try:
+            result = self.driver.execute_script(_FEED_SCROLL_JS, "metrics", None)
+            return result if isinstance(result, dict) else {}
+        except Exception:
+            return {}
+
+    def _feed_scroll_action(self, action: str, amount: Optional[int] = None) -> dict:
+        """Run a feed scroll action (down, bottom, last_post, nudge)."""
+        try:
+            result = self.driver.execute_script(_FEED_SCROLL_JS, action, amount)
+            return result if isinstance(result, dict) else {}
+        except Exception:
+            return {}
+
     def _scroll_feed(self, wait_min: float = 1.5, wait_max: float = 3.0, *args, **kwargs):
         """Scroll the feed downward while handling stalled viewports.
 
@@ -271,8 +397,9 @@ class EngageDomMixin:
             Called by the executor whenever progress is lacking.
 
         How:
-            Executes scroll JavaScript, waits within configured bounds, and
-            triggers fallback scrolls if height doesn't change.
+            Scrolls the LinkedIn 2026 mainFeed container when present, waits
+            within configured bounds, and triggers fallback scrolls if position
+            does not advance.
 
         Args:
             wait_min (float): Minimum wait after scrolling.
@@ -283,43 +410,69 @@ class EngageDomMixin:
         Returns:
             None
         """
+        prev = self._feed_scroll_metrics()
+        prev_top = int(prev.get("scrollTop") or 0)
+        prev_mode = prev.get("mode") or "window"
         try:
-            prev_h = self.driver.execute_script("return document.body.scrollHeight || document.documentElement.scrollHeight || 0;")
-        except Exception:
-            prev_h = None
-        try:
-            self.driver.execute_script("window.scrollBy(0, Math.round(window.innerHeight*0.9));")
-            logging.info("SCROLL action=page_down amount=0.9vh")
+            after = self._feed_scroll_action("down")
+            mode = after.get("mode") or prev_mode
+            logging.info("SCROLL action=page_down amount=0.9vh mode=%s", mode)
         except Exception:
             try:
-                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                self._feed_scroll_action("bottom")
                 logging.info("SCROLL action=scroll_to_bottom (fallback)")
             except Exception:
                 pass
+            after = self._feed_scroll_metrics()
+            mode = after.get("mode") or prev_mode
         time.sleep(random.uniform(max(0.2, wait_min), max(wait_min + 0.1, wait_max)))
         try:
-            new_h = self.driver.execute_script("return document.body.scrollHeight || document.documentElement.scrollHeight || 0;")
-            if prev_h is not None and new_h is not None:
-                delta = int(new_h) - int(prev_h)
-                logging.info(f"SCROLL height_before={prev_h} height_after={new_h} delta={delta}")
+            new = self._feed_scroll_metrics()
+            new_top = int(new.get("scrollTop") or 0)
+            delta = new_top - prev_top
+            logging.info(
+                "SCROLL mode=%s top_before=%s top_after=%s delta=%s "
+                "scrollHeight=%s clientHeight=%s",
+                new.get("mode") or mode,
+                prev_top,
+                new_top,
+                delta,
+                new.get("scrollHeight"),
+                new.get("clientHeight"),
+            )
+            if delta <= 0:
+                try:
+                    self._feed_scroll_action("last_post")
+                    logging.info("SCROLL_FALLBACK last_post_into_view")
+                except Exception:
+                    pass
+                time.sleep(random.uniform(0.4, 0.9))
+                new = self._feed_scroll_metrics()
+                new_top = int(new.get("scrollTop") or 0)
+                delta = new_top - prev_top
                 if delta <= 0:
                     try:
                         self.driver.switch_to.active_element.send_keys(Keys.END)
                         logging.info("SCROLL_FALLBACK end_key_sent")
                     except Exception:
                         try:
-                            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                            logging.info("SCROLL_FALLBACK js_scroll_to_bottom")
+                            self._feed_scroll_action("bottom")
+                            logging.info("SCROLL_FALLBACK scroll_to_bottom")
                         except Exception:
                             pass
-                    ext_wait = max(float(wait_max), float(wait_min)) + random.uniform(0.8, 1.6)
-                    logging.info(f"SCROLL_STALL extended_wait={ext_wait:.2f}s")
-                    time.sleep(ext_wait)
-                    try:
-                        newer_h = self.driver.execute_script("return document.body.scrollHeight || document.documentElement.scrollHeight || 0;")
-                        logging.info(f"SCROLL_STALL height_after_extended={newer_h} delta2={int(newer_h)-int(new_h)}")
-                    except Exception:
-                        pass
+                ext_wait = max(float(wait_max), float(wait_min)) + random.uniform(0.8, 1.6)
+                logging.info(f"SCROLL_STALL extended_wait={ext_wait:.2f}s")
+                time.sleep(ext_wait)
+                try:
+                    newer = self._feed_scroll_metrics()
+                    newer_top = int(newer.get("scrollTop") or 0)
+                    logging.info(
+                        "SCROLL_STALL top_after_extended=%s delta2=%s",
+                        newer_top,
+                        newer_top - new_top,
+                    )
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -353,8 +506,10 @@ class EngageDomMixin:
                 pass
             did_bottom = False
             try:
-                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                did_bottom = True
+                metrics = self._feed_scroll_action("bottom")
+                did_bottom = bool(metrics)
+                if metrics.get("mode"):
+                    logging.info("SCROLL_AGG mode=%s", metrics.get("mode"))
             except Exception:
                 pass
             if not did_bottom:
@@ -365,9 +520,9 @@ class EngageDomMixin:
                     pass
             time.sleep(random.uniform(wait_min, wait_max))
             try:
-                self.driver.execute_script("window.scrollBy(0, -Math.round(window.innerHeight*0.2));")
+                self._feed_scroll_action("last_post")
                 time.sleep(random.uniform(0.6, 1.2))
-                self.driver.execute_script("window.scrollBy(0, Math.round(window.innerHeight*0.8));")
+                self._feed_scroll_action("nudge")
             except Exception:
                 pass
             try:

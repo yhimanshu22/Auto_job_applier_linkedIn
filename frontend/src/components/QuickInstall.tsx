@@ -38,7 +38,7 @@ export default function QuickInstall({ id = "install" }: QuickInstallProps) {
       <div className="mx-auto max-w-3xl px-6 lg:px-8">
         <div className="text-center space-y-3 mb-8">
           <h2 className="font-serif text-4xl lg:text-5xl font-medium tracking-tight text-zinc-900 leading-tight">
-            Get the <span className="text-accent italic">desktop app</span>
+            Get the <span className="text-accent">desktop app</span>
           </h2>
           <p className="text-zinc-500">
             v{DESKTOP_VERSION} for Windows, macOS, and Linux. Install, sign in, and start applying.
