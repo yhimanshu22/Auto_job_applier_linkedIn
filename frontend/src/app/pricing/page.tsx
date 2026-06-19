@@ -176,6 +176,7 @@ function PricingPageContent() {
   }, [status, searchParams, startFreeTrial, session?.user?.email, redirectToLogin]);
 
 
+  /*
   async function startStripeCheckout(plan: Exclude<PlanType, "free_trial">) {
     if (status === "loading") return;
 
@@ -234,6 +235,67 @@ function PricingPageContent() {
       setLoading(null);
     }
   }
+  */
+
+  async function startPayUCheckout(plan: Exclude<PlanType, "free_trial">) {
+    if (status === "loading") return;
+
+    if (status !== "authenticated" || !session?.user?.email) {
+      redirectToLogin(PRICING_LOGIN_URL);
+      return;
+    }
+
+    const email = session.user.email;
+    setLoading(plan);
+
+    try {
+      const res = await fetch("/api/billing/create-payu-session", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan,
+          billing_cycle: billingCycle,
+          user_id: email,
+          email,
+        }),
+      });
+
+      const data = await parseApiJson<any>(res);
+      if (res.status === 401 || res.status === 403) {
+        redirectToLogin(PRICING_LOGIN_URL);
+        return;
+      }
+      if (!res.ok) throw new Error(data.detail || "Failed to start checkout");
+      
+      // Dynamically create a form and submit it to PayU
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = data.action_url;
+
+      const fields = [
+        "key", "txnid", "amount", "productinfo", "firstname", "email", 
+        "phone", "surl", "furl", "hash", "service_provider", "udf1", "udf2"
+      ];
+
+      fields.forEach(field => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = field;
+        input.value = data[field] || "";
+        form.appendChild(input);
+      });
+
+      document.body.appendChild(form);
+      form.submit();
+    } catch (error: unknown) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "Failed to initiate checkout. Is the backend running?";
+      alert(message);
+    } finally {
+      setLoading(null);
+    }
+  }
 
   function handleBuy(plan: PlanType) {
     if (status === "loading") return;
@@ -251,7 +313,7 @@ function PricingPageContent() {
       redirectToLogin(PRICING_LOGIN_URL);
       return;
     }
-    void startStripeCheckout(plan as Exclude<PlanType, "free_trial">);
+    void startPayUCheckout(plan as Exclude<PlanType, "free_trial">);
   }
 
   return (

@@ -1,6 +1,6 @@
 import os
 import stripe
-from fastapi import APIRouter, Request, HTTPException, Query, Header
+from fastapi import APIRouter, Request, HTTPException, Query, Header, Form
 from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -33,6 +33,20 @@ PRICE_MAP = {
     },
 }
 
+# PayU pricing in INR
+PAYU_PRICES = {
+    "monthly": {
+        "starter": 1599,
+        "pro": 3999,
+        "agency": 11999,
+    },
+    "yearly": {
+        "starter": 15588,
+        "pro": 39588,
+        "agency": 119988,
+    }
+}
+
 
 from typing import Literal
 
@@ -44,7 +58,148 @@ class CheckoutRequest(BaseModel):
     promo_code: str | None = None
 
 
+class PayUCheckoutRequest(BaseModel):
+    plan: Literal["starter", "pro", "agency"]
+    billing_cycle: Literal["monthly", "yearly"] = "monthly"
+    user_id: str
+    email: str
 
+
+@router.post("/create-payu-session")
+async def create_payu_session(payload: PayUCheckoutRequest, request: Request):
+    user_id = await resolve_user_id(request, payload.user_id)
+    price = PAYU_PRICES.get(payload.billing_cycle, {}).get(payload.plan)
+
+    if not price:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid plan or billing cycle selected",
+        )
+
+    amount_str = f"{float(price):.2f}"
+
+    import secrets
+    import hashlib
+
+    txnid = f"tx_{secrets.token_hex(8)}"
+    key = os.getenv("PAYU_MERCHANT_KEY", "gtKFFx").strip()
+    salt = os.getenv("PAYU_MERCHANT_SALT", "eCwWELxi").strip()
+    payu_env = os.getenv("PAYU_ENV", "test").strip()
+    
+    action_url = "https://secure.payu.in/_payment" if payu_env == "production" else "https://test.payu.in/_payment"
+
+    firstname = payload.email.split("@")[0] or "User"
+
+    # Calculate PayU Hash:
+    # sha512(key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||salt)
+    udf1 = user_id
+    udf2 = payload.billing_cycle
+    
+    hash_sequence = f"{key}|{txnid}|{amount_str}|{payload.plan}|{firstname}|{payload.email}|{udf1}|{udf2}||||||||{salt}"
+    payu_hash = hashlib.sha512(hash_sequence.encode("utf-8")).hexdigest().lower()
+
+    phone = os.getenv("PAYU_DEFAULT_PHONE", "8114245060").strip()
+
+    surl = f"{BACKEND_PUBLIC_URL}/api/billing/payu-success"
+    furl = f"{BACKEND_PUBLIC_URL}/api/billing/payu-failure"
+
+    return {
+        "action_url": action_url,
+        "key": key,
+        "txnid": txnid,
+        "amount": amount_str,
+        "productinfo": payload.plan,
+        "firstname": firstname,
+        "email": payload.email,
+        "phone": phone,
+        "surl": surl,
+        "furl": furl,
+        "hash": payu_hash,
+        "service_provider": "payu_paisa",
+        "udf1": udf1,
+        "udf2": udf2,
+    }
+
+
+@router.post("/payu-success")
+async def payu_success(
+    key: str = Form(...),
+    txnid: str = Form(...),
+    amount: str = Form(...),
+    productinfo: str = Form(...),
+    firstname: str = Form(...),
+    email: str = Form(...),
+    status: str = Form(...),
+    hash: str = Form(...),
+    udf1: str = Form(""),
+    udf2: str = Form(""),
+    udf3: str = Form(""),
+    udf4: str = Form(""),
+    udf5: str = Form(""),
+    additionalCharges: str = Form(""),
+):
+    salt = os.getenv("PAYU_MERCHANT_SALT", "eCwWELxi").strip()
+    
+    import hashlib
+    # Reverse hash formula
+    if additionalCharges:
+        hash_string = f"{additionalCharges}|{salt}|{status}||||||{udf5}|{udf4}|{udf3}|{udf2}|{udf1}|{email}|{firstname}|{productinfo}|{amount}|{txnid}|{key}"
+    else:
+        hash_string = f"{salt}|{status}||||||{udf5}|{udf4}|{udf3}|{udf2}|{udf1}|{email}|{firstname}|{productinfo}|{amount}|{txnid}|{key}"
+
+    computed_hash = hashlib.sha512(hash_string.encode('utf-8')).hexdigest().lower()
+
+    if computed_hash != hash.lower():
+        print("ERROR: PayU success callback hash verification failed")
+        return RedirectResponse(url=f"{FRONTEND_URL}/billing/cancel", status_code=303)
+
+    if status == "success":
+        days = 365 if udf2 == "yearly" else 30
+        expiry = datetime.utcnow() + timedelta(days=days)
+        
+        db.upsert_subscription(
+            user_id=udf1,
+            plan=productinfo,
+            billing_cycle=udf2,
+            status="active",
+            payment_provider="payu",
+            payu_txnid=txnid,
+            current_period_end=expiry.isoformat(),
+        )
+        
+        try:
+            session_mock = {
+                "customer_email": email,
+                "id": txnid,
+                "amount_total": int(float(amount) * 100),
+                "currency": "inr",
+                "metadata": {
+                    "user_id": udf1,
+                    "plan": productinfo,
+                    "billing_cycle": udf2,
+                }
+            }
+            billing_emails.notify_stripe_checkout(session=session_mock)
+        except Exception as email_err:
+            print(f"Failed to send PayU success email: {email_err}")
+
+        return RedirectResponse(url=f"{FRONTEND_URL}/billing/success?payu_txnid={txnid}", status_code=303)
+    else:
+        return RedirectResponse(url=f"{FRONTEND_URL}/billing/cancel", status_code=303)
+
+
+@router.post("/payu-failure")
+async def payu_failure(
+    key: str = Form(None),
+    txnid: str = Form(None),
+    amount: str = Form(None),
+    productinfo: str = Form(None),
+    status: str = Form(None),
+    hash: str = Form(None),
+):
+    # Log failure if needed, then redirect
+    print(f"DEBUG: PayU payment failure callback. TxnID: {txnid}, Status: {status}")
+    return RedirectResponse(url=f"{FRONTEND_URL}/billing/cancel", status_code=303)
 
 
 @router.post("/create-checkout-session")
