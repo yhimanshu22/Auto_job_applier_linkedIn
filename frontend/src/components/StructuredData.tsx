@@ -31,6 +31,44 @@ export default function StructuredData() {
     }
   };
 
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "LinkdApply",
+    "url": SITE_URL,
+  };
+
+  const navigationSchema = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "itemListElement": [
+      {
+        "@type": "SiteNavigationElement",
+        "position": 1,
+        "name": "Pricing",
+        "url": `${SITE_URL}/pricing`
+      },
+      {
+        "@type": "SiteNavigationElement",
+        "position": 2,
+        "name": "About Us",
+        "url": `${SITE_URL}/about`
+      },
+      {
+        "@type": "SiteNavigationElement",
+        "position": 3,
+        "name": "Contact Support",
+        "url": `${SITE_URL}/contact`
+      },
+      {
+        "@type": "SiteNavigationElement",
+        "position": 4,
+        "name": "Community Forum",
+        "url": `${SITE_URL}/community`
+      }
+    ]
+  };
+
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "Organization",
@@ -60,6 +98,14 @@ export default function StructuredData() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(navigationSchema) }}
       />
       <script
         type="application/ld+json"
