@@ -1,6 +1,6 @@
 import os
 import stripe
-from fastapi import APIRouter, Request, HTTPException, Query, Header, Form
+from fastapi import APIRouter, Request, HTTPException, Query, Header
 from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -9,6 +9,7 @@ from db_manager import db
 from services.admin import admin_subscription, is_admin
 from utils.user_resolution import resolve_user_id
 from services.plan_limits import PLAN_LIMITS
+from services import payu as payu_service
 from services import billing_emails
 
 load_dotenv()
@@ -33,20 +34,6 @@ PRICE_MAP = {
     },
 }
 
-# PayU pricing in INR
-PAYU_PRICES = {
-    "monthly": {
-        "starter": 1599,
-        "pro": 3999,
-        "agency": 11999,
-    },
-    "yearly": {
-        "starter": 15588,
-        "pro": 39588,
-        "agency": 119988,
-    }
-}
-
 
 from typing import Literal
 
@@ -55,176 +42,185 @@ class CheckoutRequest(BaseModel):
     billing_cycle: Literal["monthly", "yearly"] = "monthly"
     user_id: str
     email: str
-    promo_code: str | None = None
 
 
-class PayUCheckoutRequest(BaseModel):
+class PayUInitiateRequest(BaseModel):
     plan: Literal["starter", "pro", "agency"]
     billing_cycle: Literal["monthly", "yearly"] = "monthly"
     user_id: str
     email: str
+    firstname: str | None = None
+    phone: str | None = None
 
 
-@router.post("/create-payu-session")
-async def create_payu_session(payload: PayUCheckoutRequest, request: Request):
-    user_id = await resolve_user_id(request, payload.user_id)
-    price = PAYU_PRICES.get(payload.billing_cycle, {}).get(payload.plan)
+def _payu_callback_urls() -> tuple[str, str]:
+    return (
+        f"{BACKEND_PUBLIC_URL}/api/billing/payu/callback/success",
+        f"{BACKEND_PUBLIC_URL}/api/billing/payu/callback/failure",
+    )
 
-    if not price:
+
+async def _build_payu_checkout_params(
+    *,
+    request: Request,
+    plan: Literal["starter", "pro", "agency"],
+    billing_cycle: Literal["monthly", "yearly"],
+    user_id: str,
+    email: str,
+    firstname: str | None = None,
+    phone: str | None = None,
+) -> dict[str, str]:
+    if not payu_service.is_payu_configured():
         raise HTTPException(
-            status_code=400,
-            detail="Invalid plan or billing cycle selected",
+            status_code=503,
+            detail="PayU is not configured. Set PAYU_MERCHANT_KEY and PAYU_MERCHANT_SALT.",
         )
 
-    amount_str = f"{float(price):.2f}"
+    resolved_user_id = await resolve_user_id(request, user_id)
+    surl, furl = _payu_callback_urls()
+    try:
+        return payu_service.build_payment_params(
+            user_id=resolved_user_id,
+            email=email,
+            plan=plan,
+            billing_cycle=billing_cycle,
+            success_url=surl,
+            failure_url=furl,
+            firstname=firstname,
+            phone=phone,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
-    import secrets
-    import hashlib
 
-    txnid = f"tx_{secrets.token_hex(8)}"
-    key = os.getenv("PAYU_MERCHANT_KEY", "gtKFFx").strip()
-    salt = os.getenv("PAYU_MERCHANT_SALT", "eCwWELxi").strip()
-    payu_env = os.getenv("PAYU_ENV", "test").strip()
-    
-    action_url = "https://secure.payu.in/_payment" if payu_env == "production" else "https://test.payu.in/_payment"
+@router.get("/payu/checkout-page", response_class=HTMLResponse)
+async def payu_checkout_page(
+    request: Request,
+    plan: Literal["starter", "pro", "agency"] = Query(...),
+    billing_cycle: Literal["monthly", "yearly"] = Query("monthly"),
+    user_id: str = Query(...),
+    email: str = Query(...),
+    firstname: str | None = Query(None),
+    phone: str | None = Query(None),
+):
+    """PayU Hosted Checkout — server-rendered form that auto-POSTs to PayU."""
+    params = await _build_payu_checkout_params(
+        request=request,
+        plan=plan,
+        billing_cycle=billing_cycle,
+        user_id=user_id,
+        email=email,
+        firstname=firstname,
+        phone=phone,
+    )
+    print(f"DEBUG: PayU checkout-page txnid={params.get('txnid')} user={params.get('udf1')}")
+    return payu_service.render_checkout_html(payu_service.payu_payment_url(), params)
 
-    firstname = payload.email.split("@")[0] or "User"
 
-    # Calculate PayU Hash:
-    # sha512(key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||salt)
-    udf1 = user_id
-    udf2 = payload.billing_cycle
-    
-    hash_fields = [
-        key,
-        txnid,
-        amount_str,
-        payload.plan,
-        firstname,
-        payload.email,
-        udf1,
-        udf2,
-        "",  # udf3
-        "",  # udf4
-        "",  # udf5
-        "",  # udf6
-        "",  # udf7
-        "",  # udf8
-        "",  # udf9
-        "",  # udf10
-        salt
-    ]
-    hash_sequence = "|".join(hash_fields)
-    payu_hash = hashlib.sha512(hash_sequence.encode("utf-8")).hexdigest().lower()
-    
-    print(f"DEBUG PAYU: hash_sequence = '{hash_sequence}'")
-    print(f"DEBUG PAYU: generated hash = '{payu_hash}'")
-
-    phone = os.getenv("PAYU_DEFAULT_PHONE", "8114245060").strip()
-
-    surl = f"{BACKEND_PUBLIC_URL}/api/billing/payu-success"
-    furl = f"{BACKEND_PUBLIC_URL}/api/billing/payu-failure"
-
+@router.post("/payu/initiate")
+async def initiate_payu_payment(payload: PayUInitiateRequest, request: Request):
+    params = await _build_payu_checkout_params(
+        request=request,
+        plan=payload.plan,
+        billing_cycle=payload.billing_cycle,
+        user_id=payload.user_id,
+        email=payload.email,
+        firstname=payload.firstname,
+        phone=payload.phone,
+    )
     return {
-        "action_url": action_url,
-        "key": key,
-        "txnid": txnid,
-        "amount": amount_str,
-        "productinfo": payload.plan,
-        "firstname": firstname,
-        "email": payload.email,
-        "phone": phone,
-        "surl": surl,
-        "furl": furl,
-        "hash": payu_hash,
-        "service_provider": "payu_paisa",
-        "udf1": udf1,
-        "udf2": udf2,
-        "udf3": "",
-        "udf4": "",
-        "udf5": "",
+        "action": payu_service.payu_payment_url(),
+        "params": params,
+        "checkout_page": (
+            f"{BACKEND_PUBLIC_URL}/api/billing/payu/checkout-page"
+            f"?plan={payload.plan}&billing_cycle={payload.billing_cycle}"
+            f"&user_id={payload.user_id}&email={payload.email}"
+        ),
     }
 
 
-@router.post("/payu-success")
-async def payu_success(
-    key: str = Form(...),
-    txnid: str = Form(...),
-    amount: str = Form(...),
-    productinfo: str = Form(...),
-    firstname: str = Form(...),
-    email: str = Form(...),
-    status: str = Form(...),
-    hash: str = Form(...),
-    udf1: str = Form(""),
-    udf2: str = Form(""),
-    udf3: str = Form(""),
-    udf4: str = Form(""),
-    udf5: str = Form(""),
-    additionalCharges: str = Form(""),
-):
-    salt = os.getenv("PAYU_MERCHANT_SALT", "eCwWELxi").strip()
-    
-    import hashlib
-    # Reverse hash formula
-    if additionalCharges:
-        hash_string = f"{additionalCharges}|{salt}|{status}||||||{udf5}|{udf4}|{udf3}|{udf2}|{udf1}|{email}|{firstname}|{productinfo}|{amount}|{txnid}|{key}"
-    else:
-        hash_string = f"{salt}|{status}||||||{udf5}|{udf4}|{udf3}|{udf2}|{udf1}|{email}|{firstname}|{productinfo}|{amount}|{txnid}|{key}"
+def _activate_payu_subscription(params: dict[str, str]) -> bool:
+    user_id = params.get("udf1")
+    plan = params.get("udf2")
+    billing_cycle = params.get("udf3", "monthly")
+    txnid = params.get("txnid")
 
-    computed_hash = hashlib.sha512(hash_string.encode('utf-8')).hexdigest().lower()
+    if not user_id or plan not in payu_service.PLAN_LABELS:
+        print("WARNING: PayU callback missing user_id or plan in UDF fields")
+        return False
 
-    if computed_hash != hash.lower():
-        print("ERROR: PayU success callback hash verification failed")
-        return RedirectResponse(url=f"{FRONTEND_URL}/billing/cancel", status_code=303)
-
-    if status == "success":
-        days = 365 if udf2 == "yearly" else 30
-        expiry = datetime.utcnow() + timedelta(days=days)
-        
-        db.upsert_subscription(
-            user_id=udf1,
-            plan=productinfo,
-            billing_cycle=udf2,
-            status="active",
-            payment_provider="payu",
-            payu_txnid=txnid,
-            current_period_end=expiry.isoformat(),
+    expected_amount = payu_service.get_inr_amount(plan, billing_cycle)  # type: ignore[arg-type]
+    if params.get("amount") != expected_amount:
+        print(
+            f"WARNING: PayU amount mismatch for {txnid}: "
+            f"expected {expected_amount}, got {params.get('amount')}"
         )
-        
-        try:
-            session_mock = {
-                "customer_email": email,
-                "id": txnid,
-                "amount_total": int(float(amount) * 100),
-                "currency": "inr",
-                "metadata": {
-                    "user_id": udf1,
-                    "plan": productinfo,
-                    "billing_cycle": udf2,
-                }
-            }
-            billing_emails.notify_stripe_checkout(session=session_mock)
-        except Exception as email_err:
-            print(f"Failed to send PayU success email: {email_err}")
+        return False
 
-        return RedirectResponse(url=f"{FRONTEND_URL}/billing/success?payu_txnid={txnid}", status_code=303)
-    else:
-        return RedirectResponse(url=f"{FRONTEND_URL}/billing/cancel", status_code=303)
+    period_end = payu_service.period_end_for_cycle(billing_cycle)  # type: ignore[arg-type]
+    db.upsert_subscription(
+        user_id=user_id,
+        plan=plan,
+        billing_cycle=billing_cycle,
+        status="active",
+        payment_provider="payu",
+        payu_txnid=txnid,
+        current_period_end=period_end,
+        cancel_at_period_end=0,
+    )
+    return True
 
 
-@router.post("/payu-failure")
-async def payu_failure(
-    key: str = Form(None),
-    txnid: str = Form(None),
-    amount: str = Form(None),
-    productinfo: str = Form(None),
-    status: str = Form(None),
-    hash: str = Form(None),
-):
-    # Log failure if needed, then redirect
-    print(f"DEBUG: PayU payment failure callback. TxnID: {txnid}, Status: {status}")
-    return RedirectResponse(url=f"{FRONTEND_URL}/billing/cancel", status_code=303)
+async def _handle_payu_callback(request: Request, *, success: bool):
+    form = await request.form()
+    params = {k: str(v) for k, v in form.items()}
+    salt = (os.getenv("PAYU_MERCHANT_SALT") or "").strip()
+
+    if not payu_service.verify_response_hash(params, salt):
+        print(f"WARNING: PayU hash verification failed for txnid={params.get('txnid')}")
+        return RedirectResponse(
+            f"{FRONTEND_URL}/billing/cancel?reason=hash_verification_failed",
+            status_code=303,
+        )
+
+    status = (params.get("status") or "").lower()
+    txnid = params.get("txnid", "")
+    print(f"DEBUG: PayU callback success={success} status={status} txnid={txnid}")
+
+    if success and status == "success":
+        verified = payu_service.verify_payment_with_payu(txnid)
+        if verified and str(verified.get("status", "")).lower() not in ("success", "captured"):
+            print(f"WARNING: PayU verify_payment status mismatch for {txnid}: {verified}")
+            return RedirectResponse(
+                f"{FRONTEND_URL}/billing/cancel?reason=payment_not_verified",
+                status_code=303,
+            )
+
+        if not _activate_payu_subscription(params):
+            return RedirectResponse(
+                f"{FRONTEND_URL}/billing/cancel?reason=activation_failed",
+                status_code=303,
+            )
+        billing_emails.notify_payu_payment(params=params)
+        return RedirectResponse(
+            f"{FRONTEND_URL}/billing/success?provider=payu&txnid={txnid}",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        f"{FRONTEND_URL}/billing/cancel?reason={status or 'failed'}",
+        status_code=303,
+    )
+
+
+@router.post("/payu/callback/success")
+async def payu_callback_success(request: Request):
+    return await _handle_payu_callback(request, success=True)
+
+
+@router.post("/payu/callback/failure")
+async def payu_callback_failure(request: Request):
+    return await _handle_payu_callback(request, success=False)
 
 
 @router.post("/create-checkout-session")
@@ -239,26 +235,11 @@ async def create_checkout_session(payload: CheckoutRequest, request: Request):
             detail="Invalid plan or billing cycle selected",
         )
 
-    discounts = None
-    if payload.promo_code:
-        try:
-            promo_codes = stripe.PromotionCode.list(
-                code=payload.promo_code.strip(),
-                active=True,
-                limit=1,
-            )
-            if promo_codes.data:
-                discounts = [{"promotion_code": promo_codes.data[0].id}]
-        except Exception as e:
-            print(f"ERROR: failed to lookup promotion code '{payload.promo_code}': {e}")
-
     try:
         session = stripe.checkout.Session.create(
             mode="subscription",
             payment_method_types=["card"],
             customer_email=payload.email,
-            allow_promotion_codes=True,
-            discounts=discounts,
             line_items=[
                 {
                     "price": price_id,
@@ -337,9 +318,8 @@ async def stripe_webhook(request: Request):
     except stripe.error.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid signature")
 
-    event_dict = event.to_dict()
-    event_type = event_dict["type"]
-    data = event_dict["data"]["object"]
+    event_type = event["type"]
+    data = event["data"]["object"]
 
     if event_type == "checkout.session.completed":
         handle_checkout_completed(data)
@@ -359,14 +339,14 @@ async def stripe_webhook(request: Request):
     return {"received": True}
 
 
-def handle_checkout_completed(session: dict):
+def handle_checkout_completed(session):
     try:
-        metadata = session.get("metadata", {}) or {}
+        metadata = getattr(session, "metadata", {})
         user_id = metadata.get("user_id")
         plan = metadata.get("plan")
         billing_cycle = metadata.get("billing_cycle", "monthly")
-        customer_id = session.get("customer")
-        subscription_id = session.get("subscription")
+        customer_id = getattr(session, "customer", None)
+        subscription_id = getattr(session, "subscription", None)
 
         print(f"DEBUG: Processing checkout for user: {user_id}, plan: {plan}, cycle: {billing_cycle}")
 
@@ -388,24 +368,21 @@ def handle_checkout_completed(session: dict):
         raise e
 
 
-def handle_subscription_updated(subscription: dict):
+def handle_subscription_updated(subscription):
     try:
-        metadata = subscription.get("metadata", {}) or {}
+        metadata = getattr(subscription, "metadata", {})
         user_id = metadata.get("user_id")
         plan = metadata.get("plan")
         billing_cycle = metadata.get("billing_cycle", "monthly")
         
-        status = subscription.get("status", "inactive")
-        subscription_id = subscription.get("id")
-        customer_id = subscription.get("customer")
-        cancel_at_period_end = subscription.get("cancel_at_period_end", False)
+        status = getattr(subscription, "status", "inactive")
+        subscription_id = getattr(subscription, "id", None)
+        customer_id = getattr(subscription, "customer", None)
+        cancel_at_period_end = getattr(subscription, "cancel_at_period_end", False)
 
-        items = subscription.get("items", {}).get("data", [])
+        items = getattr(subscription, "items", {}).get("data", [])
         price_id = items[0]["price"]["id"] if items else None
-        current_period_end = subscription.get("current_period_end")
-        if isinstance(current_period_end, (int, float)):
-            from datetime import datetime
-            current_period_end = datetime.utcfromtimestamp(current_period_end).isoformat()
+        current_period_end = getattr(subscription, "current_period_end", None)
 
         print(f"DEBUG: Subscription updated: user={user_id}, plan={plan}, cycle={billing_cycle}, status={status}")
 
@@ -427,7 +404,7 @@ def handle_subscription_updated(subscription: dict):
         raise e
 
 
-def handle_subscription_deleted(subscription: dict):
+def handle_subscription_deleted(subscription):
     subscription_id = subscription.get("id")
     metadata = subscription.get("metadata", {}) or {}
     user_id = metadata.get("user_id")
@@ -443,7 +420,7 @@ def handle_subscription_deleted(subscription: dict):
         billing_emails.notify_subscription_cancelled(email=user_id, plan=plan)
 
 
-def handle_payment_failed(invoice: dict):
+def handle_payment_failed(invoice):
     customer_id = invoice.get("customer")
     email = invoice.get("customer_email")
     plan = "starter"

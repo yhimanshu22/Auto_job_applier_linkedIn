@@ -113,18 +113,17 @@ const PRICING_LOGIN_URL = `/login?callbackUrl=${encodeURIComponent("/pricing")}`
 function PricingPageContent() {
   const [loading, setLoading] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
-  const [currency] = useState<Currency>("inr");
+  const [currency, setCurrency] = useState<Currency>("inr");
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const autoTrialStarted = useRef(false);
-  const autoCheckoutStarted = useRef(false);
 
   const redirectToLogin = useCallback(
     (callbackUrl: string = TRIAL_LOGIN_URL) => {
-      window.location.href = callbackUrl;
+      router.push(callbackUrl);
     },
-    []
+    [router]
   );
 
   const startFreeTrial = useCallback(async () => {
@@ -176,29 +175,29 @@ function PricingPageContent() {
     void startFreeTrial();
   }, [status, searchParams, startFreeTrial, session?.user?.email, redirectToLogin]);
 
-  useEffect(() => {
-    const cycle = searchParams.get("cycle");
-    if (cycle === "monthly" || cycle === "yearly") {
-      setBillingCycle(cycle);
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
-    const buyPlan = searchParams.get("buy") as PlanType | null;
-    if (!buyPlan || buyPlan === "free_trial") return;
+  async function startPayUCheckout(plan: Exclude<PlanType, "free_trial">) {
     if (status === "loading") return;
 
     if (status !== "authenticated" || !session?.user?.email) {
+      redirectToLogin(PRICING_LOGIN_URL);
       return;
     }
 
-    if (autoCheckoutStarted.current) return;
-    autoCheckoutStarted.current = true;
-    void startPayUCheckout(buyPlan as Exclude<PlanType, "free_trial">);
-  }, [status, searchParams, session?.user?.email]);
+    const email = session.user.email;
+    setLoading(plan);
+    const qs = new URLSearchParams({
+      plan,
+      billing_cycle: billingCycle,
+      user_id: email,
+      email,
+    });
+    const name = session.user.name?.trim();
+    if (name) qs.set("firstname", name);
 
+    // PayU docs Step 1.3a: server-rendered HTML form auto-POSTs to PayU.
+    window.location.href = `/api/billing/payu/checkout-page?${qs.toString()}`;
+  }
 
-  /*
   async function startStripeCheckout(plan: Exclude<PlanType, "free_trial">) {
     if (status === "loading") return;
 
@@ -209,24 +208,6 @@ function PricingPageContent() {
 
     const email = session.user.email;
     setLoading(plan);
-
-    // Detect if there's an active Product Hunt promo code
-    let promoCode: string | undefined = undefined;
-    if (typeof window !== "undefined") {
-      const urlParams = new URLSearchParams(window.location.search);
-      const isPhReferral = 
-        urlParams.get("utm_source") === "producthunt" || 
-        urlParams.get("ref") === "producthunt" ||
-        document.referrer.includes("producthunt.com");
-      
-      const directPromo = urlParams.get("promo");
-      if (directPromo) {
-        promoCode = directPromo;
-      } else if (isPhReferral) {
-        promoCode = "PH20";
-      }
-    }
-
     try {
       const res = await fetch("/api/billing/create-checkout-session", {
         method: "POST",
@@ -237,7 +218,6 @@ function PricingPageContent() {
           billing_cycle: billingCycle,
           user_id: email,
           email,
-          promo_code: promoCode,
         }),
       });
 
@@ -249,78 +229,6 @@ function PricingPageContent() {
       if (!res.ok) throw new Error(data.detail || "Failed to start checkout");
       if (!data.url) throw new Error("Checkout URL missing from server.");
       window.location.href = data.url;
-    } catch (error: unknown) {
-      console.error(error);
-      const message = error instanceof Error ? error.message : "Failed to initiate checkout. Is the backend running?";
-      alert(message);
-    } finally {
-      setLoading(null);
-    }
-  }
-  */
-
-  async function startPayUCheckout(plan: Exclude<PlanType, "free_trial">) {
-    if (status === "loading") return;
-
-    if (status !== "authenticated" || !session?.user?.email) {
-      redirectToLogin(PRICING_LOGIN_URL);
-      return;
-    }
-
-    const email = session.user.email;
-    setLoading(plan);
-
-    try {
-      const res = await fetch("/api/billing/create-payu-session", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          plan,
-          billing_cycle: billingCycle,
-          user_id: email,
-          email,
-        }),
-      });
-
-      const data = await parseApiJson<any>(res);
-      if (res.status === 401 || res.status === 403) {
-        redirectToLogin(PRICING_LOGIN_URL);
-        return;
-      }
-      if (!res.ok) throw new Error(data.detail || "Failed to start checkout");
-      
-      // Dynamically create a form and submit it to PayU
-      const form = document.createElement("form");
-      form.method = "POST";
-      form.action = data.action_url;
-
-      const fields = [
-        "key", "txnid", "amount", "productinfo", "firstname", "email", 
-        "phone", "surl", "furl", "hash", "service_provider", "udf1", "udf2", "udf3", "udf4", "udf5"
-      ];
-
-      fields.forEach(field => {
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = field;
-        input.value = data[field] || "";
-        form.appendChild(input);
-      });
-
-      console.log("PayU Redirect Details:", {
-        action_url: data.action_url,
-        txnid: data.txnid,
-        amount: data.amount,
-        productinfo: data.productinfo,
-      });
-
-      document.body.appendChild(form);
-      
-      // Delay submission slightly to allow DOM integration and prevent browser blockers/interruption
-      setTimeout(() => {
-        form.submit();
-      }, 100);
     } catch (error: unknown) {
       console.error(error);
       const message = error instanceof Error ? error.message : "Failed to initiate checkout. Is the backend running?";
@@ -343,10 +251,14 @@ function PricingPageContent() {
     }
 
     if (status !== "authenticated" || !session?.user?.email) {
-      redirectToLogin(`/login?callbackUrl=${encodeURIComponent(`/pricing?buy=${plan}&cycle=${billingCycle}`)}`);
+      redirectToLogin(PRICING_LOGIN_URL);
       return;
     }
-    void startPayUCheckout(plan as Exclude<PlanType, "free_trial">);
+    if (currency === "inr") {
+      void startPayUCheckout(plan as Exclude<PlanType, "free_trial">);
+      return;
+    }
+    void startStripeCheckout(plan as Exclude<PlanType, "free_trial">);
   }
 
   return (
@@ -362,7 +274,7 @@ function PricingPageContent() {
         
         <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
           <div className="text-center space-y-6 pt-12">
-            <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[9px] font-bold tracking-widest text-accent">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20 text-[10px] font-bold uppercase tracking-widest text-accent">
               Start free. Upgrade when your job search scales.
             </div>
             <p className="font-serif text-[40px] lg:text-[64px] leading-[1.1] font-medium tracking-tight text-zinc-900">
@@ -372,6 +284,31 @@ function PricingPageContent() {
               Try LinkdApply for 24 hours, then choose the plan that matches your application volume.
             </p>
 
+            {/* Currency Toggle */}
+            <div className="mt-8 flex justify-center">
+              <div className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 p-1 shadow-sm">
+                <button
+                  onClick={() => setCurrency("inr")}
+                  className={`rounded-full px-6 py-2 text-sm font-bold transition-all ${
+                    currency === "inr"
+                      ? "bg-zinc-900 text-white shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-900"
+                  }`}
+                >
+                  ₹ INR (India)
+                </button>
+                <button
+                  onClick={() => setCurrency("usd")}
+                  className={`rounded-full px-6 py-2 text-sm font-bold transition-all ${
+                    currency === "usd"
+                      ? "bg-zinc-900 text-white shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-900"
+                  }`}
+                >
+                  $ USD (International)
+                </button>
+              </div>
+            </div>
 
             {/* Billing Cycle Toggle */}
             <div className="mt-4 inline-flex rounded-full border border-zinc-200 bg-zinc-50 p-1 shadow-sm">
@@ -416,7 +353,9 @@ function PricingPageContent() {
           </div>
 
           <p className="text-center text-sm text-zinc-500 max-w-3xl mx-auto mb-24">
-            All payments are processed securely in INR via PayU.
+            All prices for Indian customers are listed in Indian Rupees (INR) and are inclusive of applicable
+            taxes. Indian payments are processed securely via PayU (UPI, cards, net banking). International
+            payments are processed securely in USD via Stripe.
           </p>
         </div>
       </main>
