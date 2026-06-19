@@ -186,6 +186,24 @@ function PricingPageContent() {
 
     const email = session.user.email;
     setLoading(plan);
+
+    // Detect if there's an active Product Hunt promo code
+    let promoCode: string | undefined = undefined;
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isPhReferral = 
+        urlParams.get("utm_source") === "producthunt" || 
+        urlParams.get("ref") === "producthunt" ||
+        document.referrer.includes("producthunt.com");
+      
+      const directPromo = urlParams.get("promo");
+      if (directPromo) {
+        promoCode = directPromo;
+      } else if (isPhReferral) {
+        promoCode = "PH20";
+      }
+    }
+
     try {
       const res = await fetch("/api/billing/create-checkout-session", {
         method: "POST",
@@ -196,6 +214,7 @@ function PricingPageContent() {
           billing_cycle: billingCycle,
           user_id: email,
           email,
+          promo_code: promoCode,
         }),
       });
 

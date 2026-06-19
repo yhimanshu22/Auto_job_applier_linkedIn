@@ -41,6 +41,7 @@ class CheckoutRequest(BaseModel):
     billing_cycle: Literal["monthly", "yearly"] = "monthly"
     user_id: str
     email: str
+    promo_code: str | None = None
 
 
 
@@ -58,12 +59,26 @@ async def create_checkout_session(payload: CheckoutRequest, request: Request):
             detail="Invalid plan or billing cycle selected",
         )
 
+    discounts = None
+    if payload.promo_code:
+        try:
+            promo_codes = stripe.PromotionCode.list(
+                code=payload.promo_code.strip(),
+                active=True,
+                limit=1,
+            )
+            if promo_codes.data:
+                discounts = [{"promotion_code": promo_codes.data[0].id}]
+        except Exception as e:
+            print(f"ERROR: failed to lookup promotion code '{payload.promo_code}': {e}")
+
     try:
         session = stripe.checkout.Session.create(
             mode="subscription",
             payment_method_types=["card"],
             customer_email=payload.email,
             allow_promotion_codes=True,
+            discounts=discounts,
             line_items=[
                 {
                     "price": price_id,
