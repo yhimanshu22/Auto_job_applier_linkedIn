@@ -190,19 +190,96 @@ def render_checkout_html(action: str, params: dict[str, str]) -> str:
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Redirecting to PayU…</title>
     <style>
-      body {{ font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; background: #fafafa; color: #333; }}
-      .box {{ text-align: center; padding: 2rem; }}
+      body {{
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+        background-color: #0b0f19;
+        color: #f3f4f6;
+      }}
+      .card {{
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 3rem 2rem;
+        max-width: 400px;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(10px);
+      }}
+      .spinner {{
+        width: 50px;
+        height: 50px;
+        border: 3px solid rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        border-top-color: #6366f1;
+        margin: 0 auto 2rem auto;
+        animation: spin 1s ease-in-out infinite;
+      }}
+      @keyframes spin {{
+        to {{ transform: rotate(360deg); }}
+      }}
+      h2 {{
+        font-size: 1.5rem;
+        margin-top: 0;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: #ffffff;
+      }}
+      p {{
+        color: #9ca3af;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        margin-bottom: 2rem;
+      }}
+      .btn {{
+        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        color: white;
+        border: none;
+        padding: 0.8rem 2rem;
+        font-size: 1rem;
+        font-weight: 500;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        width: 100%;
+      }}
+      .btn:hover {{
+        background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+      }}
+      .btn:active {{
+        transform: translateY(0);
+      }}
     </style>
   </head>
-  <body onload="document.forms.payu.submit()">
-    <div class="box">
-      <p>Redirecting to secure PayU checkout…</p>
-      <p><small>If you are not redirected, click Continue.</small></p>
-    </div>
-    <form name="payu" method="post" action="{action_escaped}">
+  <body>
+    <div class="card">
+      <div class="spinner"></div>
+      <h2>Secure Checkout</h2>
+      <p>Redirecting you to PayU to complete your payment. If you are not redirected in a few seconds, please click the button below.</p>
+      <form name="payu" method="post" action="{action_escaped}">
 {fields}
-      <noscript><input type="submit" value="Continue to PayU"></noscript>
-    </form>
+        <button type="submit" class="btn">Continue to Payment</button>
+      </form>
+    </div>
+    <script>
+      (function() {{
+        setTimeout(function() {{
+          try {{
+            document.forms.payu.submit();
+          }} catch (e) {{
+            console.error("Auto-submit failed:", e);
+          }}
+        }}, 200);
+      }})();
+    </script>
   </body>
 </html>"""
 
