@@ -140,6 +140,9 @@ async def create_payu_session(payload: PayUCheckoutRequest, request: Request):
         "service_provider": "payu_paisa",
         "udf1": udf1,
         "udf2": udf2,
+        "udf3": "",
+        "udf4": "",
+        "udf5": "",
     }
 
 

@@ -297,7 +297,7 @@ function PricingPageContent() {
 
       const fields = [
         "key", "txnid", "amount", "productinfo", "firstname", "email", 
-        "phone", "surl", "furl", "hash", "service_provider", "udf1", "udf2"
+        "phone", "surl", "furl", "hash", "service_provider", "udf1", "udf2", "udf3", "udf4", "udf5"
       ];
 
       fields.forEach(field => {
