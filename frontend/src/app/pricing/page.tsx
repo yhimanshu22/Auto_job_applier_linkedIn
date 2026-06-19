@@ -113,7 +113,7 @@ const PRICING_LOGIN_URL = `/login?callbackUrl=${encodeURIComponent("/pricing")}`
 function PricingPageContent() {
   const [loading, setLoading] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
-  const [currency] = useState<Currency>("usd");
+  const [currency] = useState<Currency>("inr");
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -416,7 +416,7 @@ function PricingPageContent() {
           </div>
 
           <p className="text-center text-sm text-zinc-500 max-w-3xl mx-auto mb-24">
-            All payments are processed securely in USD via Stripe.
+            All payments are processed securely in INR via PayU.
           </p>
         </div>
       </main>
