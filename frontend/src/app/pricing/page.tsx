@@ -284,31 +284,7 @@ function PricingPageContent() {
               Try LinkdApply for 24 hours, then choose the plan that matches your application volume.
             </p>
 
-            {/* Currency Toggle */}
-            <div className="mt-8 flex justify-center">
-              <div className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 p-1 shadow-sm">
-                <button
-                  onClick={() => setCurrency("inr")}
-                  className={`rounded-full px-6 py-2 text-sm font-bold transition-all ${
-                    currency === "inr"
-                      ? "bg-zinc-900 text-white shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-900"
-                  }`}
-                >
-                  ₹ INR (India)
-                </button>
-                <button
-                  onClick={() => setCurrency("usd")}
-                  className={`rounded-full px-6 py-2 text-sm font-bold transition-all ${
-                    currency === "usd"
-                      ? "bg-zinc-900 text-white shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-900"
-                  }`}
-                >
-                  $ USD (International)
-                </button>
-              </div>
-            </div>
+
 
             {/* Billing Cycle Toggle */}
             <div className="mt-4 inline-flex rounded-full border border-zinc-200 bg-zinc-50 p-1 shadow-sm">
