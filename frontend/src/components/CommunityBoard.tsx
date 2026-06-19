@@ -29,10 +29,11 @@ function ReplyForm({ postId, parentReplyId, replyToName, onSuccess, onCancel }: 
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     setSubmitting(true);
     setError("");
 
-    const data = new FormData(event.currentTarget);
+    const data = new FormData(form);
     const payload = {
       author_name: String(data.get("author_name") ?? "").trim(),
       body: String(data.get("body") ?? "").trim(),
@@ -51,7 +52,7 @@ function ReplyForm({ postId, parentReplyId, replyToName, onSuccess, onCancel }: 
           typeof body.detail === "string" ? body.detail : "Could not post reply."
         );
       }
-      event.currentTarget.reset();
+      form.reset();
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -231,10 +232,11 @@ function NewPostForm({ onSuccess }: { onSuccess: () => void }) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     setSubmitting(true);
     setError("");
 
-    const data = new FormData(event.currentTarget);
+    const data = new FormData(form);
     const payload = {
       author_name: String(data.get("author_name") ?? "").trim(),
       body: String(data.get("body") ?? "").trim(),
@@ -252,7 +254,7 @@ function NewPostForm({ onSuccess }: { onSuccess: () => void }) {
           typeof body.detail === "string" ? body.detail : "Could not create post."
         );
       }
-      event.currentTarget.reset();
+      form.reset();
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
