@@ -14,10 +14,10 @@ type DownloadLinkProps = {
   download?: boolean;
 };
 
-function DownloadIcon() {
+function DownloadIcon({ className = "size-4" }: { className?: string }) {
   return (
     <svg
-      className="size-4"
+      className={className}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
