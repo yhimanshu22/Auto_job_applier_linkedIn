@@ -13,10 +13,10 @@ export default function Header() {
             href="/"
             title="LinkdApply Home"
             rel="home"
-            className="flex items-center gap-2.5 font-serif text-2xl font-bold tracking-tight bg-gradient-to-r from-indigo-700 via-blue-700 to-violet-600 bg-clip-text text-transparent hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2.5 font-serif text-2xl font-bold tracking-tight hover:opacity-90 transition-opacity"
           >
-            <img src="/icon.png" alt="LinkdApply Logo" className="h-8 w-8 object-contain" />
-            <span>LinkdApply</span>
+            <img src="/icon.png?v=2" alt="LinkdApply Logo" className="h-10 w-10 object-contain" />
+            <span className="bg-gradient-to-r from-indigo-700 via-blue-700 to-violet-600 bg-clip-text text-transparent">LinkdApply</span>
           </Link>
           <nav className="hidden md:flex items-center gap-6">
             <Link 
