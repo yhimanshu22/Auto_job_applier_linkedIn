@@ -3,6 +3,7 @@ import { Inter, EB_Garamond } from "next/font/google";
 import "./globals.css";
 import { SITE_URL } from "@/lib/company";
 import AuthContext from "@/components/AuthContext";
+import Script from "next/script";
 
 const interSizeAdjust = Inter({
   variable: "--font-inter",
@@ -96,6 +97,24 @@ export default function RootLayout({
       className={`${interSizeAdjust.variable} ${ebGaramond.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        <Script
+          strategy="afterInteractive"
+          src="https://www.googletagmanager.com/gtag/js?id=G-D7K1N1MCKG"
+        />
+        <Script
+          id="gtag-init"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-D7K1N1MCKG');
+            `,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         <AuthContext>{children}</AuthContext>
       </body>
