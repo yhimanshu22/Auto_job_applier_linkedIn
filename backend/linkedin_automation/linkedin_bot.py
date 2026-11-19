@@ -283,7 +283,7 @@ class LinkedInBot:
                             ai_client=self.openai_client,
                             post_extractor=self.post_extractor,
                             ai_perspectives=perspectives,
-                            ai_max_tokens=150,
+                            ai_max_tokens=config.linkedin_ai_comment_max_tokens(),
                             ai_temperature=0.7,
                         )
                         results["engagement"] = {
@@ -643,7 +643,7 @@ class LinkedInBot:
                 ai_client=self.openai_client,
                 post_extractor=self.post_extractor,
                 ai_perspectives=perspectives,
-                ai_max_tokens=150,
+                ai_max_tokens=config.linkedin_ai_comment_max_tokens(),
                 ai_temperature=0.7,
             )
             return {"success": success, "action": action, "max_actions": max_actions}

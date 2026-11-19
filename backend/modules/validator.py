@@ -237,15 +237,21 @@ def validate_secrets() -> None | ValueError | TypeError:
     check_string(password, "password", min_length=5)
 
     check_boolean(use_AI, "use_AI")
-    check_string(llm_api_url, "llm_api_url", min_length=5)
-    check_string(llm_api_key, "llm_api_key")
+    # Validate DeepSeek configuration (openclaw was removed; treat as openai-compatible)
+    provider = "openai" if ai_provider == "openclaw" else ai_provider
+    check_string(provider, "ai_provider", ["openai", "deepseek", "gemini", "ollama"])
+
+    if provider != "ollama":
+        check_string(llm_api_url, "llm_api_url", min_length=5)
+        check_string(llm_api_key, "llm_api_key")
+    else:
+        check_string(llm_api_url or "http://127.0.0.1:11434/v1", "llm_api_url", min_length=5)
+        if llm_api_key is not None and str(llm_api_key).strip() == "":
+            raise ValueError("llm_api_key cannot be empty when use_AI is enabled")
     # check_string(llm_embedding_model, "llm_embedding_model")
     check_boolean(stream_output, "stream_output")
 
     ##> ------ Yang Li : MARKYangL - Feature ------
-    # Validate DeepSeek configuration (openclaw was removed; treat as openai-compatible)
-    provider = "openai" if ai_provider == "openclaw" else ai_provider
-    check_string(provider, "ai_provider", ["openai", "deepseek", "gemini"])
 
     ##> ------ Tim L : tulxoro - Refactor ------
     if provider == "deepseek":

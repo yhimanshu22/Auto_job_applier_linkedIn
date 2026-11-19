@@ -55,6 +55,7 @@ if use_AI:
         gemini_create_client,
         gemini_answer_question,
     )
+    from modules.ai.ollamaConnections import ollama_create_client
 
 from typing import Literal
 

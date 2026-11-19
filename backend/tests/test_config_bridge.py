@@ -87,3 +87,18 @@ def test_bot_worker_uses_injected_linkedin_env(monkeypatch, test_db):
 
     assert cfg["username"] == "worker@example.com"
     assert cfg["password"] == "worker-secret"
+
+
+def test_ollama_defaults_applied_for_provider():
+    cfg = {
+        "ai_provider": "ollama",
+        "use_AI": True,
+        "llm_api_url": "",
+        "llm_api_key": "",
+        "llm_model": "",
+    }
+    config_bridge._apply_ollama_bot_defaults(cfg)
+    assert cfg["llm_api_url"] == "http://127.0.0.1:11434/v1"
+    assert cfg["llm_api_key"] == "ollama"
+    assert cfg["llm_spec"] == "openai-like"
+    assert cfg["llm_model"]

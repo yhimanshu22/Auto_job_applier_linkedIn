@@ -65,6 +65,10 @@ def gemini_completion(model, prompt: str, is_json: bool = False) -> dict | str:
     if not model:
         raise ValueError("Gemini client is not available!")
 
+    from modules.ai.llm_guard import guard_llm_call
+
+    guard_llm_call(provider="gemini", api_key=llm_api_key)
+
     try:
         # The Gemini API has a 'safety_settings' parameter to control content filtering.
         # For a job application helper, it's generally safe to set these to a less restrictive level

@@ -16,10 +16,43 @@ from services.linkedin_env import (
 )
 
 
+def _apply_ollama_bot_defaults(config_dict: dict) -> None:
+    """Fill Ollama URL/key/model for the Easy Apply bot when provider is ``ollama``."""
+    if config_dict.get("ai_provider") != "ollama":
+        return
+    if not (config_dict.get("llm_api_url") or "").strip():
+        config_dict["llm_api_url"] = "http://127.0.0.1:11434/v1"
+    if not (config_dict.get("llm_api_key") or "").strip():
+        config_dict["llm_api_key"] = "ollama"
+    if not (config_dict.get("llm_model") or "").strip():
+        from linkedin_automation.ollama_runtime import resolve_ollama_model
+
+        config_dict["llm_model"] = resolve_ollama_model()
+    if not (config_dict.get("llm_spec") or "").strip():
+        config_dict["llm_spec"] = "openai-like"
+
+
+def _maybe_prefer_local_ollama(config_dict: dict) -> None:
+    """Use local Ollama when AI is on, no cloud LLM key is set, and Ollama is reachable."""
+    if not config_dict.get("use_AI"):
+        return
+    if (config_dict.get("llm_api_key") or "").strip() not in ("", "ollama"):
+        return
+    if config_dict.get("ai_provider") not in (None, "", "openai"):
+        return
+    from linkedin_automation.ollama_runtime import ollama_available
+
+    if ollama_available():
+        config_dict["ai_provider"] = "ollama"
+        _apply_ollama_bot_defaults(config_dict)
+
+
 def _apply_config_normalizations(config_dict: dict) -> dict:
     """Migrate legacy settings (e.g. removed providers) before export to the bot."""
     if config_dict.get("ai_provider") == "openclaw":
         config_dict["ai_provider"] = "openai"
+    _maybe_prefer_local_ollama(config_dict)
+    _apply_ollama_bot_defaults(config_dict)
     _coerce_config_types(config_dict)
     return config_dict
 
@@ -92,11 +125,11 @@ def _base_config_defaults() -> dict:
         "use_AI": True,
         "stream_output": True,
         "showAiErrorAlerts": False,
-        "ai_provider": "openai",
-        "llm_api_url": "https://api.groq.com/openai/v1/",
-        "llm_model": "llama-3.3-70b-versatile",
-        "llm_spec": "openai",
-        "llm_api_key": "",
+        "ai_provider": "ollama",
+        "llm_api_url": "http://127.0.0.1:11434/v1",
+        "llm_model": "",
+        "llm_spec": "openai-like",
+        "llm_api_key": "ollama",
         # settings.py — required by open_chrome / validator when DB rows are missing
         "close_tabs": True,
         "follow_companies": False,

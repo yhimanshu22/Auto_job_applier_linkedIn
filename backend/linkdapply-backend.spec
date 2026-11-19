@@ -38,6 +38,7 @@ hiddenimports = [
     "multipart",
     "services.bot_config_cache",
     "services.smart_rate_limit",
+    "services.llm_rate_limit",
     "services.chrome_ports",
 ] + collect_submodules("cryptography") + collect_submodules("linkedin_automation")
 

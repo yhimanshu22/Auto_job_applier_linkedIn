@@ -13,7 +13,6 @@ SENSITIVE_KEYS = [
     "openai_api_key",
     "gemini_api_key",
     "grok_api_key",
-    "groq_api_key",
     "LINKEDIN_PASSWORD",
 ]
 

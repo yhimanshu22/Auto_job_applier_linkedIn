@@ -59,7 +59,18 @@ type FrameworkSettings = {
   openai_api_key?: string;
   openai_model?: string | null;
   gemini_api_key?: string;
+  gemini_model?: string | null;
+  linkedin_ai_provider?: string | null;
+  ollama_model?: string | null;
+  ollama_api_base?: string | null;
   use_gemini?: boolean | null;
+  llm_rate_limit_enabled?: boolean | null;
+  llm_max_calls_per_minute?: number | null;
+  llm_max_calls_per_hour?: number | null;
+  llm_max_calls_per_day?: number | null;
+  llm_max_key_calls_per_minute?: number | null;
+  llm_max_key_calls_per_hour?: number | null;
+  llm_max_key_calls_per_day?: number | null;
   headless?: boolean | null;
   marketing_mode?: boolean | null;
   project_name?: string | null;
@@ -1395,9 +1406,38 @@ function SettingsForm({
         </h3>
         <p className="text-[10px] text-zinc-500 mb-3">
           Stored encrypted in the dashboard DB. Leave a masked field (<code>set</code>)
-          alone to keep its current value.
+          alone to keep its current value. Engage and pursue AI replies use the engage
+          reply provider (choose gemini for Google Gemini). Scheduled posts use the
+          Gemini toggle below when enabled.
         </p>
         <div className="grid sm:grid-cols-2 gap-3">
+          <Field
+            label="Engage reply provider"
+            hint="Powers AI comments on Engage / Pursue"
+          >
+            <select
+              value={s.linkedin_ai_provider || ""}
+              onChange={(e) => set("linkedin_ai_provider", e.target.value)}
+              className={inputCls}
+            >
+              <option value="">Auto (first available key)</option>
+              <option value="gemini">gemini</option>
+              <option value="openai">openai</option>
+              <option value="grok">grok</option>
+              <option value="ollama">ollama (local)</option>
+            </select>
+          </Field>
+          <Field
+            label="Ollama model"
+            hint="Optional — blank uses smallest pulled tag (e.g. qwen2.5:1.5b)"
+          >
+            <input
+              value={s.ollama_model || ""}
+              onChange={(e) => set("ollama_model", e.target.value)}
+              placeholder="qwen2.5:1.5b"
+              className={inputCls}
+            />
+          </Field>
           <Field label="OpenAI API key" hint="Used for AI comments / engagement">
             <input
               value={s.openai_api_key || ""}
@@ -1415,7 +1455,10 @@ function SettingsForm({
               className={inputCls}
             />
           </Field>
-          <Field label="Gemini API key" hint="Used for AI post generation">
+          <Field
+            label="Gemini API key"
+            hint="Required for Gemini engage replies and optional post generation"
+          >
             <input
               value={s.gemini_api_key || ""}
               onChange={(e) => set("gemini_api_key", e.target.value)}
@@ -1424,6 +1467,105 @@ function SettingsForm({
               type="password"
             />
           </Field>
+          <Field
+            label="Gemini model"
+            hint="Engage comments + posts — e.g. gemini-3.1-flash-lite"
+          >
+            <input
+              value={s.gemini_model || ""}
+              onChange={(e) => set("gemini_model", e.target.value)}
+              placeholder="gemini-3.1-flash-lite"
+              className={inputCls}
+            />
+          </Field>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">
+          LLM rate limits
+        </h3>
+        <p className="text-[10px] text-zinc-500 mb-3">
+          Caps Gemini and other cloud LLM calls through this app (per account and per API
+          key). Limits direct abuse if a key leaks in config; stolen keys used outside the
+          app still need rotation in Google Cloud.
+        </p>
+        <div className="space-y-3">
+          <Toggle
+            label="Enable LLM rate limits"
+            val={s.llm_rate_limit_enabled ?? true}
+            onSet={(b) => set("llm_rate_limit_enabled", b)}
+          />
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label="Max / min (user)" hint="Per signed-in user">
+              <input
+                type="number"
+                min={0}
+                value={s.llm_max_calls_per_minute ?? 6}
+                onChange={(e) =>
+                  set("llm_max_calls_per_minute", parseInt(e.target.value, 10) || 0)
+                }
+                className={inputCls}
+              />
+            </Field>
+            <Field label="Max / hour (user)">
+              <input
+                type="number"
+                min={0}
+                value={s.llm_max_calls_per_hour ?? 40}
+                onChange={(e) =>
+                  set("llm_max_calls_per_hour", parseInt(e.target.value, 10) || 0)
+                }
+                className={inputCls}
+              />
+            </Field>
+            <Field label="Max / day (user)">
+              <input
+                type="number"
+                min={0}
+                value={s.llm_max_calls_per_day ?? 120}
+                onChange={(e) =>
+                  set("llm_max_calls_per_day", parseInt(e.target.value, 10) || 0)
+                }
+                className={inputCls}
+              />
+            </Field>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label="Max / min (API key)" hint="Same key, all users">
+              <input
+                type="number"
+                min={0}
+                value={s.llm_max_key_calls_per_minute ?? 10}
+                onChange={(e) =>
+                  set("llm_max_key_calls_per_minute", parseInt(e.target.value, 10) || 0)
+                }
+                className={inputCls}
+              />
+            </Field>
+            <Field label="Max / hour (API key)">
+              <input
+                type="number"
+                min={0}
+                value={s.llm_max_key_calls_per_hour ?? 60}
+                onChange={(e) =>
+                  set("llm_max_key_calls_per_hour", parseInt(e.target.value, 10) || 0)
+                }
+                className={inputCls}
+              />
+            </Field>
+            <Field label="Max / day (API key)">
+              <input
+                type="number"
+                min={0}
+                value={s.llm_max_key_calls_per_day ?? 200}
+                onChange={(e) =>
+                  set("llm_max_key_calls_per_day", parseInt(e.target.value, 10) || 0)
+                }
+                className={inputCls}
+              />
+            </Field>
+          </div>
         </div>
       </div>
 
@@ -1432,7 +1574,7 @@ function SettingsForm({
           label="Use Gemini for posts"
           val={s.use_gemini}
           onSet={(b) => set("use_gemini", b)}
-          hint="Falls back to OpenAI / templates if disabled or unavailable."
+          hint="Post / calendar generation via Gemini (separate from engage provider)."
         />
         <Toggle
           label="Run browser headless"

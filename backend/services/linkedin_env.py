@@ -216,8 +216,8 @@ AUTOMATION_KEY_TO_ENV: dict[str, str] = {
     "linkedin_ai_provider": "LINKEDIN_AI_PROVIDER",
     "grok_api_key": "GROK_API_KEY",
     "grok_model": "GROK_MODEL",
-    "groq_api_key": "GROQ_API_KEY",
-    "groq_model": "GROQ_MODEL",
+    "ollama_model": "OLLAMA_MODEL",
+    "ollama_api_base": "OLLAMA_API_BASE",
     "headless": "HEADLESS",
     "marketing_mode": "MARKETING_MODE",
     "project_name": "PROJECT_NAME",
@@ -230,13 +230,19 @@ AUTOMATION_KEY_TO_ENV: dict[str, str] = {
     "linkedin_github_username": "LINKEDIN_GITHUB_USERNAME",
     "linkedin_comment_display_name": "LINKEDIN_COMMENT_DISPLAY_NAME",
     "linkedin_comment_voice": "LINKEDIN_COMMENT_VOICE",
+    "llm_rate_limit_enabled": "LLM_RATE_LIMIT_ENABLED",
+    "llm_max_calls_per_minute": "LLM_MAX_CALLS_PER_MINUTE",
+    "llm_max_calls_per_hour": "LLM_MAX_CALLS_PER_HOUR",
+    "llm_max_calls_per_day": "LLM_MAX_CALLS_PER_DAY",
+    "llm_max_key_calls_per_minute": "LLM_MAX_KEY_CALLS_PER_MINUTE",
+    "llm_max_key_calls_per_hour": "LLM_MAX_KEY_CALLS_PER_HOUR",
+    "llm_max_key_calls_per_day": "LLM_MAX_KEY_CALLS_PER_DAY",
 }
 
 AUTOMATION_SENSITIVE_KEYS: set[str] = {
     "openai_api_key",
     "gemini_api_key",
     "grok_api_key",
-    "groq_api_key",
 }
 
 

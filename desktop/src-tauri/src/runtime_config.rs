@@ -58,7 +58,7 @@ pub fn write_env_template_if_missing(user_data: &Path) {
 
 # FRONTEND_URL=https://frontend-pink-phi-37.vercel.app
 # CLOUD_API_URL=https://linkedapply-backend.onrender.com
-# LLM_API_KEY=your-groq-or-openai-key
+# LLM_API_KEY=your-openai-or-compatible-key
 "#;
     let _ = std::fs::write(example, body);
 }

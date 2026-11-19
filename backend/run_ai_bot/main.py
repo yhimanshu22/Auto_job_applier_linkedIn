@@ -63,6 +63,8 @@ def main() -> None:
         if use_AI:
             if ai_provider in ("openai", "openclaw"):
                 aiClient = ai_create_openai_client()
+            elif ai_provider == "ollama":
+                aiClient = ollama_create_client()
             ##> ------ Yang Li : MARKYangL - Feature ------
             elif ai_provider == "deepseek":
                 aiClient = deepseek_create_client()
@@ -211,7 +213,7 @@ def main() -> None:
         ##> ------ Yang Li : MARKYangL - Feature ------
         if use_AI and aiClient:
             try:
-                if ai_provider.lower() in ("openai", "openclaw"):
+                if ai_provider.lower() in ("openai", "openclaw", "ollama"):
                     ai_close_openai_client(aiClient)
                 elif ai_provider.lower() == "deepseek":
                     ai_close_openai_client(aiClient)

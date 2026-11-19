@@ -659,6 +659,37 @@ def test_apply_dashboard_automation_settings_into_env(
     assert "GEMINI_API_KEY" not in env
 
 
+def test_apply_dashboard_automation_settings_gemini_model(
+    test_db, clear_automation_config
+):
+    test_db.set_config(
+        "gemini_api_key",
+        "AIza-test",
+        category="linkedin_automation",
+        user_id=TEST_USER,
+    )
+    test_db.set_config(
+        "gemini_model",
+        "gemini-3.1-flash-lite",
+        category="linkedin_automation",
+        user_id=TEST_USER,
+    )
+    test_db.set_config(
+        "linkedin_ai_provider",
+        "gemini",
+        category="linkedin_automation",
+        user_id=TEST_USER,
+    )
+
+    from services.linkedin_env import apply_dashboard_automation_settings
+
+    env: dict = {}
+    apply_dashboard_automation_settings(env, user_id=TEST_USER)
+    assert env["GEMINI_API_KEY"] == "AIza-test"
+    assert env["GEMINI_MODEL"] == "gemini-3.1-flash-lite"
+    assert env["LINKEDIN_AI_PROVIDER"] == "gemini"
+
+
 # ---------------------------------------------------------------------------
 # Routes: health + stats + tasks listing
 # ---------------------------------------------------------------------------

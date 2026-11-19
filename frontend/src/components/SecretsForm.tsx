@@ -14,7 +14,7 @@ interface SecretsFormProps {
 export default function SecretsForm({ data, onChange }: SecretsFormProps) {
   const patch = (key: string, value: any) => onChange({ ...data, [key]: value });
 
-  const aiProviders = ["openai", "deepseek", "gemini"];
+  const aiProviders = ["ollama", "openai", "deepseek", "gemini"];
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -79,7 +79,7 @@ export default function SecretsForm({ data, onChange }: SecretsFormProps) {
                 value={data.llm_api_url ?? ""}
                 onChange={(e) => patch("llm_api_url", e.target.value)}
                 className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-300 font-mono focus:outline-none focus:border-blue-600"
-                placeholder="https://api.openai.com/v1"
+                placeholder="http://127.0.0.1:11434/v1"
               />
             </div>
             <div className="space-y-1 md:col-span-2">
@@ -99,7 +99,7 @@ export default function SecretsForm({ data, onChange }: SecretsFormProps) {
                 value={data.llm_model ?? ""}
                 onChange={(e) => patch("llm_model", e.target.value)}
                 className="w-full bg-zinc-950 border border-zinc-900 rounded px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-blue-600"
-                placeholder="gpt-4o-mini, deepseek-chat, …"
+                placeholder="qwen2.5:1.5b (blank = smallest local model)"
               />
             </div>
           </div>

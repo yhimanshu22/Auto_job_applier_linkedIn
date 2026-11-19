@@ -837,6 +837,38 @@ async def connect_campaign_history(
 # ---------------------------------------------------------------------------
 
 
+@router.get("/ollama")
+async def ollama_status():
+    """Report local Ollama availability and which small model comments will use."""
+    from linkedin_automation import config as lac
+    from linkedin_automation.ollama_runtime import (
+        fetch_installed_models,
+        pick_smallest_model,
+        resolve_ollama_model,
+    )
+
+    models = fetch_installed_models()
+    provider = lac.resolve_linkedin_ai_provider()
+    engage_model = ""
+    if provider == "gemini":
+        engage_model = lac.resolve_gemini_model_name()
+    elif provider == "openai":
+        engage_model = lac.OPENAI_MODEL or ""
+    elif provider == "grok":
+        engage_model = lac.GROK_MODEL or ""
+    elif provider == "ollama":
+        engage_model = lac.resolve_ollama_model_name()
+    return {
+        "available": bool(models),
+        "provider": provider,
+        "engage_model": engage_model,
+        "selected_model": resolve_ollama_model(),
+        "smallest_installed": pick_smallest_model(models),
+        "comment_max_tokens": lac.linkedin_ai_comment_max_tokens(),
+        "models": [m.get("name") for m in models if m.get("name")],
+    }
+
+
 class AutomationSettings(BaseModel):
     openai_api_key: Optional[str] = None
     openai_model: Optional[str] = None
@@ -846,8 +878,8 @@ class AutomationSettings(BaseModel):
     linkedin_ai_provider: Optional[str] = None
     grok_api_key: Optional[str] = None
     grok_model: Optional[str] = None
-    groq_api_key: Optional[str] = None
-    groq_model: Optional[str] = None
+    ollama_model: Optional[str] = None
+    ollama_api_base: Optional[str] = None
     headless: Optional[bool] = None
     marketing_mode: Optional[bool] = None
     project_name: Optional[str] = None
@@ -860,6 +892,13 @@ class AutomationSettings(BaseModel):
     linkedin_github_username: Optional[str] = None
     linkedin_comment_display_name: Optional[str] = None
     linkedin_comment_voice: Optional[str] = None
+    llm_rate_limit_enabled: Optional[bool] = None
+    llm_max_calls_per_minute: Optional[int] = None
+    llm_max_calls_per_hour: Optional[int] = None
+    llm_max_calls_per_day: Optional[int] = None
+    llm_max_key_calls_per_minute: Optional[int] = None
+    llm_max_key_calls_per_hour: Optional[int] = None
+    llm_max_key_calls_per_day: Optional[int] = None
 
 
 _SENTINEL_PRESERVE = {"set", "***", "********"}

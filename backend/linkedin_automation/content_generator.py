@@ -433,13 +433,19 @@ class ContentGenerator:
             Invoked inside :meth:`generate_post_content` before making API calls.
 
         How:
-            Lists available models, prioritises preferred names, looks for any
-            text-capable alternative, and finally falls back to hardcoded names.
+            Uses dashboard ``GEMINI_MODEL`` when set; otherwise lists models and
+            picks a preferred flash/pro name.
 
         Returns:
             str | None: Fully qualified model identifier or ``None`` if none are
             usable.
         """
+        explicit = (os.getenv("GEMINI_MODEL") or "").strip()
+        if explicit:
+            if explicit.startswith("models/"):
+                return explicit
+            return f"models/{explicit}"
+
         try:
             # List available models
             models = _genai().list_models()
@@ -451,7 +457,12 @@ class ContentGenerator:
             logging.info(f"Extracted model names: {extracted_models}")
 
             # Define preferred models in order
-            preferred_models = ["gemini-2.5-flash", "gemini-1.0-pro", "gemini-pro"]
+            preferred_models = [
+                "gemini-3.1-flash-lite",
+                "gemini-2.5-flash",
+                "gemini-1.0-pro",
+                "gemini-pro",
+            ]
             selected_model = None
 
             # Try to find a preferred model
@@ -532,6 +543,9 @@ class ContentGenerator:
 
         while retry_count < max_retries:
             try:
+                from .llm_guard import guard_llm_call
+
+                guard_llm_call(provider="gemini", api_key=config.GEMINI_API_KEY)
                 response = client.generate_content(messages)
                 return response  # Success, return the response
             except Exception as e:

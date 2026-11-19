@@ -85,6 +85,10 @@ def deepseek_completion(client: OpenAI, messages: list[dict], response_format: d
     if response_format:
         params["response_format"] = response_format
 
+    from modules.ai.llm_guard import guard_llm_call
+
+    guard_llm_call(provider="deepseek", api_key=llm_api_key)
+
     try:
         # Make the API call
         print_lg(f"Calling DeepSeek API for completion...")

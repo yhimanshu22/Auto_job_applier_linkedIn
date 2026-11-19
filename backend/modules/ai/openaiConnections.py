@@ -140,6 +140,10 @@ def ai_completion(client: OpenAI, messages: list[dict], response_format: dict = 
     """
     if not client: raise ValueError("Client is not available!")
 
+    from modules.ai.llm_guard import guard_llm_call
+
+    guard_llm_call(provider=llm_spec or "openai", api_key=llm_api_key)
+
     params = {"model": llm_model, "messages": messages, "stream": stream}
 
     if model_supports_temperature(llm_model):

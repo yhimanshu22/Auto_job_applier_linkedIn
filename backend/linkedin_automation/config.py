@@ -38,48 +38,32 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 # Which LLM powers LinkedIn comments / calendar / OpenAIClient helpers.
-# Values: openai | gemini | grok | groq (case-insensitive). Empty = auto-pick
-# from available keys (OpenAI → Gemini → Grok → Groq).
+# Values: openai | gemini | grok | ollama (case-insensitive). Empty = auto-pick
+# from available keys (OpenAI → Gemini → Grok → local Ollama).
 LINKEDIN_AI_PROVIDER = (os.getenv("LINKEDIN_AI_PROVIDER") or "").strip().lower()
+
+# Local Ollama (OpenAI-compatible API) — defaults to smallest pulled model when unset.
+OLLAMA_API_BASE = (os.getenv("OLLAMA_API_BASE") or "http://127.0.0.1:11434/v1").rstrip("/")
+OLLAMA_API_KEY = (os.getenv("OLLAMA_API_KEY") or "ollama").strip()
 
 # xAI Grok (OpenAI-compatible Chat Completions API)
 GROK_API_KEY = os.getenv("GROK_API_KEY")
 GROK_API_BASE = (os.getenv("GROK_API_BASE") or "https://api.x.ai/v1").rstrip("/")
 GROK_MODEL = os.getenv("GROK_MODEL", "grok-2-latest")
 
-# Groq — optional dedicated vars, or reuse job-applier ``LLM_API_KEY`` when
-# ``LLM_API_URL`` points at Groq. If ``LINKEDIN_AI_PROVIDER=groq``, ``LLM_API_KEY``
-# is accepted even without "groq" in the URL.
-_LLM_API_KEY = os.getenv("LLM_API_KEY")
-_LLM_API_URL = (os.getenv("LLM_API_URL") or "").strip().rstrip("/")
+# Gemini model for engage comments, pursue replies, and calendar (via OpenAIClient).
+DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite"
+LINKEDIN_GEMINI_MODEL = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 
 
-def effective_groq_api_key() -> str | None:
-    """Resolve the Groq API key from GROQ_* or shared LLM_* settings."""
-    k = os.getenv("GROQ_API_KEY")
-    if k:
-        return k
-    if not _LLM_API_KEY:
-        return None
-    if "groq" in _LLM_API_URL.lower():
-        return _LLM_API_KEY
-    if LINKEDIN_AI_PROVIDER == "groq":
-        return _LLM_API_KEY
-    return None
-
-
-GROQ_API_BASE = (
-    os.getenv("GROQ_API_BASE") or (_LLM_API_URL if _LLM_API_URL else "https://api.groq.com/openai/v1")
-).rstrip("/")
-GROQ_MODEL = os.getenv("GROQ_MODEL") or os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
-
-# Gemini model for OpenAIClient (comments / calendar); content posts use their own picker.
-LINKEDIN_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+def resolve_gemini_model_name() -> str:
+    """Dashboard ``gemini_model`` → ``GEMINI_MODEL`` env, else SaaS default."""
+    return (os.getenv("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL).strip()
 
 
 def resolve_linkedin_ai_provider() -> str:
     """Pick the LLM backend for :class:`openai_client.OpenAIClient`."""
-    if LINKEDIN_AI_PROVIDER in ("openai", "gemini", "grok", "groq"):
+    if LINKEDIN_AI_PROVIDER in ("openai", "gemini", "grok", "ollama"):
         return LINKEDIN_AI_PROVIDER
     if OPENAI_API_KEY:
         return "openai"
@@ -87,8 +71,11 @@ def resolve_linkedin_ai_provider() -> str:
         return "gemini"
     if GROK_API_KEY:
         return "grok"
-    if effective_groq_api_key():
-        return "groq"
+    # Local Ollama when no cloud keys are configured.
+    from .ollama_runtime import ollama_available
+
+    if ollama_available():
+        return "ollama"
     return "openai"
 
 
@@ -101,9 +88,24 @@ def has_linkedin_llm_credentials() -> bool:
         return bool(GEMINI_API_KEY)
     if p == "grok":
         return bool(GROK_API_KEY)
-    if p == "groq":
-        return bool(effective_groq_api_key())
+    if p == "ollama":
+        from .ollama_runtime import ollama_available
+
+        return ollama_available()
     return False
+
+
+def resolve_ollama_model_name() -> str:
+    from .ollama_runtime import resolve_ollama_model
+
+    return resolve_ollama_model()
+
+
+def linkedin_ai_comment_max_tokens() -> int:
+    """Shorter cap for small local models."""
+    if resolve_linkedin_ai_provider() == "ollama":
+        return int(os.getenv("OLLAMA_COMMENT_MAX_TOKENS", "96"))
+    return int(os.getenv("LINKEDIN_COMMENT_MAX_TOKENS", "150"))
 
 # Project marketing defaults
 MARKETING_MODE = os.getenv("MARKETING_MODE", "true").lower() == "true"

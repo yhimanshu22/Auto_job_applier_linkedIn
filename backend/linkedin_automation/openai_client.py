@@ -1,6 +1,6 @@
 """LLM helpers for LinkedIn post, comment, and calendar generation.
 
-Supports OpenAI, Google Gemini, xAI Grok, and Groq (OpenAI-compatible APIs),
+Supports OpenAI, Google Gemini, xAI Grok, and local Ollama (OpenAI-compatible APIs),
 selected via ``LINKEDIN_AI_PROVIDER`` / available API keys in ``config``.
 """
 
@@ -43,7 +43,7 @@ class ContentCalendarRequest:
 
 
 class OpenAIClient:
-    """Multi-provider LLM client (OpenAI, Gemini, Grok, Groq) for LinkedIn copy.
+    """Multi-provider LLM client (OpenAI, Gemini, Grok, Ollama) for LinkedIn copy.
 
     Instantiated by :class:`LinkedInBot` when :func:`config.has_linkedin_llm_credentials`
     is true. OpenAI-compatible hosts use the ``openai`` Python package; Gemini
@@ -68,16 +68,14 @@ class OpenAIClient:
                     api_key=config.GROK_API_KEY,
                     base_url=config.GROK_API_BASE,
                 )
-        elif self.provider == "groq":
-            self.model = model or config.GROQ_MODEL
-            gk = config.effective_groq_api_key()
-            if gk:
-                self.client = OpenAI(
-                    api_key=gk,
-                    base_url=config.GROQ_API_BASE,
-                )
         elif self.provider == "gemini":
-            self.model = model or config.LINKEDIN_GEMINI_MODEL
+            self.model = model or config.resolve_gemini_model_name()
+        elif self.provider == "ollama":
+            self.model = model or config.resolve_ollama_model_name()
+            self.client = OpenAI(
+                api_key=config.OLLAMA_API_KEY,
+                base_url=config.OLLAMA_API_BASE,
+            )
 
         try:
             logging.info(
@@ -101,13 +99,17 @@ class OpenAIClient:
     def _llm_ready(self) -> bool:
         if self.provider == "gemini":
             return bool(config.GEMINI_API_KEY)
+        if self.provider == "ollama":
+            from .ollama_runtime import ollama_available
+
+            return ollama_available()
         return self.client is not None
 
     def _missing_credentials_message(self) -> str:
         return (
             f"AI not configured for provider {self.provider!r}. Set one of: "
-            "OPENAI_API_KEY, GEMINI_API_KEY, GROK_API_KEY, GROQ_API_KEY / LLM_API_KEY "
-            "(with LLM_API_URL for Groq), or LINKEDIN_AI_PROVIDER to pick a backend."
+            "OPENAI_API_KEY, GEMINI_API_KEY, GROK_API_KEY, run Ollama locally, "
+            "or set LINKEDIN_AI_PROVIDER."
         )
 
     def _complete_chat(
@@ -121,22 +123,34 @@ class OpenAIClient:
         frequency_penalty: float = 0.2,
         presence_penalty: float = 0.2,
     ) -> str:
+        from .llm_guard import guard_llm_call
+
+        guard_llm_call(provider=self.provider)
         if self.provider == "gemini":
             return self._gemini_generate(system, user, max_tokens, temperature)
         if not self.client:
             raise ValueError(self._missing_credentials_message())
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            temperature=min(max(temperature, 0.1), 1.0),
-            max_tokens=max_tokens,
-            top_p=top_p,
-            frequency_penalty=frequency_penalty,
-            presence_penalty=presence_penalty,
-        )
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        if self.provider == "ollama":
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=min(max(temperature, 0.1), 1.0),
+                max_tokens=max_tokens,
+            )
+        else:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=min(max(temperature, 0.1), 1.0),
+                max_tokens=max_tokens,
+                top_p=top_p,
+                frequency_penalty=frequency_penalty,
+                presence_penalty=presence_penalty,
+            )
         msg = response.choices[0].message
         return (getattr(msg, "content", None) or "").strip()
 
@@ -328,11 +342,12 @@ Rules:
         }
 
         processed_text = post_text
-        if summarize_input and len(post_text) > 300:
+        max_post_chars = 180 if self.provider == "ollama" else 300
+        if summarize_input and len(post_text) > max_post_chars:
             processed_text = preprocess_for_ai(
                 post_text,
-                summarize_ratio=0.3,
-                max_chars=300
+                summarize_ratio=0.35 if self.provider == "ollama" else 0.3,
+                max_chars=max_post_chars,
             )
 
         resume_block = (
@@ -393,12 +408,13 @@ Comment (plain text only):"""
             "You never fabricate links. You follow the user's GitHub and resume rules exactly."
         )
 
+        cap = 120 if self.provider == "ollama" else 300
         try:
             comment = self._complete_chat(
                 system=system,
                 user=prompt,
-                max_tokens=min(max(max_tokens, 20), 300),
-                temperature=min(max(temperature, 0.1), 1.0),
+                max_tokens=min(max(max_tokens, 20), cap),
+                temperature=min(max(temperature, 0.1), 0.85 if self.provider == "ollama" else 1.0),
                 frequency_penalty=0.2,
                 presence_penalty=0.2,
             )
