@@ -278,6 +278,24 @@ def test_build_command_scan_opportunities():
     )
     assert "--require-contact" in strict
 
+    search = la_service._build_command(
+        "scan-opportunities",
+        {
+            "max_posts": 20,
+            "search_query": "hiring intern",
+            "include_without_contact": False,
+        },
+    )
+    assert "--search-query" in search
+    assert search[search.index("--search-query") + 1] == "hiring intern"
+
+    multi = la_service._build_command(
+        "scan-opportunities",
+        {"search_queries": ["hiring", "campus intern"]},
+    )
+    idx = multi.index("--search-query")
+    assert multi[idx + 1 : idx + 3] == ["hiring", "campus intern"]
+
 
 def test_scan_opportunities_endpoint_launches_task(
     client, fake_popen, clear_automation_tasks, auth_as

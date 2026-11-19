@@ -309,6 +309,8 @@ class EngageDomMixin:
         new_dom_selectors = [
             "//div[@data-testid='mainFeed']//div[@role='listitem'][.//button[starts-with(@aria-label,'Open control menu')]]",
             "//div[@role='listitem'][.//button[starts-with(@aria-label,'Open control menu for post')]]",
+            "//main[@role='main']//div[@role='listitem'][.//button[contains(@aria-label,'control menu')]]",
+            "//div[contains(@class,'search-results-container')]//div[contains(@class,'feed-shared-update-v2')]",
         ]
         for xp in legacy_selectors:
             try:

@@ -6,10 +6,13 @@ import json
 import logging
 import re
 import time
+import urllib.parse
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from .. import config
 from .engage_dom import EngageDomMixin
@@ -78,6 +81,15 @@ _URL_SKIP_FRAGMENTS = (
 )
 
 # Prefer these when present (forms, ATS, careers pages).
+def linkedin_content_search_url(query: str) -> str:
+    """Build the LinkedIn *Posts* search URL for a keyword phrase."""
+    encoded = urllib.parse.quote_plus((query or "").strip())
+    return (
+        "https://www.linkedin.com/search/results/content/"
+        f"?keywords={encoded}&origin=SWITCH_SEARCH_VERTICAL"
+    )
+
+
 _URL_PRIORITY_FRAGMENTS = (
     "forms.gle",
     "docs.google.com/forms",
@@ -97,7 +109,7 @@ _URL_PRIORITY_FRAGMENTS = (
 
 
 class OpportunityScanMixin(EngageDomMixin):
-    """Scroll the home feed and collect job / intern opportunities from posts."""
+    """Scroll the home feed or post search and collect job / intern opportunities."""
 
     def scan_feed_opportunities(
         self,
@@ -106,8 +118,14 @@ class OpportunityScanMixin(EngageDomMixin):
         output_file: str = "opportunities.json",
         post_extractor=None,
         require_contact: bool = False,
+        search_query: Optional[str] = None,
+        search_queries: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Scan feed posts for hiring/intern content and extract apply details.
+        """Scan posts for hiring/intern content and extract apply details.
+
+        When ``search_query`` or ``search_queries`` is set, opens LinkedIn post
+        search for each phrase instead of the home feed. ``max_posts`` is the
+        total scan budget across all passes (split evenly when multiple queries).
 
         By default, posts that match hiring keywords are saved even when no
         email or apply URL is found (``has_contact=false`` on the entry).
@@ -120,6 +138,8 @@ class OpportunityScanMixin(EngageDomMixin):
             "output_file": output_file,
             "errors": [],
             "success": False,
+            "mode": "feed",
+            "search_queries": [],
         }
         if max_posts <= 0:
             return results
@@ -128,16 +148,21 @@ class OpportunityScanMixin(EngageDomMixin):
         if not kw_list:
             kw_list = list(_DEFAULT_KEYWORDS)
 
-        try:
-            self._navigate_opportunity_feed()
-        except Exception as exc:
-            results["errors"].append(f"Could not open feed: {exc}")
-            return results
+        passes: List[Optional[str]] = []
+        if search_queries:
+            passes = [str(q).strip() for q in search_queries if q and str(q).strip()]
+        elif search_query and str(search_query).strip():
+            passes = [str(search_query).strip()]
+        if passes:
+            results["mode"] = "search"
+            results["search_queries"] = list(passes)
+        else:
+            passes = [None]
+
+        per_pass_limit = max(1, max_posts // len(passes))
 
         seen_keys: Set[str] = set()
         opportunities: List[Dict[str, Any]] = []
-        stalled = 0
-        stall_budget = 10
         started_at = datetime.now(timezone.utc).isoformat()
 
         self._persist_opportunities(
@@ -146,97 +171,132 @@ class OpportunityScanMixin(EngageDomMixin):
             posts_scanned=0,
             started_at=started_at,
             in_progress=True,
+            extra_meta={
+                "mode": results["mode"],
+                "search_queries": results["search_queries"],
+            },
         )
 
-        while results["posts_scanned"] < max_posts and stalled < stall_budget:
-            posts = self._find_visible_posts(limit=12)
-            if not posts:
-                self._scroll_feed(1.2, 2.4)
-                stalled += 1
-                continue
-
-            progress = False
-            for post in posts:
-                if results["posts_scanned"] >= max_posts:
-                    break
-                try:
-                    urn = self._extract_post_urn(post)
-                    key = self._post_dedupe_key(post, urn)
-                except Exception:
-                    key = str(id(post))
-                if key in seen_keys:
-                    continue
-                seen_keys.add(key)
-                results["posts_scanned"] += 1
-                progress = True
-
-                text = self._read_post_text(post, post_extractor)
-                clean_text = self._clean_opportunity_text(text)
-                emails = self._extract_emails(clean_text)
-                urls = self._extract_apply_urls(clean_text, post)
-                has_job_link = any("/jobs/view/" in u for u in urls)
-
-                if not (has_job_link or self._looks_like_opportunity(clean_text, kw_list)):
-                    continue
-                if require_contact and not emails and not urls:
-                    logging.info(
-                        "OPPORTUNITY skip no_contact key=%s snippet=%r",
-                        key[:40],
-                        clean_text[:80],
-                    )
-                    continue
-
-                has_contact = bool(emails or urls)
-                author = self._extract_author_name(post) or ""
-                post_url = self._extract_post_permalink(post, urn)
-                snippet = " ".join(clean_text.split())[:280]
-                matched = [kw for kw in kw_list if kw in clean_text.lower()]
-                if has_job_link and "linkedin job" not in matched:
-                    matched.append("linkedin job")
-
-                entry = {
-                    "author": author,
-                    "post_urn": urn,
-                    "post_url": post_url,
-                    "snippet": snippet,
-                    "emails": emails,
-                    "urls": urls,
-                    "has_contact": has_contact,
-                    "keywords_matched": matched,
-                    "found_at": datetime.now(timezone.utc).isoformat(),
-                }
-                opportunities.append(entry)
-                results["found"] = len(opportunities)
-                logging.info(
-                    "OPPORTUNITY found author=%r contact=%s emails=%s urls=%s",
-                    author,
-                    has_contact,
-                    emails,
-                    urls,
-                )
-                try:
-                    self._persist_opportunities(
-                        output_file,
-                        opportunities,
-                        posts_scanned=results["posts_scanned"],
-                        started_at=started_at,
-                        in_progress=True,
-                    )
-                except OSError as exc:
-                    results["errors"].append(
-                        f"Could not write {output_file}: {exc}"
-                    )
-
-            if results["posts_scanned"] >= max_posts:
+        for active_search in passes:
+            remaining = max_posts - results["posts_scanned"]
+            if remaining <= 0:
                 break
-            if progress:
-                stalled = 0
+            pass_limit = min(per_pass_limit, remaining)
+            if active_search:
+                try:
+                    self._navigate_opportunity_search(active_search)
+                except Exception as exc:
+                    results["errors"].append(
+                        f"Could not open post search {active_search!r}: {exc}"
+                    )
+                    continue
             else:
-                stalled += 1
-                if stalled >= 2:
-                    if self._aggressive_load_more(list(seen_keys), tries=3):
-                        stalled = 0
-            self._scroll_feed(1.2, 2.4)
+                try:
+                    self._navigate_opportunity_feed()
+                except Exception as exc:
+                    results["errors"].append(f"Could not open feed: {exc}")
+                    return results
+
+            stalled = 0
+            stall_budget = 10
+            scanned_at_start = results["posts_scanned"]
+
+            while results["posts_scanned"] - scanned_at_start < pass_limit and stalled < stall_budget:
+                posts = self._find_visible_posts(limit=12)
+                if not posts:
+                    self._scroll_feed(1.2, 2.4)
+                    stalled += 1
+                    continue
+
+                progress = False
+                for post in posts:
+                    if results["posts_scanned"] - scanned_at_start >= pass_limit:
+                        break
+                    try:
+                        urn = self._extract_post_urn(post)
+                        key = self._post_dedupe_key(post, urn)
+                    except Exception:
+                        key = str(id(post))
+                    if key in seen_keys:
+                        continue
+                    seen_keys.add(key)
+                    results["posts_scanned"] += 1
+                    progress = True
+
+                    text = self._read_post_text(post, post_extractor)
+                    clean_text = self._clean_opportunity_text(text)
+                    emails = self._extract_emails(clean_text)
+                    urls = self._extract_apply_urls(clean_text, post)
+                    has_job_link = any("/jobs/view/" in u for u in urls)
+
+                    if not (has_job_link or self._looks_like_opportunity(clean_text, kw_list)):
+                        continue
+                    if require_contact and not emails and not urls:
+                        logging.info(
+                            "OPPORTUNITY skip no_contact key=%s snippet=%r",
+                            key[:40],
+                            clean_text[:80],
+                        )
+                        continue
+
+                    has_contact = bool(emails or urls)
+                    author = self._extract_author_name(post) or ""
+                    post_url = self._extract_post_permalink(post, urn)
+                    snippet = " ".join(clean_text.split())[:280]
+                    matched = [kw for kw in kw_list if kw in clean_text.lower()]
+                    if has_job_link and "linkedin job" not in matched:
+                        matched.append("linkedin job")
+
+                    entry = {
+                        "author": author,
+                        "post_urn": urn,
+                        "post_url": post_url,
+                        "snippet": snippet,
+                        "emails": emails,
+                        "urls": urls,
+                        "has_contact": has_contact,
+                        "keywords_matched": matched,
+                        "found_at": datetime.now(timezone.utc).isoformat(),
+                        "source": "search" if active_search else "feed",
+                    }
+                    if active_search:
+                        entry["search_query"] = active_search
+                    opportunities.append(entry)
+                    results["found"] = len(opportunities)
+                    logging.info(
+                        "OPPORTUNITY found author=%r contact=%s emails=%s urls=%s",
+                        author,
+                        has_contact,
+                        emails,
+                        urls,
+                    )
+                    try:
+                        self._persist_opportunities(
+                            output_file,
+                            opportunities,
+                            posts_scanned=results["posts_scanned"],
+                            started_at=started_at,
+                            in_progress=True,
+                            extra_meta={
+                                "mode": results["mode"],
+                                "search_queries": results["search_queries"],
+                            },
+                        )
+                    except OSError as exc:
+                        results["errors"].append(
+                            f"Could not write {output_file}: {exc}"
+                        )
+
+                if results["posts_scanned"] - scanned_at_start >= pass_limit:
+                    break
+                if progress:
+                    stalled = 0
+                else:
+                    stalled += 1
+                    if stalled >= 2:
+                        if self._aggressive_load_more(list(seen_keys), tries=3):
+                            stalled = 0
+                self._scroll_feed(1.2, 2.4)
 
         results["opportunities"] = opportunities
         results["found"] = len(opportunities)
@@ -249,6 +309,10 @@ class OpportunityScanMixin(EngageDomMixin):
                 posts_scanned=results["posts_scanned"],
                 started_at=started_at,
                 in_progress=False,
+                extra_meta={
+                    "mode": results["mode"],
+                    "search_queries": results["search_queries"],
+                },
             )
             logging.info(
                 "OPPORTUNITY saved count=%d file=%s", results["found"], output_file
@@ -271,6 +335,7 @@ class OpportunityScanMixin(EngageDomMixin):
         posts_scanned: int,
         started_at: str,
         in_progress: bool,
+        extra_meta: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Write the current scan snapshot to disk (called after each find)."""
         now = datetime.now(timezone.utc).isoformat()
@@ -283,6 +348,8 @@ class OpportunityScanMixin(EngageDomMixin):
             "in_progress": in_progress,
             "opportunities": opportunities,
         }
+        if extra_meta:
+            payload.update(extra_meta)
         with open(output_file, "w", encoding="utf-8") as fh:
             json.dump(payload, fh, indent=2, ensure_ascii=False)
         if opportunities:
@@ -303,6 +370,65 @@ class OpportunityScanMixin(EngageDomMixin):
             self.dismiss_overlays()
         except Exception:
             pass
+
+    def _navigate_opportunity_search(self, query: str) -> None:
+        """Open LinkedIn post search for ``query`` and wait for results."""
+        search_url = linkedin_content_search_url(query)
+        logging.info("OPPORTUNITY_SEARCH url=%s", search_url)
+        try:
+            self.driver.get(search_url)
+        except Exception:
+            pass
+        pause_between(config.MIN_PAGE_LOAD_DELAY, config.MAX_PAGE_LOAD_DELAY)
+        try:
+            self.dismiss_overlays()
+        except Exception:
+            pass
+        self._ensure_posts_search_tab()
+        post_xpath = (
+            "//div[contains(@class,'feed-shared-update-v2')] | "
+            "//div[@role='listitem'][.//button[contains(@aria-label,'control menu')]] | "
+            "//div[@data-id]"
+        )
+        try:
+            WebDriverWait(self.driver, 18).until(
+                EC.presence_of_element_located((By.XPATH, post_xpath))
+            )
+        except Exception:
+            logging.warning(
+                "OPPORTUNITY_SEARCH results did not render within timeout query=%r",
+                query,
+            )
+        time.sleep(1.2)
+
+    def _ensure_posts_search_tab(self) -> None:
+        """Click the Posts filter when search lands on All / mixed results."""
+        labels = ("Posts", "posts")
+        for label in labels:
+            try:
+                buttons = self.driver.find_elements(
+                    By.XPATH,
+                    (
+                        f"//button[normalize-space()='{label}'] | "
+                        f"//a[normalize-space()='{label}'] | "
+                        f"//*[@role='tab' and normalize-space()='{label}']"
+                    ),
+                )
+            except Exception:
+                continue
+            for btn in buttons:
+                try:
+                    if not btn.is_displayed():
+                        continue
+                    aria = (btn.get_attribute("aria-selected") or "").lower()
+                    if aria == "true":
+                        return
+                    btn.click()
+                    time.sleep(1.0)
+                    logging.info("OPPORTUNITY_SEARCH selected_tab=%s", label)
+                    return
+                except Exception:
+                    continue
 
     def _read_post_text(self, post, post_extractor) -> str:
         if post_extractor and hasattr(post_extractor, "extract_text"):

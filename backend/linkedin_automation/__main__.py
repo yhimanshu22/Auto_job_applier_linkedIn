@@ -124,11 +124,13 @@ def main() -> int:
                 )
 
         elif args.command == "scan-opportunities":
+            search_queries = list(args.search_query) if args.search_query else None
             results = bot.scan_opportunities(
                 max_posts=args.max_posts,
                 keywords=args.keywords,
                 output_file=args.output,
                 require_contact=args.require_contact and not args.include_without_contact,
+                search_queries=search_queries,
             )
             logging.info(f"Opportunity scan results: {json.dumps(results, indent=2)}")
             if results.get("errors"):

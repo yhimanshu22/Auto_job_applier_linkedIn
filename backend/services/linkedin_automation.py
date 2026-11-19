@@ -198,6 +198,13 @@ def _build_command(action: str, params: dict[str, Any]) -> list[str]:
             cmd += ["--keywords", *map(str, params["keywords"])]
         if params.get("output"):
             cmd += ["--output", str(params["output"])]
+        search_queries = params.get("search_queries")
+        if search_queries:
+            cmd += ["--search-query", *map(str, search_queries)]
+        elif params.get("search_query"):
+            sq = str(params["search_query"]).strip()
+            if sq:
+                cmd += ["--search-query", sq]
         require_contact = params.get("require_contact")
         if require_contact is None:
             require_contact = not params.get("include_without_contact", True)

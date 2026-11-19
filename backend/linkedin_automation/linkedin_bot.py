@@ -836,8 +836,10 @@ class LinkedInBot:
         keywords: Optional[List[str]] = None,
         output_file: str = "opportunities.json",
         require_contact: bool = False,
+        search_query: Optional[str] = None,
+        search_queries: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Scan the home feed for job/intern posts with apply emails or forms."""
+        """Scan the feed or post search for hiring posts with apply emails or forms."""
         results: Dict[str, Any] = {
             "posts_scanned": 0,
             "found": 0,
@@ -852,11 +854,16 @@ class LinkedInBot:
                 results["errors"].append("LinkedIn login failed")
                 return results
 
+            mode = "search" if (search_queries or search_query) else "feed"
             logging.info(
-                "Scanning feed for opportunities (max_posts=%s)", max_posts
+                "Scanning %s for opportunities (max_posts=%s)", mode, max_posts
             )
+            if search_queries:
+                logging.info("Search queries: %s", ", ".join(search_queries))
+            elif search_query:
+                logging.info("Search query: %s", search_query)
             if keywords:
-                logging.info("Extra keywords: %s", ", ".join(keywords))
+                logging.info("Match keywords: %s", ", ".join(keywords))
 
             scan = self.linkedin.scan_feed_opportunities(
                 max_posts=max_posts,
@@ -864,6 +871,8 @@ class LinkedInBot:
                 output_file=output_file,
                 post_extractor=self.post_extractor,
                 require_contact=require_contact,
+                search_query=search_query,
+                search_queries=search_queries,
             )
             results.update(scan)
             results["success"] = not results.get("errors")

@@ -208,6 +208,13 @@ def _setup_scan_opportunities_parser(parser: argparse.ArgumentParser) -> None:
         help="JSON file to write results to",
     )
     parser.add_argument(
+        "--search-query",
+        nargs="+",
+        default=None,
+        metavar="PHRASE",
+        help="LinkedIn post search phrase(s); uses search instead of home feed",
+    )
+    parser.add_argument(
         "--require-contact",
         action="store_true",
         help="Only save posts that include an email or apply URL",

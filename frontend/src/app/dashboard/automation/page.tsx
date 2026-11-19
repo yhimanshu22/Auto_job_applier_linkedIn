@@ -140,6 +140,7 @@ type FormDefaults = {
   opportunities_keywords?: string;
   opportunities_output?: string;
   opportunities_include_without_contact?: boolean;
+  opportunities_search_query?: string;
   // pursue
   pursue_profile_name?: string;
   pursue_max_posts?: number;
@@ -837,6 +838,9 @@ function OpportunitiesForm({
   const [includeWithoutContact, setIncludeWithoutContact] = useState(
     defaults.opportunities_include_without_contact ?? true
   );
+  const [searchQuery, setSearchQuery] = useState(
+    defaults.opportunities_search_query ?? ""
+  );
 
   useEffect(() => {
     patchDefaults({
@@ -844,8 +848,9 @@ function OpportunitiesForm({
       opportunities_keywords: keywords,
       opportunities_output: output,
       opportunities_include_without_contact: includeWithoutContact,
+      opportunities_search_query: searchQuery,
     });
-  }, [maxPosts, keywords, output, includeWithoutContact, patchDefaults]);
+  }, [maxPosts, keywords, output, includeWithoutContact, searchQuery, patchDefaults]);
 
   const splitList = (s: string) =>
     s
@@ -856,10 +861,22 @@ function OpportunitiesForm({
   return (
     <div className="space-y-4">
       <p className="text-[10px] text-zinc-500 leading-relaxed">
-        Scrolls your LinkedIn feed and collects hiring/intern posts. Saves apply
-        emails and form links when present; also keeps keyword matches (e.g.
-        &quot;we are hiring&quot;) with the post snippet for manual follow-up.
+        Scrolls your LinkedIn home feed or runs a <strong>Posts</strong> search,
+        then collects hiring/intern posts. Saves apply emails and Google Form
+        links when present; uncheck the option below to keep only posts with an
+        email or link.
       </p>
+      <Field
+        label="LinkedIn post search"
+        hint="Optional — e.g. hiring software engineer intern. Leave blank to scan home feed only."
+      >
+        <input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="we are hiring intern"
+          className={inputCls}
+        />
+      </Field>
       <div className="grid sm:grid-cols-2 gap-3">
         <Field label="Max posts to scan">
           <input
@@ -904,18 +921,24 @@ function OpportunitiesForm({
         <button
           type="button"
           disabled={busy}
-          onClick={() =>
+          onClick={() => {
+            const queries = splitList(searchQuery);
             onSubmit({
               max_posts: maxPosts,
               keywords: keywords ? splitList(keywords) : undefined,
               output: output.trim() || "opportunities.json",
               include_without_contact: includeWithoutContact,
+              ...(queries.length === 1
+                ? { search_query: queries[0] }
+                : queries.length > 1
+                  ? { search_queries: queries }
+                  : {}),
               ...common,
-            })
-          }
+            });
+          }}
           className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
         >
-          {busy ? "Launching…" : "Scan feed"}
+          {busy ? "Launching…" : searchQuery.trim() ? "Search posts" : "Scan feed"}
         </button>
         <ClearDefaultsButton onClear={onClearDefaults} />
       </div>

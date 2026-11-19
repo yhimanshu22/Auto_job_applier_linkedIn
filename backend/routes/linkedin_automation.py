@@ -215,6 +215,15 @@ class ConnectCampaignPatch(BaseModel):
 class ScanOpportunitiesRequest(_CommonOpts):
     max_posts: int = Field(default=50, ge=1, le=200)
     keywords: Optional[list[str]] = None
+    search_query: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description="LinkedIn post search phrase (uses Posts search instead of home feed)",
+    )
+    search_queries: Optional[list[str]] = Field(
+        default=None,
+        description="Multiple post search phrases (max_posts split across them)",
+    )
     output: Optional[str] = Field(default="opportunities.json")
     include_without_contact: bool = True
 
@@ -639,6 +648,7 @@ ALLOWED_FORM_KEYS: frozenset[str] = frozenset({
     "opportunities_keywords",
     "opportunities_output",
     "opportunities_include_without_contact",
+    "opportunities_search_query",
     # calendar
     "calendar_niche",
     "calendar_total_posts",

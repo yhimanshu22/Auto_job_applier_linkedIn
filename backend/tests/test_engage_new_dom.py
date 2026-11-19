@@ -615,6 +615,14 @@ def test_job_card_url_counts_as_opportunity_signal():
     assert any("/jobs/view/4429226393/" in u for u in urls)
 
 
+def test_linkedin_content_search_url_encodes_query():
+    from linkedin_automation.linkedin_ui.opportunity_scan import linkedin_content_search_url
+
+    url = linkedin_content_search_url("hiring software engineer")
+    assert "/search/results/content/" in url
+    assert "keywords=hiring+software+engineer" in url
+
+
 def test_persist_opportunities_writes_incrementally(tmp_path):
     from linkedin_automation.linkedin_ui.opportunity_scan import OpportunityScanMixin
 

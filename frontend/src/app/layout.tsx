@@ -80,6 +80,9 @@ export const metadata: Metadata = {
   alternates: {
     canonical: SITE_URL,
   },
+  verification: {
+    google: "huAUy75l5-iDVnLpeUVSs27-8PPxVSj_sNIbCsBxNz8",
+  },
   icons: {
     icon: "/icon.png?v=2",
     apple: "/icon.png?v=2",
